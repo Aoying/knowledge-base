@@ -168,6 +168,16 @@
           "icon": "git-pull-request",
           "title": "Source Control"
         }
+      },
+      {
+        "id": "348ba2c9927f1292",
+        "type": "leaf",
+        "state": {
+          "type": "calendar",
+          "state": {},
+          "icon": "calendar-with-checkmark",
+          "title": "Calendar"
+        }
       }
     ],
     "currentTab": 3
@@ -181,7 +191,9 @@
       "templates:插入模板": false,
       "command-palette:打开命令面板": false,
       "bases:新建数据库": false,
-      "obsidian-git:Open Git source control": false
+      "obsidian-git:Open Git source control": false,
+      "obsidian-excalidraw-plugin:新建绘图文件": false,
+      "templater-obsidian:Templater": false
     }
   },
   "active": "9d37bd88e6a33dab",
