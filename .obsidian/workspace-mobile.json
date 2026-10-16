@@ -193,9 +193,27 @@
       "bases:新建数据库": false,
       "obsidian-git:Open Git source control": false,
       "obsidian-excalidraw-plugin:新建绘图文件": false,
-      "templater-obsidian:Templater": false
+      "templater-obsidian:Templater": false,
+      "copilot:Open Copilot Chat": false
     }
   },
-  "active": "9d37bd88e6a33dab",
-  "lastOpenFiles": []
+  "active": "e5f54ab26afc44ad",
+  "lastOpenFiles": [
+    "frontend/README.md",
+    "plugins/第三方插件使用指南.md",
+    "copilot/copilot-conversations/你好@20261017_040211.md",
+    "copilot/copilot-conversations",
+    "copilot",
+    "docker/README.md",
+    "plugins",
+    "explore/README.md",
+    "explore/探索方向建议.md",
+    "skills/dev-workflow.md",
+    "vim/README.md",
+    "shortcuts/README.md",
+    "redis/README.md",
+    "nginx/README.md",
+    "README.md",
+    "维护规则.md"
+  ]
 }
