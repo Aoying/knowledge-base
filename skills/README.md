@@ -3,6 +3,12 @@
 > 每晚 20:30 自动搜集更新。只收集分析，不安装不执行。
 > 格式约定：每个 skill 记录名称、功能、适用场景、来源、许可证、更新时间、安全注意事项。
 
+## 分类索引
+
+- [RAG 相关](rag.md)：rag-skills、agentic-rag、rag-eval-workflow
+- [Agent 开发](agent-dev.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories
+- [开发工作流](dev-workflow.md)：cyberfly agent-skills（git/checkpoint/session）
+
 ## 已收录
 
 ### 1. Anthropic Agent Skills（官方仓库）
