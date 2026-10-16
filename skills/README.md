@@ -6,7 +6,7 @@
 ## 分类索引
 
 - [RAG 相关](rag.md)：rag-skills、agentic-rag、rag-eval-workflow
-- [Agent 开发](agent-dev.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories
+- [Agent 开发](agent-dev.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills
 - [开发工作流](dev-workflow.md)：cyberfly agent-skills（git/checkpoint/session）
 
 ## 已收录
