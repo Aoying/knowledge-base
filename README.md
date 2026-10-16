@@ -1,53 +1,55 @@
 # 个人知识库
 
-20 个方向 + Obsidian 插件指南，每晚 20:30 自动更新维护。
+每晚 20:30 自动更新维护。
 
-## 🤖 AI 与 Agent
+## 目录
 
-- [agent/](agent/) Agent
-- [skills/](skills/) 好用 Skills 搜集
+### 🤖 01-AI与Agent
 
-## 💻 开发语言
+- [agent](01-AI与Agent/agent/) Agent
+- [skills](01-AI与Agent/skills/) 好用 Skills 搜集
 
-- [java/](java/) Java
-- [python/](python/) Python
-- [js/](js/) JavaScript
+### 💻 02-开发语言
 
-## 🗄️ 数据与消息
+- [java](02-开发语言/java/) Java
+- [python](02-开发语言/python/) Python
+- [js](02-开发语言/js/) JavaScript
 
-- [mysql/](mysql/) MySQL
-- [redis/](redis/) Redis
-- [rocketmq/](rocketmq/) RocketMQ
-- [kafka/](kafka/) Kafka
+### 🗄️ 03-数据与消息
 
-## 🛠️ 运维与工具
+- [mysql](03-数据与消息/mysql/) MySQL
+- [redis](03-数据与消息/redis/) Redis
+- [rocketmq](03-数据与消息/rocketmq/) RocketMQ
+- [kafka](03-数据与消息/kafka/) Kafka
 
-- [docker/](docker/) Docker
-- [nginx/](nginx/) Nginx
-- [git/](git/) Git 命令及常见问题解决办法
-- [vim/](vim/) Vim 操作指南
-- [windows/](windows/) Windows 常用命令
-- [shortcuts/](shortcuts/) IDEA / VSCode / Windows 常用快捷键
+### 🛠️ 04-运维与工具
 
-## 📦 框架
+- [docker](04-运维与工具/docker/) Docker
+- [nginx](04-运维与工具/nginx/) Nginx
+- [git](04-运维与工具/git/) Git 命令及常见问题解决办法
+- [vim](04-运维与工具/vim/) Vim 操作指南
+- [windows](04-运维与工具/windows/) Windows 常用命令
+- [shortcuts](04-运维与工具/shortcuts/) IDEA / VSCode / Windows 常用快捷键
 
-- [flowable/](flowable/) Flowable
+### 📦 05-框架
 
-## 🎨 前端
+- [flowable](05-框架/flowable/) Flowable
 
-- [frontend/](frontend/) 前端
+### 🎨 06-前端
 
-## 🎮 游戏
+- [frontend](06-前端/frontend/) 前端
 
-- [godot/](godot/) Godot
+### 🎮 07-游戏
 
-## 🧩 效率工具
+- [godot](07-游戏/godot/) Godot
 
-- [plugins/](plugins/) Obsidian 第三方插件使用指南
+### 🧩 08-效率工具
 
-## 🔭 探索
+- [plugins](08-效率工具/plugins/) Obsidian 第三方插件使用指南
 
-- [explore/](explore/) 可探索的新方向
+### 🔭 09-探索
+
+- [explore](09-探索/explore/) 可探索的新方向
 
 ## 维护
 
