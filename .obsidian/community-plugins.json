@@ -3,5 +3,7 @@
   "obsidian-excalidraw-plugin",
   "templater-obsidian",
   "dataview",
-  "calendar"
+  "calendar",
+  "obsidian-style-settings",
+  "copilot"
 ]
