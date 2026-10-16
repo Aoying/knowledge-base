@@ -1,27 +1,52 @@
 # 个人知识库
 
-19 个方向的个人知识库，每晚 20:30 自动更新维护。
+20 个方向 + Obsidian 插件指南，每晚 20:30 自动更新维护。
 
-## 目录
+## 🤖 AI 与 Agent
 
-- [skills/](skills/) 好用 Skills 搜集
 - [agent/](agent/) Agent
-- [python/](python/) Python
+- [skills/](skills/) 好用 Skills 搜集
+
+## 💻 开发语言
+
 - [java/](java/) Java
-- [redis/](redis/) Redis
+- [python/](python/) Python
+- [js/](js/) JavaScript
+
+## 🗄️ 数据与消息
+
 - [mysql/](mysql/) MySQL
-- [flowable/](flowable/) Flowable
+- [redis/](redis/) Redis
 - [rocketmq/](rocketmq/) RocketMQ
 - [kafka/](kafka/) Kafka
+
+## 🛠️ 运维与工具
+
 - [docker/](docker/) Docker
 - [nginx/](nginx/) Nginx
 - [git/](git/) Git 命令及常见问题解决办法
-- [shortcuts/](shortcuts/) IDEA / VSCode / Windows 常用快捷键
-- [windows/](windows/) Windows 常用命令
 - [vim/](vim/) Vim 操作指南
-- [js/](js/) JavaScript
+- [windows/](windows/) Windows 常用命令
+- [shortcuts/](shortcuts/) IDEA / VSCode / Windows 常用快捷键
+
+## 📦 框架
+
+- [flowable/](flowable/) Flowable
+
+## 🎨 前端
+
 - [frontend/](frontend/) 前端
+
+## 🎮 游戏
+
 - [godot/](godot/) Godot
+
+## 🧩 效率工具
+
+- [plugins/](plugins/) Obsidian 第三方插件使用指南
+
+## 🔭 探索
+
 - [explore/](explore/) 可探索的新方向
 
 ## 维护
