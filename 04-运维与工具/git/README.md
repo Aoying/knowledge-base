@@ -54,6 +54,27 @@ git config --global core.autocrlf true   # Windows 推荐：入库转 LF，检�
 git show <commit-sha> --stat
 ```
 
+### 8. 远端重组了目录，本地 pull 后旧文件夹还在
+
+这是 Git 同步不会自动删除本地未跟踪文件夹导致的。进入仓库目录，执行：
+
+```bash
+git fetch origin
+git status
+git pull
+git clean -nd
+```
+
+`git clean -nd` 只预览将删除的未跟踪文件，不会真的删除。
+
+确认残余文件确实不需要后，再执行：
+
+```bash
+git clean -fd
+```
+
+注意：`git clean -fd` 会删除所有未跟踪文件和文件夹，请先检查预览结果。若残余文件已被 Git 跟踪但远程已删除，通常 `git pull` 就能同步删除。
+
 ## Gitee / GitHub 对应
 
 - 两个平台的 git 协议操作完全一样，区别只在远端地址和网页功能。
