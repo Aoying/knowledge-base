@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "04-运维与工具/git/README.md",
+                "file": "10-疑难杂症/troubleshooting/README.md",
                 "mode": "preview",
                 "source": false
               },
@@ -115,7 +115,7 @@
         }
       }
     ],
-    "currentTab": 5
+    "currentTab": 0
   },
   "right": {
     "id": "e29916749b71a433",
@@ -213,9 +213,21 @@
   },
   "active": "9d37bd88e6a33dab",
   "lastOpenFiles": [
-    "04-运维与工具/git/README.md",
     "维护规则.md",
     "README.md",
+    "10-疑难杂症/troubleshooting/README.md",
+    "03-数据与消息/elasticsearch/README.md",
+    "02-开发语言/regex/README.md",
+    "01-AI与Agent/skills/agent-dev.md",
+    "10-疑难杂症/troubleshooting",
+    "03-数据与消息/elasticsearch",
+    "02-开发语言/regex",
+    "10-疑难杂症",
+    "01-AI与Agent/skills/dev-workflow.md",
+    "01-AI与Agent/skills/README.md",
+    "03-数据与消息/kafka/README.md",
+    "08-效率工具/plugins/第三方插件使用指南.md",
+    "04-运维与工具/git/README.md",
     "02-开发语言/python/README.md",
     "01-AI与Agent/skills.md",
     "02-开发语言/java.md",
@@ -224,30 +236,18 @@
     "04-运维与工具/shortcuts/README.md",
     "04-运维与工具/vim/README.md",
     "04-运维与工具/windows/README.md",
-    "08-效率工具/plugins/第三方插件使用指南.md",
     "07-游戏/godot/README.md",
-    "01-AI与Agent/skills/README.md",
     "05-框架/flowable/README.md",
     "06-前端/frontend/README.md",
-    "03-数据与消息/kafka/README.md",
     "03-数据与消息/rocketmq/README.md",
     "02-开发语言/js/README.md",
     "09-探索/explore/探索方向建议.md",
     "09-探索/explore/README.md",
-    "04-运维与工具/docker/README.md",
-    "03-数据与消息/redis/README.md",
-    "03-数据与消息/mysql/README.md",
-    "01-AI与Agent/skills/rag.md",
-    "01-AI与Agent/skills/dev-workflow.md",
     "09-探索/explore",
     "08-效率工具/plugins",
     "07-游戏/godot",
     "06-前端/frontend",
     "05-框架/flowable",
-    "04-运维与工具/windows",
-    "04-运维与工具/vim",
-    "04-运维与工具/shortcuts",
-    "04-运维与工具/nginx",
-    "04-运维与工具/git"
+    "04-运维与工具/windows"
   ]
 }
