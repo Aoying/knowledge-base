@@ -14,6 +14,7 @@
 - [java](02-开发语言/java/) Java
 - [python](02-开发语言/python/) Python
 - [js](02-开发语言/js/) JavaScript
+- [regex](02-开发语言/regex/) 正则表达式
 
 ### 🗄️ 03-数据与消息
 
@@ -21,6 +22,7 @@
 - [redis](03-数据与消息/redis/) Redis
 - [rocketmq](03-数据与消息/rocketmq/) RocketMQ
 - [kafka](03-数据与消息/kafka/) Kafka
+- [elasticsearch](03-数据与消息/elasticsearch/) Elasticsearch
 
 ### 🛠️ 04-运维与工具
 
@@ -50,6 +52,10 @@
 ### 🔭 09-探索
 
 - [explore](09-探索/explore/) 可探索的新方向
+
+### 🆘 10-疑难杂症
+
+- [troubleshooting](10-疑难杂症/troubleshooting/) 疑难杂症问题解决方案
 
 ## 维护
 
