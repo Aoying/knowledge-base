@@ -45,3 +45,20 @@ retries=Integer.MAX_VALUE
 - Spring Kafka（KafkaTemplate / @KafkaListener）实战片段
 - RocketMQ vs Kafka 选型对比（见 rocketmq/ 方向）
 - 本地 Docker 单机 KRaft 起一个 broker 的 compose
+
+## 疑难杂症
+
+### 1. ISR 收缩与 unclean leader election 丢数据
+- **现象**：broker 挂了一个，恢复后发现少了一段消息。
+- **原因**：`unclean.leader.election.enable=true` 时，非 ISR 副本也能当选 leader，它缺的数据就丢了。
+- **解决**：生产环境设 `unclean.leader.election.enable=false`，宁可短暂不可用也不丢数据；`min.insync.replicas` 至少 2。
+
+### 2. 消费者 lag 持续增长的排查链路
+- **现象**：监控看 lag 只增不减，消费组像没在干活。
+- **原因**：按顺序查：消费者是不是挂了/rebalance 不停 → 单条消费耗时（下游慢）→ 分区数 < 消费者线程数（扩线程没用）→ broker 磁盘/网络瓶颈。
+- **解决**：先看消费耗时，90% 的 lag 都是下游慢；确认分区数 >= 消费线程数；临时扩分区+消费者顶过去再查根因。
+
+### 3. exactly-once 的代价
+- **现象**：开了幂等+事务，吞吐掉了 30%+，延迟也高了。
+- **原因**：exactly-once = 幂等生产者 + 事务 + 消费者幂等处理，三重成本。
+- **解决**：不是所有业务都要 exactly-once；能接受"至少一次+消费端幂等"就别开事务；真要开，压测出基准再上线。
