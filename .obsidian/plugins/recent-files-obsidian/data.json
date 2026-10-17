@@ -1,16 +1,16 @@
 {
   "recentFiles": [
     {
-      "basename": "维护规则",
-      "path": "维护规则.md"
-    },
-    {
       "basename": "疑难杂症",
       "path": "10-疑难杂症/疑难杂症.md"
     },
     {
-      "basename": "Git运维与工具",
-      "path": "04-运维与工具/Git运维与工具.md"
+      "basename": "维护规则",
+      "path": "维护规则.md"
+    },
+    {
+      "basename": "Git 运维与工具",
+      "path": "04-运维与工具/Git 运维与工具.md"
     },
     {
       "basename": "快捷键速查",
@@ -19,10 +19,6 @@
     {
       "basename": "Windows 常用命令",
       "path": "04-运维与工具/Windows 常用命令.md"
-    },
-    {
-      "basename": "Git 运维与工具",
-      "path": "04-运维与工具/Git 运维与工具.md"
     },
     {
       "basename": "README",
