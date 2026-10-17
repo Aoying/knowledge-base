@@ -1,48 +1,12 @@
 {
   "recentFiles": [
     {
-      "basename": "README",
-      "path": "10-疑难杂症/troubleshooting/README.md"
-    },
-    {
-      "basename": "README",
-      "path": "04-运维与工具/git/README.md"
-    },
-    {
       "basename": "维护规则",
       "path": "维护规则.md"
     },
     {
       "basename": "README",
       "path": "README.md"
-    },
-    {
-      "basename": "README",
-      "path": "03-数据与消息/elasticsearch/README.md"
-    },
-    {
-      "basename": "README",
-      "path": "02-开发语言/regex/README.md"
-    },
-    {
-      "basename": "agent-dev",
-      "path": "01-AI与Agent/skills/agent-dev.md"
-    },
-    {
-      "basename": "dev-workflow",
-      "path": "01-AI与Agent/skills/dev-workflow.md"
-    },
-    {
-      "basename": "README",
-      "path": "01-AI与Agent/skills/README.md"
-    },
-    {
-      "basename": "README",
-      "path": "03-数据与消息/kafka/README.md"
-    },
-    {
-      "basename": "第三方插件使用指南",
-      "path": "08-效率工具/plugins/第三方插件使用指南.md"
     }
   ],
   "omittedPaths": [],

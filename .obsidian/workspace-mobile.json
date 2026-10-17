@@ -11,14 +11,10 @@
             "id": "9d37bd88e6a33dab",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "10-疑难杂症/troubleshooting/README.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "README"
+              "title": "新标签页"
             }
           }
         ]
@@ -127,7 +123,7 @@
         "state": {
           "type": "backlink",
           "state": {
-            "file": "10-疑难杂症/troubleshooting/README.md",
+            "file": "04-运维与工具/git/README.md",
             "collapseAll": false,
             "extraContext": false,
             "sortOrder": "alphabetical",
@@ -146,7 +142,7 @@
         "state": {
           "type": "outgoing-link",
           "state": {
-            "file": "10-疑难杂症/troubleshooting/README.md",
+            "file": "04-运维与工具/git/README.md",
             "linksCollapsed": false,
             "unlinkedCollapsed": false
           },
@@ -211,38 +207,38 @@
       "file-cleaner-redux:Clean files": false
     }
   },
-  "active": "e5f54ab26afc44ad",
+  "active": "9d37bd88e6a33dab",
   "lastOpenFiles": [
     "04-运维与工具/git/README.md",
-    "10-疑难杂症/troubleshooting/README.md",
-    "远端重组目录后本地残余文件夹清理.md",
-    "远端重组目录后本地残余文件夹清理[[.md",
-    "维护规则.md",
-    "README.md",
-    "03-数据与消息/elasticsearch/README.md",
-    "02-开发语言/regex/README.md",
-    "01-AI与Agent/skills/agent-dev.md",
+    "03-数据与消息/Elasticsearch.md",
+    "02-开发语言/正则表达式.md",
+    "10-疑难杂症/疑难杂症.md",
+    "09-探索/探索方向建议.md",
+    "08-效率工具/Obsidian 插件使用指南.md",
+    "07-游戏/Godot.md",
+    "06-前端/前端开发.md",
+    "05-框架/Flowable.md",
+    "04-运维与工具/快捷键速查.md",
+    "04-运维与工具/Windows 常用命令.md",
+    "04-运维与工具/Vim.md",
+    "04-运维与工具/Nginx.md",
+    "04-运维与工具/Git 运维与工具.md",
+    "04-运维与工具/Docker.md",
+    "03-数据与消息/RocketMQ.md",
+    "03-数据与消息/Redis.md",
+    "03-数据与消息/MySQL 数据库.md",
+    "03-数据与消息/Kafka 消息队列.md",
+    "02-开发语言/Python.md",
+    "02-开发语言/JavaScript.md",
+    "02-开发语言/Java.md",
+    "01-AI与Agent/开发工作流 Skills.md",
+    "01-AI与Agent/Skills 索引.md",
+    "01-AI与Agent/RAG Skills.md",
+    "01-AI与Agent/Agent.md",
     "10-疑难杂症/troubleshooting",
     "03-数据与消息/elasticsearch",
     "02-开发语言/regex",
     "10-疑难杂症",
-    "01-AI与Agent/skills/dev-workflow.md",
-    "01-AI与Agent/skills/README.md",
-    "03-数据与消息/kafka/README.md",
-    "08-效率工具/plugins/第三方插件使用指南.md",
-    "02-开发语言/python/README.md",
-    "01-AI与Agent/skills.md",
-    "02-开发语言/java.md",
-    "02-开发语言/java/README.md",
-    "04-运维与工具/nginx/README.md",
-    "04-运维与工具/shortcuts/README.md",
-    "04-运维与工具/vim/README.md",
-    "04-运维与工具/windows/README.md",
-    "07-游戏/godot/README.md",
-    "05-框架/flowable/README.md",
-    "06-前端/frontend/README.md",
-    "03-数据与消息/rocketmq/README.md",
-    "02-开发语言/js/README.md",
     "09-探索/explore",
     "08-效率工具/plugins",
     "07-游戏/godot",
