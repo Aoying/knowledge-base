@@ -75,6 +75,51 @@ git clean -fd
 
 注意：`git clean -fd` 会删除所有未跟踪文件和文件夹，请先检查预览结果。若残余文件已被 Git 跟踪但远程已删除，通常 `git pull` 就能同步删除。
 
+### 9. commit 了但还没 push，想撤销
+
+撤销未推送的 commit 是安全且推荐的，核心命令是 `git reset`，按想保留修改的程度选参数：
+
+**保留修改，仅撤销 commit（推荐）**：
+```bash
+git reset --soft HEAD~1    # 修改保留在暂存区，可直接重新提交
+git reset HEAD~1            # 默认 --mixed，修改回到未暂存状态，需重新 git add
+```
+
+**彻底丢弃修改（谨慎）**：
+```bash
+git reset --hard HEAD~1    # 永久删除工作区未提交改动，不可逆，执行前务必确认
+```
+
+补充技巧：撤销多个 commit 把 `HEAD~1` 换成 `HEAD~n`（如 `HEAD~3`）；只想改上一次的 commit message 用 `git commit --amend`，不需要 reset。
+
+### 10. 本地仓库损坏，强行修复
+
+`git fsck` 报大量 `error: object file ... is empty` 时，不想重新克隆可以尝试清理。**操作有风险，先备份整个项目文件夹。**
+
+1. 找出损坏对象：
+```bash
+git fsck --full
+```
+2. 删除所有 0 字节空对象文件（在仓库根目录执行）：
+```bash
+find .git/objects -type f -empty -delete -print
+```
+3. 从远端重新获取完整数据：
+```bash
+git fetch --refetch
+```
+4. 还不行就重置：
+```bash
+git fetch origin
+git reset --hard origin/你的分支名
+```
+
+额外建议：知识库推送体积大、网络不稳定导致 unexpected disconnect 时，增大缓冲区：
+```bash
+git config --global http.postBuffer 157286400
+```
+以上都无效，最稳妥的还是重新克隆。
+
 ## Gitee / GitHub 对应
 
 - 两个平台的 git 协议操作完全一样，区别只在远端地址和网页功能。
