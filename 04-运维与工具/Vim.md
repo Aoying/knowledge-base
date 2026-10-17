@@ -78,3 +78,15 @@ set clipboard=unnamedplus   " 与系统剪贴板互通（需 +clipboard）
 3. **粘贴代码缩进错乱**：粘贴前 `:set paste`，粘完 `:set nopaste`。
 4. **`u` 撤销不够用**：Vim 撤销是树状的，`g-` / `g+` 按时间回退分支。
 5. **想用鼠标**：`:set mouse=a` 开启鼠标支持（终端 Vim）。
+
+## 疑难杂症
+
+### 1. 远程粘贴代码缩进全乱（bracketed paste）
+- **现象**：从本地复制大段代码粘到远程 vim，每行缩进越来越深。
+- **原因**：开了 `autoindent`，粘贴时 vim 把每行都当手打的又缩进一次。
+- **解决**：粘贴前 `:set paste`，粘完 `:set nopaste`；或用 `"+p` 走系统剪贴板（需 +clipboard）；新版 vim/neovim 一般自动处理 bracketed paste。
+
+### 2. 打开文件提示 swap 文件已存在
+- **现象**：`Found a swap file by the name ...`，问你要恢复还是删除。
+- **原因**：上次 vim 非正常退出（断网、kill），swap 残留；或另一个 vim 正开着这文件。
+- **解决**：确认没别的 vim 在编辑，选 `D` 删除 swap；经常断网的话把 `directory` 指到本地 tmp，避免残留。
