@@ -85,3 +85,20 @@ String lua = "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del'
 - Redis Cluster 槽位与扩缩容
 - Stream 消费者组实战
 - Redisson 常用件（限流、信号量）
+
+## 疑难杂症
+
+### 1. 生产环境用了 KEYS * 直接打挂
+- **现象**：想查个 key 模式，`KEYS *` 一执行，Redis 整个卡死。
+- **原因**：`KEYS` 是 O(N) 全量扫描，单线程模型下直接阻塞所有请求。
+- **解决**：一律用 `SCAN` 游标分批扫；生产环境可以 rename 掉 `KEYS` 命令防手滑。
+
+### 2. RDB/AOF 选型与数据恢复
+- **现象**：Redis 重启后数据丢了，或恢复巨慢。
+- **原因**：纯 RDB 两次快照之间的数据会丢；纯 AOF 文件太大恢复慢；`appendfsync` 策略影响写入性能。
+- **解决**：生产用 RDB+AOF 混合持久化；`appendfsync everysec` 是常用折中；定期把 RDB 备份到异机。
+
+### 3. Cluster 模式 key 报错 CROSSSLOT
+- **现象**：`MGET`/`MSET` 多个 key 报 `CROSSSLOT Keys in request don't hash to the same slot`。
+- **原因**：Cluster 按 key 的哈希槽分片，多 key 操作要求 key 落在同一个槽。
+- **解决**：用 hash tag 把相关 key 绑一起：`{user:1}:name`、`{user:1}:age`，花括号内的部分决定槽位。
