@@ -7,10 +7,10 @@
 ### 🤖 01-AI与Agent
 
 - [Agent](01-AI与Agent/Agent.md)
-- [Skills 索引](01-AI与Agent/Skills 索引.md)
-- [RAG Skills](01-AI与Agent/RAG Skills.md)
-- [Agent 开发 Skills](01-AI与Agent/Agent 开发 Skills.md)
-- [开发工作流 Skills](01-AI与Agent/开发工作流 Skills.md)
+- [Skills 索引](01-AI与Agent/Skills-索引.md)
+- [RAG Skills](01-AI与Agent/RAG-Skills.md)
+- [Agent 开发 Skills](01-AI与Agent/Agent-开发-Skills.md)
+- [开发工作流 Skills](01-AI与Agent/开发工作流-Skills.md)
 
 ### 💻 02-开发语言
 
@@ -21,19 +21,19 @@
 
 ### 🗄️ 03-数据与消息
 
-- [MySQL 数据库](03-数据与消息/MySQL 数据库.md)
+- [MySQL 数据库](03-数据与消息/MySQL-数据库.md)
 - [Redis](03-数据与消息/Redis.md)
 - [RocketMQ](03-数据与消息/RocketMQ.md)
-- [Kafka 消息队列](03-数据与消息/Kafka 消息队列.md)
+- [Kafka 消息队列](03-数据与消息/Kafka-消息队列.md)
 - [Elasticsearch](03-数据与消息/Elasticsearch.md)
 
 ### 🛠️ 04-运维与工具
 
 - [Docker](04-运维与工具/Docker.md)
 - [Nginx](04-运维与工具/Nginx.md)
-- [Git 运维与工具](04-运维与工具/Git 运维与工具.md)
+- [Git 运维与工具](04-运维与工具/Git-运维与工具.md)
 - [Vim](04-运维与工具/Vim.md)
-- [Windows 常用命令](04-运维与工具/Windows 常用命令.md)
+- [Windows 常用命令](04-运维与工具/Windows-常用命令.md)
 - [快捷键速查](04-运维与工具/快捷键速查.md)
 
 ### 📦 05-框架
@@ -50,7 +50,7 @@
 
 ### 🧩 08-效率工具
 
-- [Obsidian 插件使用指南](08-效率工具/Obsidian 插件使用指南.md)
+- [Obsidian 插件使用指南](08-效率工具/Obsidian-插件使用指南.md)
 
 ### 🔭 09-探索
 
