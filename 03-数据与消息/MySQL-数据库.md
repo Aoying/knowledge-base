@@ -64,3 +64,20 @@ EXPLAIN SELECT * FROM t_order WHERE user_id=1;
 - 分库分表中间件选型笔记
 -  binlog / Canal 同步实战
 -  OceanBase 租户与资源单元概念
+
+## 疑难杂症
+
+### 1. OceanBase 与 MySQL 的 SQL 兼容差异
+- **现象**：同一套 SQL 在 MySQL 跑得好好的，OceanBase 报错或结果不对。
+- **原因**：OceanBase MySQL 模式兼容约 90%+，但窗口函数、部分 DDL、系统变量、事务行为有差异。
+- **解决**：以 OceanBase 官方兼容性文档为准；联调阶段用 `EXPLAIN` 对比执行计划；新项目优先用两者都支持的标准写法。
+
+### 2. 死锁排查
+- **现象**：并发一高就报 `Deadlock found when trying to get lock`，日志里看不出谁和谁打架。
+- **原因**：两个事务以不同顺序加锁（如 A 先锁行 1 再锁行 2，B 反过来）。
+- **解决**：`SHOW ENGINE INNODB STATUS` 看 `LATEST DETECTED DEADLOCK` 段，找加锁顺序；业务层统一加锁顺序；缩短事务，能不放事务里的查询拿出来。
+
+### 3. 主从延迟导致读到旧数据
+- **现象**：刚写入的数据，读接口查出来是旧的，刷新几次才正常。
+- **原因**：写主库、读从库，从库复制有延迟。
+- **解决**：写后立即读走主库（`forceMaster`）；或业务接受最终一致；延迟持续偏高查从库的 SQL 线程/IO 线程状态。
