@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "README.md",
+                "file": "04-运维与工具/git/README.md",
                 "mode": "preview",
                 "source": false
               },
@@ -103,9 +103,19 @@
           "icon": "lucide-bookmark",
           "title": "书签"
         }
+      },
+      {
+        "id": "15483b83dcd5a48c",
+        "type": "leaf",
+        "state": {
+          "type": "recent-files",
+          "state": {},
+          "icon": "clock",
+          "title": "Recent files"
+        }
       }
     ],
-    "currentTab": 0
+    "currentTab": 5
   },
   "right": {
     "id": "e29916749b71a433",
@@ -193,15 +203,23 @@
       "bases:新建数据库": false,
       "obsidian-git:Open Git source control": false,
       "obsidian-excalidraw-plugin:新建绘图文件": false,
-      "templater-obsidian:Templater": false
+      "templater-obsidian:Templater": false,
+      "table-editor-obsidian:Advanced Tables Toolbar": false,
+      "obsidian-kanban:创建新看板": false,
+      "omnisearch:Omnisearch": false,
+      "obsidian42-brat:BRAT": false,
+      "file-cleaner-redux:Clean files": false
     }
   },
   "active": "9d37bd88e6a33dab",
   "lastOpenFiles": [
+    "04-运维与工具/git/README.md",
+    "维护规则.md",
+    "README.md",
+    "02-开发语言/python/README.md",
+    "01-AI与Agent/skills.md",
     "02-开发语言/java.md",
     "02-开发语言/java/README.md",
-    "README.md",
-    "04-运维与工具/git/README.md",
     "04-运维与工具/nginx/README.md",
     "04-运维与工具/shortcuts/README.md",
     "04-运维与工具/vim/README.md",
@@ -211,7 +229,6 @@
     "01-AI与Agent/skills/README.md",
     "05-框架/flowable/README.md",
     "06-前端/frontend/README.md",
-    "维护规则.md",
     "03-数据与消息/kafka/README.md",
     "03-数据与消息/rocketmq/README.md",
     "02-开发语言/js/README.md",
@@ -220,10 +237,8 @@
     "04-运维与工具/docker/README.md",
     "03-数据与消息/redis/README.md",
     "03-数据与消息/mysql/README.md",
-    "02-开发语言/python/README.md",
     "01-AI与Agent/skills/rag.md",
     "01-AI与Agent/skills/dev-workflow.md",
-    "01-AI与Agent/skills/agent-dev.md",
     "09-探索/explore",
     "08-效率工具/plugins",
     "07-游戏/godot",
