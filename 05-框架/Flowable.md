@@ -65,3 +65,20 @@ taskService.complete(taskId, variables);
 - 流程实例迁移（6.7 的 migration API 实战）
 - 自定义节点行为（JavaDelegate vs 表达式）
 - 结合神农 e 贷的真实审批流沉淀案例
+
+## 疑难杂症
+
+### 1. 流程卡在异步节点不动，也不报错
+- **现象**：任务到异步节点后没下文，act_ru_job 表里有记录但一直不执行。
+- **原因**：`asyncExecutorActivate` 没开，或 job 被标记为 deadletter（失败超重试次数）。
+- **解决**：确认 `flowable.async-executor-activate=true`；查 `act_ru_deadletter_job` 表看失败原因；手动触发 `managementService.moveDeadLetterJobToExecutableJob` 重试。
+
+### 2. 会签（多实例）一个人点了就结束了
+- **现象**：并行会签 3 个人，1 个人审批完流程就往下走了。
+- **原因**：`completionCondition` 写错了（如 `${nrOfCompletedInstances == 1}`），或压根没配。
+- **解决**：全票通过配 `${nrOfCompletedInstances == nrOfInstances}`；按比例配 `${nrOfCompletedInstances/nrOfInstances >= 0.6}`；画完图务必走一遍测试。
+
+### 3. 流程图中文乱码
+- **现象**：生成的流程图图片里中文全是方框。
+- **原因**：服务器（Linux/TongWeb）没有中文字体，Flowable 画图时 fallback 失败。
+- **解决**：服务器装中文字体（如 `wqy-microhei`）；或在代码里指定 `activityFontName` / `labelFontName` 为已安装的字体。
