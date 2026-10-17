@@ -18,6 +18,7 @@
 - [Python](02-开发语言/Python.md)
 - [JavaScript](02-开发语言/JavaScript.md)
 - [正则表达式](02-开发语言/正则表达式.md)
+- [Lua](02-开发语言/Lua.md)
 
 ### 🗄️ 03-数据与消息
 
