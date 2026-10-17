@@ -97,3 +97,20 @@ docker compose down -v    # 连数据卷一起删，慎用
 ## 待补充
 - 本地 Ollama 进阶：不用 Docker，直接本机跑（已在用）
 - 生产发布：镜像 tag 规范、滚动更新
+
+## 疑难杂症
+
+### 1. 容器内时区不对，日志和定时任务全错乱
+- **现象**：容器里 `date` 显示 UTC，日志时间对不上，cron 定时任务跑错时间。
+- **原因**：官方镜像默认 UTC 时区，和宿主机不一致。
+- **解决**：挂载时区文件 `-v /etc/localtime:/etc/localtime:ro`，或 Dockerfile 里 `ENV TZ=Asia/Shanghai` + 装 tzdata。
+
+### 2. 多阶段构建缓存每次都失效
+- **现象**：改一行代码，`docker build` 全量重跑，慢得离谱。
+- **原因**：COPY 顺序不对，源代码变动导致后面所有层缓存失效。
+- **解决**：先 COPY 依赖描述文件（package.json/pom.xml）并安装依赖，再 COPY 源码；`.dockerignore` 排除无关文件。
+
+### 3. Windows 下文件挂载又慢又报权限错
+- **现象**：Docker Desktop 挂载 Windows 目录，读写巨慢，偶发 permission denied。
+- **原因**：跨 OS 文件共享走网络文件系统，性能差且权限映射复杂。
+- **解决**：代码放 WSL2 文件系统里再挂载；或尽量用 COPY 进镜像而不是挂载；生产环境用 Linux 宿主机。
