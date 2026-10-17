@@ -129,3 +129,13 @@ git config --global http.postBuffer 157286400
 
 - 大文件处理（Git LFS）
 - 子模块 vs subtree
+
+### 11. push 被拒绝：non-fast-forward
+- **现象**：`git push` 报 `! [rejected] main -> main (non-fast-forward)`。
+- **原因**：远端有你本地没有的提交（比如别人推了，或你在别的机器推过）。
+- **解决**：先 `git pull --rebase` 把远端提交接进来再推；确认远端提交是你自己的、不要了，才用 `git push --force-with-lease`（别用裸 `--force`）。
+
+### 12. 大文件 push 一直失败
+- **现象**：push 到 99% 断开，或远端拒绝超大文件。
+- **原因**：GitHub 单文件 100MB 上限；大文件进仓库后每次 clone 都慢。
+- **解决**：用 Git LFS（`git lfs track "*.psd"`）；已经误提交的大文件用 `git filter-repo` 清理历史；能放对象存储就别进仓库。
