@@ -6,56 +6,59 @@
 
 ### 🤖 01-AI与Agent
 
-- [agent](01-AI与Agent/agent/) Agent
-- [skills](01-AI与Agent/skills/) 好用 Skills 搜集
+- [Agent](01-AI与Agent/Agent.md)
+- [Skills 索引](01-AI与Agent/Skills 索引.md)
+- [RAG Skills](01-AI与Agent/RAG Skills.md)
+- [Agent 开发 Skills](01-AI与Agent/Agent 开发 Skills.md)
+- [开发工作流 Skills](01-AI与Agent/开发工作流 Skills.md)
 
 ### 💻 02-开发语言
 
-- [java](02-开发语言/java/) Java
-- [python](02-开发语言/python/) Python
-- [js](02-开发语言/js/) JavaScript
-- [regex](02-开发语言/regex/) 正则表达式
+- [Java](02-开发语言/Java.md)
+- [Python](02-开发语言/Python.md)
+- [JavaScript](02-开发语言/JavaScript.md)
+- [正则表达式](02-开发语言/正则表达式.md)
 
 ### 🗄️ 03-数据与消息
 
-- [mysql](03-数据与消息/mysql/) MySQL
-- [redis](03-数据与消息/redis/) Redis
-- [rocketmq](03-数据与消息/rocketmq/) RocketMQ
-- [kafka](03-数据与消息/kafka/) Kafka
-- [elasticsearch](03-数据与消息/elasticsearch/) Elasticsearch
+- [MySQL 数据库](03-数据与消息/MySQL 数据库.md)
+- [Redis](03-数据与消息/Redis.md)
+- [RocketMQ](03-数据与消息/RocketMQ.md)
+- [Kafka 消息队列](03-数据与消息/Kafka 消息队列.md)
+- [Elasticsearch](03-数据与消息/Elasticsearch.md)
 
 ### 🛠️ 04-运维与工具
 
-- [docker](04-运维与工具/docker/) Docker
-- [nginx](04-运维与工具/nginx/) Nginx
-- [git](04-运维与工具/git/) Git 命令及常见问题解决办法
-- [vim](04-运维与工具/vim/) Vim 操作指南
-- [windows](04-运维与工具/windows/) Windows 常用命令
-- [shortcuts](04-运维与工具/shortcuts/) IDEA / VSCode / Windows 常用快捷键
+- [Docker](04-运维与工具/Docker.md)
+- [Nginx](04-运维与工具/Nginx.md)
+- [Git 运维与工具](04-运维与工具/Git 运维与工具.md)
+- [Vim](04-运维与工具/Vim.md)
+- [Windows 常用命令](04-运维与工具/Windows 常用命令.md)
+- [快捷键速查](04-运维与工具/快捷键速查.md)
 
 ### 📦 05-框架
 
-- [flowable](05-框架/flowable/) Flowable
+- [Flowable](05-框架/Flowable.md)
 
 ### 🎨 06-前端
 
-- [frontend](06-前端/frontend/) 前端
+- [前端开发](06-前端/前端开发.md)
 
 ### 🎮 07-游戏
 
-- [godot](07-游戏/godot/) Godot
+- [Godot](07-游戏/Godot.md)
 
 ### 🧩 08-效率工具
 
-- [plugins](08-效率工具/plugins/) Obsidian 第三方插件使用指南
+- [Obsidian 插件使用指南](08-效率工具/Obsidian 插件使用指南.md)
 
 ### 🔭 09-探索
 
-- [explore](09-探索/explore/) 可探索的新方向
+- [探索方向建议](09-探索/探索方向建议.md)
 
 ### 🆘 10-疑难杂症
 
-- [troubleshooting](10-疑难杂症/troubleshooting/) 疑难杂症问题解决方案
+- [疑难杂症](10-疑难杂症/疑难杂症.md)
 
 ## 维护
 
