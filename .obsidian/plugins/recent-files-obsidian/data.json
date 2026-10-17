@@ -1,6 +1,54 @@
 {
   "recentFiles": [
     {
+      "basename": "疑难杂症",
+      "path": "10-疑难杂症/疑难杂症.md"
+    },
+    {
+      "basename": "Nginx",
+      "path": "04-运维与工具/Nginx.md"
+    },
+    {
+      "basename": "Git-运维与工具",
+      "path": "04-运维与工具/Git-运维与工具.md"
+    },
+    {
+      "basename": "Flowable",
+      "path": "05-框架/Flowable.md"
+    },
+    {
+      "basename": "MySQL-数据库",
+      "path": "03-数据与消息/MySQL-数据库.md"
+    },
+    {
+      "basename": "快捷键速查",
+      "path": "04-运维与工具/快捷键速查.md"
+    },
+    {
+      "basename": "Docker",
+      "path": "04-运维与工具/Docker.md"
+    },
+    {
+      "basename": "Vim",
+      "path": "04-运维与工具/Vim.md"
+    },
+    {
+      "basename": "Windows-常用命令",
+      "path": "04-运维与工具/Windows-常用命令.md"
+    },
+    {
+      "basename": "Elasticsearch",
+      "path": "03-数据与消息/Elasticsearch.md"
+    },
+    {
+      "basename": "探索方向建议",
+      "path": "09-探索/探索方向建议.md"
+    },
+    {
+      "basename": "前端开发",
+      "path": "06-前端/前端开发.md"
+    },
+    {
       "basename": "Godot",
       "path": "07-游戏/Godot.md"
     },
@@ -21,20 +69,8 @@
       "path": "01-AI与Agent/Agent.md"
     },
     {
-      "basename": "Git-运维与工具",
-      "path": "04-运维与工具/Git-运维与工具.md"
-    },
-    {
-      "basename": "疑难杂症",
-      "path": "10-疑难杂症/疑难杂症.md"
-    },
-    {
       "basename": "维护规则",
       "path": "维护规则.md"
-    },
-    {
-      "basename": "快捷键速查",
-      "path": "04-运维与工具/快捷键速查.md"
     },
     {
       "basename": "README",

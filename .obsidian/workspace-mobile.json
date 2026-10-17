@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "07-游戏/Godot.md",
+                "file": "10-疑难杂症/疑难杂症.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Godot"
+              "title": "疑难杂症"
             }
           }
         ]
@@ -211,16 +211,26 @@
       "file-cleaner-redux:Clean files": false
     }
   },
-  "active": "9d37bd88e6a33dab",
+  "active": "e5f54ab26afc44ad",
   "lastOpenFiles": [
+    "02-开发语言/Lua.md",
+    "04-运维与工具/Nginx.md",
+    "04-运维与工具/Git-运维与工具.md",
+    "10-疑难杂症/疑难杂症.md",
+    "05-框架/Flowable.md",
+    "03-数据与消息/MySQL-数据库.md",
+    "04-运维与工具/快捷键速查.md",
+    "04-运维与工具/Docker.md",
+    "04-运维与工具/Vim.md",
+    "04-运维与工具/Windows-常用命令.md",
+    "03-数据与消息/Elasticsearch.md",
+    "09-探索/探索方向建议.md",
+    "06-前端/前端开发.md",
+    "07-游戏/Godot.md",
     "01-AI与Agent/Skills-索引.md",
     "02-开发语言/Java.md",
     "01-AI与Agent/开发工作流-Skills.md",
     "01-AI与Agent/Agent.md",
-    "04-运维与工具/Git-运维与工具.md",
-    "10-疑难杂症/疑难杂症.md",
-    "04-运维与工具/Windows-常用命令.md",
-    "03-数据与消息/MySQL-数据库.md",
     "03-数据与消息/Kafka-消息队列.md",
     "01-AI与Agent/RAG-Skills.md",
     "01-AI与Agent/Agent-开发-Skills.md",
@@ -228,17 +238,7 @@
     "维护规则.md",
     "04-运维与工具/Git 运维与工具.md",
     "04-运维与工具/Git运维与工具.md",
-    "04-运维与工具/快捷键速查.md",
     "04-运维与工具/Windows 常用命令.md",
-    "04-运维与工具/Git.md",
-    "04-运维与工具/git/README.md",
-    "03-数据与消息/Elasticsearch.md",
-    "02-开发语言/正则表达式.md",
-    "09-探索/探索方向建议.md",
-    "08-效率工具/Obsidian 插件使用指南.md",
-    "07-游戏/Godot.md",
-    "06-前端/前端开发.md",
-    "05-框架/Flowable.md",
     "10-疑难杂症/troubleshooting",
     "03-数据与消息/elasticsearch",
     "02-开发语言/regex",
