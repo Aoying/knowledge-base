@@ -71,3 +71,20 @@ node --watch app.js     # 文件变化自动重启（开发用）
 3. **`==` 隐式转换**：永远用 `===`，`==` 的转换规则是 bug 之源。
 4. **async 函数没 await**：Promise 静默悬挂，错误 catch 不到。
 5. **循环里用 var**：`for (var i...)` + 异步回调全是最后一个值，改 `let`。
+
+## 疑难杂症
+
+### 1. forEach 里 await 不等待
+- **现象**：`arr.forEach(async x => await fetch(x))` 后面代码先跑了，请求还没完。
+- **原因**：forEach 不管回调返回的 Promise，async 回调只是"启动了"而已。
+- **解决**：换 `for...of` + await（串行），或 `await Promise.all(arr.map(...))`（并行）。
+
+### 2. Promise.all 一个 reject 全部挂
+- **现象**：并行调 10 个接口，1 个失败，9 个成功的结果也拿不到。
+- **原因**：`Promise.all` 遇到第一个 reject 就整体 reject。
+- **解决**：用 `Promise.allSettled` 拿全部结果再过滤；或给每个 promise 包 `.catch` 兜底。
+
+### 3. 深拷贝循环引用爆栈
+- **现象**：`JSON.parse(JSON.stringify(obj))` 报 `Converting circular structure to JSON`。
+- **原因**：对象互相引用，JSON 序列化无限递归。
+- **解决**：用 `structuredClone`（现代浏览器/Node 17+），自带循环引用处理；老环境手写 WeakMap 版深拷贝。
