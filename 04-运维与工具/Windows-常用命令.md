@@ -72,3 +72,15 @@ Get-Content app.log -Tail 50 -Wait
 3. **路径空格**：`"C:\Program Files\xxx"` 加引号；`&` 调用带空格路径的可执行文件。
 4. **换行符 CRLF**：跨平台脚本注意 `\r`，Git 仓库设 `core.autocrlf=true`（Windows 推荐）。
 5. **管理员权限**：改 hosts、看系统进程等需要管理员终端（右键以管理员身份运行）。
+
+## 疑难杂症
+
+### 1. WSL2 里连不上 Windows 上的服务
+- **现象**：Windows 上起了个服务（localhost:8080），WSL2 里 curl 不通。
+- **原因**：WSL2 是独立虚拟网卡，和 Windows 不在同一个 localhost。
+- **解决**：WSL2 里用 `$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}')` 拿 Windows 宿主机 IP；或在 Windows 防火墙给 WSL 网段放行。
+
+### 2. winget 安装卡住或找不到包
+- **现象**：`winget install` 一直转圈，或提示找不到包。
+- **原因**：默认源在国外，网络差；或包名不对。
+- **解决**：先 `winget search` 确认包名/Id；换源或挂代理；急用直接去 GitHub Releases 下安装包。
