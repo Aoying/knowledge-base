@@ -59,3 +59,20 @@ curl -X GET "localhost:9200/books/_search" -H 'Content-Type: application/json' -
 3. **深度分页性能坑**：`from+size` 翻到几万页会很慢，大数据量翻页用 `search_after`。
 4. **写入后查不到**：默认 refresh 间隔 1s，刚写入的文档有延迟可见，不是丢了。
 5. **分片数拍脑袋**：分片不是越多越好，每个分片都是开销；单机测试 1 分片起步。
+
+## 疑难杂症
+
+### 1. 脑裂（split-brain）
+- **现象**：网络抖动后集群出现两个 master，数据写乱。
+- **原因**：master 选举的 quorum 数设小了，网络分区后两边各自选出 master。
+- **解决**：`discovery.zen.minimum_master_nodes`（7.x 前）设为 `master 节点数/2+1`；8.x 用集群自动管理；生产 master 节点至少 3 个。
+
+### 2. bulk 写入被拒绝（rejected execution）
+- **现象**：批量写入报 `EsRejectedExecutionException`，队列满了。
+- **原因**：写入线程池 + 队列满了，通常是 bulk 包太大、并发太高，或集群写入本来就慢（如 refresh 太频繁）。
+- **解决**：bulk 单包控制在 5-15MB；客户端做退避重试；写入高峰调大 `refresh_interval`（如 30s）。
+
+### 3. 分片长期 UNASSIGNED
+- **现象**：集群状态 yellow/red，有分片一直分配不下去。
+- **原因**：`GET _cluster/allocation/explain` 看，大概率是磁盘水位（flood stage）、节点属性不满足，或副本数 > 数据节点数。
+- **解决**：先看 explain 的 decision；磁盘问题清数据或扩容；单节点测试环境把副本数设 0。
