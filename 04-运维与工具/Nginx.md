@@ -67,3 +67,25 @@ proxy_set_header Connection "upgrade";
 
 - HTTPS / 证书自动续期（certbot）
 - 限流（limit_req）防刷配置
+
+## 疑难杂症
+
+### 1. WebSocket 代理连上就断
+- **现象**：ws 直连后端正常，走 Nginx 握手成功后很快断开。
+- **原因**：没透传 `Upgrade` 和 `Connection` 头，Nginx 把它当普通 HTTP 处理了。
+- **解决**：
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+```
+
+### 2. location 匹配优先级深坑
+- **现象**：配了多个 location，请求总走到不对的那个。
+- **原因**：优先级是 `=` > `^~` > 正则（按文件顺序）> 前缀最长；很多人以为按书写顺序。
+- **解决**：精确匹配用 `=`，前缀想截胡用 `^~`，正则注意先后顺序；`nginx -T` dump 出来逐条对。
+
+### 3. 反向代理下载大文件卡住
+- **现象**：下载几百 MB 的文件，进度条走走停停，甚至超时。
+- **原因**：`proxy_buffering` 开着，Nginx 先把后端响应全 buffer 到磁盘/内存再转发。
+- **解决**：大文件下载的 location 关掉 `proxy_buffering off`，改走 `X-Accel-Redirect` 让 Nginx 直接发文件。
