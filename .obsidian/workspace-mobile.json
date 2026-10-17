@@ -14,7 +14,7 @@
               "type": "markdown",
               "state": {
                 "file": "10-疑难杂症/troubleshooting/README.md",
-                "mode": "preview",
+                "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
@@ -127,7 +127,7 @@
         "state": {
           "type": "backlink",
           "state": {
-            "file": "维护规则.md",
+            "file": "10-疑难杂症/troubleshooting/README.md",
             "collapseAll": false,
             "extraContext": false,
             "sortOrder": "alphabetical",
@@ -146,9 +146,9 @@
         "state": {
           "type": "outgoing-link",
           "state": {
-            "file": "维护规则.md",
+            "file": "10-疑难杂症/troubleshooting/README.md",
             "linksCollapsed": false,
-            "unlinkedCollapsed": true
+            "unlinkedCollapsed": false
           },
           "icon": "links-going-out",
           "title": "出链"
@@ -211,11 +211,14 @@
       "file-cleaner-redux:Clean files": false
     }
   },
-  "active": "9d37bd88e6a33dab",
+  "active": "e5f54ab26afc44ad",
   "lastOpenFiles": [
+    "04-运维与工具/git/README.md",
+    "10-疑难杂症/troubleshooting/README.md",
+    "远端重组目录后本地残余文件夹清理.md",
+    "远端重组目录后本地残余文件夹清理[[.md",
     "维护规则.md",
     "README.md",
-    "10-疑难杂症/troubleshooting/README.md",
     "03-数据与消息/elasticsearch/README.md",
     "02-开发语言/regex/README.md",
     "01-AI与Agent/skills/agent-dev.md",
@@ -227,7 +230,6 @@
     "01-AI与Agent/skills/README.md",
     "03-数据与消息/kafka/README.md",
     "08-效率工具/plugins/第三方插件使用指南.md",
-    "04-运维与工具/git/README.md",
     "02-开发语言/python/README.md",
     "01-AI与Agent/skills.md",
     "02-开发语言/java.md",
@@ -241,8 +243,6 @@
     "06-前端/frontend/README.md",
     "03-数据与消息/rocketmq/README.md",
     "02-开发语言/js/README.md",
-    "09-探索/explore/探索方向建议.md",
-    "09-探索/explore/README.md",
     "09-探索/explore",
     "08-效率工具/plugins",
     "07-游戏/godot",

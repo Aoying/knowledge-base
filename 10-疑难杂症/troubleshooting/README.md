@@ -6,9 +6,9 @@
 
 ### Git
 
-- [远端重组目录后本地残余文件夹清理](../04-运维与工具/git/README.md)（`git clean -nd` 预览 / `git clean -fd` 删除）
-- [commit 未 push 想撤销](../04-运维与工具/git/README.md)（`git reset --soft/--mixed/--hard`）
-- [本地仓库损坏强行修复](../04-运维与工具/git/README.md)（`git fsck` / 清空对象 / `fetch --refetch`）
+- [远端重组目录后本地残余文件夹清理](04-运维与工具/git/README.md)（`git clean -nd` 预览 / `git clean -fd` 删除）
+- [commit 未 push 想撤销](04-运维与工具/git/README.md)（`git reset --soft/--mixed/--hard`）
+- [本地仓库损坏强行修复](04-运维与工具/git/README.md)（`git fsck` / 清空对象 / `fetch --refetch`）
 
 ## 收录规范
 

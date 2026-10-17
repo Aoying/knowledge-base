@@ -5,6 +5,10 @@
       "path": "10-疑难杂症/troubleshooting/README.md"
     },
     {
+      "basename": "README",
+      "path": "04-运维与工具/git/README.md"
+    },
+    {
       "basename": "维护规则",
       "path": "维护规则.md"
     },
@@ -39,10 +43,6 @@
     {
       "basename": "第三方插件使用指南",
       "path": "08-效率工具/plugins/第三方插件使用指南.md"
-    },
-    {
-      "basename": "README",
-      "path": "04-运维与工具/git/README.md"
     }
   ],
   "omittedPaths": [],
