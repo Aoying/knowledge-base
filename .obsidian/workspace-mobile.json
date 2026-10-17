@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "10-疑难杂症/疑难杂症.md",
+                "file": "07-游戏/Godot.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "疑难杂症"
+              "title": "Godot"
             }
           }
         ]
@@ -213,10 +213,21 @@
   },
   "active": "9d37bd88e6a33dab",
   "lastOpenFiles": [
+    "01-AI与Agent/Skills-索引.md",
+    "02-开发语言/Java.md",
+    "01-AI与Agent/开发工作流-Skills.md",
+    "01-AI与Agent/Agent.md",
+    "04-运维与工具/Git-运维与工具.md",
+    "10-疑难杂症/疑难杂症.md",
+    "04-运维与工具/Windows-常用命令.md",
+    "03-数据与消息/MySQL-数据库.md",
+    "03-数据与消息/Kafka-消息队列.md",
+    "01-AI与Agent/RAG-Skills.md",
+    "01-AI与Agent/Agent-开发-Skills.md",
+    "08-效率工具/Obsidian-插件使用指南.md",
     "维护规则.md",
     "04-运维与工具/Git 运维与工具.md",
     "04-运维与工具/Git运维与工具.md",
-    "10-疑难杂症/疑难杂症.md",
     "04-运维与工具/快捷键速查.md",
     "04-运维与工具/Windows 常用命令.md",
     "04-运维与工具/Git.md",
@@ -228,17 +239,6 @@
     "07-游戏/Godot.md",
     "06-前端/前端开发.md",
     "05-框架/Flowable.md",
-    "04-运维与工具/Vim.md",
-    "04-运维与工具/Nginx.md",
-    "04-运维与工具/Docker.md",
-    "03-数据与消息/RocketMQ.md",
-    "03-数据与消息/Redis.md",
-    "03-数据与消息/MySQL 数据库.md",
-    "03-数据与消息/Kafka 消息队列.md",
-    "02-开发语言/Python.md",
-    "02-开发语言/JavaScript.md",
-    "02-开发语言/Java.md",
-    "01-AI与Agent/开发工作流 Skills.md",
     "10-疑难杂症/troubleshooting",
     "03-数据与消息/elasticsearch",
     "02-开发语言/regex",
