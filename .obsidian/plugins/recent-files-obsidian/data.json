@@ -1,8 +1,24 @@
 {
   "recentFiles": [
     {
+      "basename": "正则表达式",
+      "path": "02-开发语言/正则表达式.md"
+    },
+    {
+      "basename": "前端开发",
+      "path": "06-前端/前端开发.md"
+    },
+    {
       "basename": "疑难杂症",
       "path": "10-疑难杂症/疑难杂症.md"
+    },
+    {
+      "basename": "Java",
+      "path": "02-开发语言/Java.md"
+    },
+    {
+      "basename": "Vim",
+      "path": "04-运维与工具/Vim.md"
     },
     {
       "basename": "Nginx",
@@ -29,10 +45,6 @@
       "path": "04-运维与工具/Docker.md"
     },
     {
-      "basename": "Vim",
-      "path": "04-运维与工具/Vim.md"
-    },
-    {
       "basename": "Windows-常用命令",
       "path": "04-运维与工具/Windows-常用命令.md"
     },
@@ -45,20 +57,12 @@
       "path": "09-探索/探索方向建议.md"
     },
     {
-      "basename": "前端开发",
-      "path": "06-前端/前端开发.md"
-    },
-    {
       "basename": "Godot",
       "path": "07-游戏/Godot.md"
     },
     {
       "basename": "Skills-索引",
       "path": "01-AI与Agent/Skills-索引.md"
-    },
-    {
-      "basename": "Java",
-      "path": "02-开发语言/Java.md"
     },
     {
       "basename": "开发工作流-Skills",
