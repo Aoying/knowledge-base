@@ -116,3 +116,22 @@ server {
 }
 ```
 - `rate=10r/s` 每秒 10 个；`burst=20 nodelay` 允许突发 20 个立即处理，超了 503。
+
+## 反向代理缓存（proxy_cache）
+
+```nginx
+proxy_cache_path /data/nginx-cache levels=1:2 keys_zone=api:50m max_size=1g inactive=60m;
+server {
+    location /api/hot/ {
+        proxy_cache api;
+        proxy_cache_valid 200 5m;      # 成功响应缓存5分钟
+        proxy_cache_key "$scheme$host$request_uri";
+        add_header X-Cache-Status $upstream_cache_status;  # HIT/MISS 看缓存是否生效
+        proxy_pass http://backend;
+    }
+}
+```
+
+- 读多写少、允许分钟级延迟的接口（如排行榜、配置下发）最适合。
+- 调试先看 `X-Cache-Status` 是 HIT 还是 MISS，别上来就怀疑人生。
+- 带用户态的接口（`Authorization` 头）默认不缓存，想缓存要显式 `proxy_cache_key` 带上区分维度。
