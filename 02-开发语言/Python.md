@@ -149,3 +149,22 @@ except ValidationError as e:
 
 - 小说引擎 ChapterAnalysisService 的 JSON 落库前必须过 pydantic，LLM 偶尔吐 `chapter: "第十二章"` 这种，直接进 SQLite 就是脏数据。
 - v2 用 `model_validate`，别再用 v1 的 `parse_obj`（v1 已停止维护）。
+
+## dataclass + typing（告别 dict 满天飞）
+
+```python
+from dataclasses import dataclass, field
+from typing import Optional
+
+@dataclass
+class Chapter:
+    id: int
+    title: str
+    summary: str = ""
+    entities: list[str] = field(default_factory=list)  # 可变默认值必须用它
+
+def get_chapter(cid: int) -> Optional[Chapter]: ...
+```
+
+- 小说引擎的 Entity/Relation 传来传去全用 dict 的话，字段名拼错只有运行时才知道；dataclass + 类型注解让 IDE 直接标红。
+- 重一点的校验上 pydantic（见上节），轻量结构用 dataclass，零依赖。
