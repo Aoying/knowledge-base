@@ -128,7 +128,7 @@ git config --global http.postBuffer 157286400
 ## 待补充
 
 
-- 子模块 vs subtree
+
 
 ### 11. push 被拒绝：non-fast-forward
 - **现象**：`git push` 报 `! [rejected] main -> main (non-fast-forward)`。
@@ -182,3 +182,18 @@ git lfs ls-files                  # 确认进了 LFS
 - FAQ 12 是"救火"，这是"日常"：仓库建好第一天就把二进制后缀 track 上。
 - clone 时 `--depth 1` + LFS 拉取依然慢，大视频/数据集别进 git，用对象存储 + 版本号文件。
 - `.gitattributes` 必须提交，不然别人 clone 下来的是指针文件。
+
+### 16. 子模块 vs subtree
+
+```bash
+git submodule add https://github.com/x/y lib/y   # 子模块：仓库嵌仓库
+git subtree add --prefix=lib/y https://github.com/x/y main  # subtree：合并成一个历史
+```
+
+|  | submodule | subtree |
+|---|---|---|
+| 历史 | 独立，父仓库只记 commit id | 合并进父仓库历史 |
+| clone | 要 `--recurse-submodules` | 普通 clone 就行 |
+| 适合 | 第三方库、主题 | 偶尔同步的小模块 |
+
+- 个人知识库引第三方模板用 subtree，省心；团队协作的公共库用 submodule，版本锁定清楚。
