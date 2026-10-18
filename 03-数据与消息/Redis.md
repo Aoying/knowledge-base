@@ -83,7 +83,7 @@ String lua = "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del'
 
 ## 待补充
 - Redis Cluster 槽位与扩缩容
-- Stream 消费者组实战
+
 - Redisson 常用件（限流、信号量）
 
 ## 疑难杂症
@@ -102,3 +102,25 @@ String lua = "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del'
 - **现象**：`MGET`/`MSET` 多个 key 报 `CROSSSLOT Keys in request don't hash to the same slot`。
 - **原因**：Cluster 按 key 的哈希槽分片，多 key 操作要求 key 落在同一个槽。
 - **解决**：用 hash tag 把相关 key 绑一起：`{user:1}:name`、`{user:1}:age`，花括号内的部分决定槽位。
+
+## Stream 消费者组实战
+
+```bash
+XADD orders * user 1001 amount 99          # 生产
+XGROUP CREATE orders g1 0 MKSTREAM        # 建消费组（0=从头消费）
+XREADGROUP GROUP g1 c1 COUNT 10 BLOCK 5000 STREAMS orders >   # 消费
+XACK orders g1 <message-id>                # 确认
+XPENDING orders g1                         # 查未确认的（掉线消费者的活儿）
+```
+
+- `>` 表示"还没人领过的"，消费者崩了没 ACK 的消息会进 Pending，用 `XPENDING` + `XCLAIM` 认领。
+- 比 List 的 `BRPOPLPUSH` 可靠：有消费组、ACK、Pending 三件套，消息队列场景优先用 Stream。
+- 配合 `MAXLEN ~ 10000` 给 stream 封顶，防止无上限膨胀。
+
+## Redis 8 新特性（2026-10-18 按 redis.io 核验）
+
+- **Vector Set（beta）**：原生向量数据类型，做语义检索不用再搭外部向量库，小说引擎 RAG 可选它当轻量向量层。
+- **HGETEX / HSETEX / HGETDEL**：hash 字段级"读并设置过期"，缓存/会话场景少一次往返。
+- 命令执行快 87%（官方数据）；Community Edition 改名 Redis Open Source。
+- 许可注意：Redis 2024 年后一度换 SSPL，2025-05 已改回 AGPL；纯自用/内网无影响，云上托管 Redis 注意合规。
+- 来源：https://redis.io/docs/latest/develop/whats-new/8-0/
