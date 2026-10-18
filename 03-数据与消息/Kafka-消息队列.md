@@ -42,7 +42,7 @@ retries=Integer.MAX_VALUE
 
 ## 待补充
 
-- Spring Kafka（KafkaTemplate / @KafkaListener）实战片段
+
 - RocketMQ vs Kafka 选型对比（见 rocketmq/ 方向）
 
 
@@ -98,3 +98,27 @@ producer.send(new ProducerRecord<>("orders", userId, orderJson));
 - **分区数**：`分区数 >= 消费线程数`，不然加机器也白加；但别一上来 100 个分区，controller 负担重。
 - 改分区数只能调大不能调小（调大后 key 的归属会变，保序要求高的业务要停机迁移）。
 - 选型对比见待补充：RocketMQ vs Kafka（`03-数据与消息/RocketMQ.md` 的顺序消息可对照看）。
+
+## Spring Kafka 实战片段
+
+```java
+// 生产
+kafkaTemplate.send("orders", userId, orderJson);
+
+// 消费：批量 + 手动提交（推荐生产配置）
+@KafkaListener(topics = "orders", groupId = "g1")
+public void onBatch(List<ConsumerRecord<String,String>> rs, Acknowledgment ack) {
+    try { process(rs); ack.acknowledge(); }
+    catch (Exception e) { /* 别 ack，下次重投；记死信 */ }
+}
+```
+
+```yaml
+spring.kafka.consumer:
+  enable-auto-commit: false
+  max-poll-records: 50
+  properties.max.poll.interval.ms: 300000
+```
+
+- 关掉自动提交，业务成功才 `ack`，这是"至少一次"的底线。
+- `max.poll.interval.ms` < 单批处理耗时会触发 rebalance，大批量调大它或调小 `max-poll-records`。
