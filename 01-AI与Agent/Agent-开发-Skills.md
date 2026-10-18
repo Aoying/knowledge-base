@@ -58,3 +58,11 @@
 - **来源**：https://github.com/karpathy/skills（按 2026-09 第三方榜单约 208k stars，社区整理版）
 - **许可证**：使用前核对仓库 LICENSE。
 - **安全注意**：纯文档型 skill，风险低。
+
+## 7. ponytail（高效编码习惯 skill）
+
+- **功能**：给 Agent 立"高效编码规矩"：别绕弯、别过度抽象、一次改对。减少 Agent 写代码时的 token 浪费和返工。
+- **适用场景**：和 superpowers（方法论）互补：superpowers 管"流程"，ponytail 管"代码味道"；日常让 Agent 改代码前先加载。
+- **来源**：https://github.com/parcadei/ponytail（按 2026-08 第三方榜单约 116k stars）
+- **许可证**：使用前核对仓库 LICENSE。
+- **安全注意**：纯 prompt 型 skill，风险低。
