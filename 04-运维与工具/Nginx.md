@@ -65,8 +65,7 @@ proxy_set_header Connection "upgrade";
 
 ## 待补充
 
-- HTTPS / 证书自动续期（certbot）
-- 限流（limit_req）防刷配置
+
 
 ## 疑难杂症
 
@@ -89,3 +88,31 @@ proxy_set_header Connection "upgrade";
 - **现象**：下载几百 MB 的文件，进度条走走停停，甚至超时。
 - **原因**：`proxy_buffering` 开着，Nginx 先把后端响应全 buffer 到磁盘/内存再转发。
 - **解决**：大文件下载的 location 关掉 `proxy_buffering off`，改走 `X-Accel-Redirect` 让 Nginx 直接发文件。
+
+## HTTPS（certbot 自动续期）
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name app.example.com;
+    ssl_certificate /etc/letsencrypt/live/app.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
+    # http 跳 https
+}
+server { listen 80; server_name app.example.com; return 301 https://$host$request_uri; }
+```
+```bash
+certbot --nginx -d app.example.com   # 一条命令签发+配好
+certbot renew --dry-run               # 续期演练，cron 里加 renew 即可
+```
+
+## 限流防刷
+```nginx
+limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+server {
+    location /api/ {
+        limit_req zone=api burst=20 nodelay;
+        proxy_pass http://backend;
+    }
+}
+```
+- `rate=10r/s` 每秒 10 个；`burst=20 nodelay` 允许突发 20 个立即处理，超了 503。
