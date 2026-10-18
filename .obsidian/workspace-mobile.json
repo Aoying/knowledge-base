@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "fed3807c59da91cf",
+        "id": "2ff717783926ff13",
         "type": "tabs",
         "children": [
           {
-            "id": "9d37bd88e6a33dab",
+            "id": "af67408a5beb63a3",
             "type": "leaf",
             "state": {
-              "type": "diff-view",
-              "state": {
-                "aFile": ".obsidian/workspace-mobile.json",
-                "bFile": ".obsidian/workspace-mobile.json",
-                "aRef": ""
-              },
-              "icon": "git-pull-request",
-              "title": "Diff: workspace-mobile.json"
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "新标签页"
             }
           }
         ]
@@ -211,34 +207,36 @@
       "file-cleaner-redux:Clean files": false
     }
   },
-  "active": "9d37bd88e6a33dab",
+  "active": "af67408a5beb63a3",
   "lastOpenFiles": [
+    "02-开发语言/设计模式.md",
     "02-开发语言/正则表达式.md",
+    "01-AI与Agent/大模型基础.md",
+    "维护规则.md",
+    "02-开发语言/Java-并发编程.md",
+    "01-AI与Agent/开发工作流-Skills.md",
+    "02-开发语言/Java.md",
+    "11-计算机基础/操作系统-进程线程.md",
+    "11-计算机基础/数据结构与算法.md",
+    "12-项目沉淀/神农-e贷-审批流.md",
+    "11-计算机基础/计算机网络.md",
+    "11-计算机基础/编码-字符集-内存-文件系统.md",
+    "11-计算机基础/Linux与Shell.md",
+    "06-前端/前端基础-HTML-CSS.md",
+    "12-项目沉淀",
+    "11-计算机基础",
+    "09-探索/探索方向建议.md",
+    "README.md",
+    "04-运维与工具/快捷键速查.md",
+    "02-开发语言/Python.md",
+    "02-开发语言/JavaScript.md",
     "06-前端/前端开发.md",
     "10-疑难杂症/疑难杂症.md",
-    "02-开发语言/Java.md",
-    "04-运维与工具/Vim.md",
-    "02-开发语言/Lua.md",
-    "04-运维与工具/Nginx.md",
-    "04-运维与工具/Git-运维与工具.md",
-    "05-框架/Flowable.md",
-    "03-数据与消息/MySQL-数据库.md",
-    "04-运维与工具/快捷键速查.md",
-    "04-运维与工具/Docker.md",
-    "04-运维与工具/Windows-常用命令.md",
-    "03-数据与消息/Elasticsearch.md",
-    "09-探索/探索方向建议.md",
     "07-游戏/Godot.md",
-    "01-AI与Agent/Skills-索引.md",
-    "01-AI与Agent/开发工作流-Skills.md",
-    "01-AI与Agent/Agent.md",
-    "03-数据与消息/Kafka-消息队列.md",
-    "01-AI与Agent/RAG-Skills.md",
-    "01-AI与Agent/Agent-开发-Skills.md",
-    "08-效率工具/Obsidian-插件使用指南.md",
-    "维护规则.md",
-    "04-运维与工具/Git 运维与工具.md",
-    "04-运维与工具/Git运维与工具.md",
+    "08-效率工具/模板-灵感捕捉.md",
+    "02-开发语言/Lua.md",
+    "08-效率工具/看板-任务总览.md",
+    "08-效率工具/看板-读书追踪.md",
     "10-疑难杂症/troubleshooting",
     "03-数据与消息/elasticsearch",
     "02-开发语言/regex",
@@ -246,8 +244,6 @@
     "09-探索/explore",
     "08-效率工具/plugins",
     "07-游戏/godot",
-    "06-前端/frontend",
-    "05-框架/flowable",
-    "04-运维与工具/windows"
+    "06-前端/frontend"
   ]
 }
