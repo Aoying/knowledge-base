@@ -124,3 +124,20 @@ schtasks /run /tn "MorningReport"
 
 - 图形界面是 `taskschd.msc`，命令行适合写进部署脚本。
 - 批处理里注意：`%date%` 格式随系统区域变，写日志文件名用 PowerShell 的 `Get-Date -Format yyyyMMdd` 更稳。
+
+## WSL2 进阶
+
+```bash
+# systemd（新版 WSL 默认开，可跑 docker）
+sudo systemctl status docker
+# 和 Windows 互访文件
+/mnt/c/Users/ao/Documents        # WSL 看 Windows
+\\wsl$\Ubuntu\home\ao          # Windows 看 WSL
+# 内存限制（%USERPROFILE%\.wslconfig）
+[wsl2]
+memory=16GB
+processors=8
+```
+
+- `.wslconfig` 改完 `wsl --shutdown` 重启生效。
+- 代码放 WSL 文件系统里（`~/code`），别放 `/mnt/c`（跨文件系统慢 10 倍，见 Docker 疑难杂症）。
