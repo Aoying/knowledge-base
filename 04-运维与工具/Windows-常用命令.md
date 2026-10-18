@@ -108,3 +108,19 @@ $env:PATH += ";D:\tools"
 
 - `Where-Object`、`Sort-Object`、`Select-Object` 是三件套，管道思维和 Linux 的 `grep|sort|head` 对应。
 - PS5.1 和 PS7 语法有差（`-Parallel` 只有 7+ 有），写脚本前先 `$PSVersionTable`。
+
+## 定时任务 schtasks
+
+```cmd
+:: 每天 7:30 跑脚本
+schtasks /create /tn "MorningReport" /tr "D:\scripts\report.bat" /sc daily /st 07:30
+:: 开机自启
+schtasks /create /tn "OllamaServer" /tr "ollama serve" /sc onstart /ru SYSTEM
+:: 查 / 删 / 立即跑一次
+schtasks /query /tn "MorningReport"
+schtasks /delete /tn "MorningReport" /f
+schtasks /run /tn "MorningReport"
+```
+
+- 图形界面是 `taskschd.msc`，命令行适合写进部署脚本。
+- 批处理里注意：`%date%` 格式随系统区域变，写日志文件名用 PowerShell 的 `Get-Date -Format yyyyMMdd` 更稳。
