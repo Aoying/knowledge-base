@@ -118,3 +118,28 @@ print(cfg.host)   -- 正常读
 - `__index` 可以是表（查不到就去那张表找）也可以是函数（动态计算默认值）。
 - `__newindex` 拦截所有"新增键"赋值，想做校验/只读就靠它。
 - 注意：`rawset/rawget` 绕过元表，框架内部用，业务代码别碰。
+
+## Lua 调 C 最小示例（理解"宿主+脚本"架构）
+
+```c
+// mylib.c
+#include <lua.h>
+#include <lauxlib.h>
+static int ladd(lua_State *L) {
+    lua_pushnumber(L, lua_tonumber(L,1) + lua_tonumber(L,2));
+    return 1;  // 返回值个数
+}
+int luaopen_mylib(lua_State *L) {
+    luaL_Reg f[] = {{"add", ladd}, {NULL, NULL}};
+    luaL_newlib(L, f);
+    return 1;
+}
+```
+```lua
+local m = require("mylib")
+print(m.add(1, 2))  -- 3
+```
+
+- `lua_State` 是 Lua 虚拟机的句柄，C 和 Lua 通过"栈"传参/返回值。
+- OpenResty/Redis 内嵌 Lua 都是这个原理：宿主把能力（发 HTTP、读写 key）注册成 Lua 函数。
+- 学 Godot 时对照看：GDScript 调 C++ 引擎也是同一套"脚本 glue 原生"的思想。
