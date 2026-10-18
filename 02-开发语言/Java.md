@@ -84,7 +84,7 @@ lambdaQuery().eq(StringUtils.isNotBlank(name), User::getName, name);
 
 ## 待补充
 - Flowable 6.7 实战（见 flowable/ 方向）
-- Druid 监控与慢 SQL 定位
+
 - 本地多数据源 dynamic-datasource 笔记
 
 ## 疑难杂症
@@ -140,3 +140,24 @@ try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
 - 写同步代码，跑异步性能：`Thread.sleep`/`Lock` 在虚拟线程里不会 pin 住载体线程（`synchronized` 块里别调阻塞方法，仍会 pin）。
 - 神农这种 IO 密集型（调 OceanBase/Redis/下游接口）最吃香，Tomcat 换虚拟线程执行器吞吐直接涨。
 - 升级路径：JDK 17→21 主要是 `--release` 和依赖兼容性，先在测试环境跑一遍。
+
+## Druid 监控与慢 SQL 定位
+
+```yaml
+# application.yml
+spring:
+  datasource:
+    druid:
+      filter:
+        stat: { enabled: true, slow-sql-millis: 1000, log-slow-sql: true }
+        wall: { enabled: true }   # 防火墙：防注入
+```
+```java
+// 代码里拿慢 SQL TopN
+DruidStatManagerFacade facade = DruidStatManagerFacade.getInstance();
+List<Map<String,Object>> slow = facade.getDataSourceStatDataList(1).get(0)...;
+```
+
+- 浏览器开 `/druid/index.html` 看 SQL 监控页：执行次数、慢 SQL、 max 并发，一目了然（生产记得加账号密码）。
+- 慢 SQL 定位链路：druid 慢日志 → `EXPLAIN` 看执行计划 → 索引/分页优化 → 回 druid 验证耗时下降。
+- 神农这种金融项目：`slow-sql-millis` 设 500ms，定时扫监控页，比等用户投诉强。
