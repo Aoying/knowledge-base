@@ -44,7 +44,7 @@ retries=Integer.MAX_VALUE
 
 - Spring Kafka（KafkaTemplate / @KafkaListener）实战片段
 - RocketMQ vs Kafka 选型对比（见 rocketmq/ 方向）
-- 本地 Docker 单机 KRaft 起一个 broker 的 compose
+
 
 ## 疑难杂症
 
@@ -62,3 +62,27 @@ retries=Integer.MAX_VALUE
 - **现象**：开了幂等+事务，吞吐掉了 30%+，延迟也高了。
 - **原因**：exactly-once = 幂等生产者 + 事务 + 消费者幂等处理，三重成本。
 - **解决**：不是所有业务都要 exactly-once；能接受"至少一次+消费端幂等"就别开事务；真要开，压测出基准再上线。
+
+## 本地单机 KRaft（2026-10-18 核验：Kafka 4.0 已移除 ZooKeeper，KRaft 是唯一模式）
+
+```yaml
+# docker-compose.yml
+services:
+  kafka:
+    image: apache/kafka:4.3.1
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+```
+```bash
+KAFKA_CLUSTER_ID=$(docker exec kafka /opt/kafka/bin/kafka-storage.sh random-uuid)
+docker exec kafka /opt/kafka/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c /opt/kafka/config/server.properties
+docker compose up -d
+```
+
+- 单机把 broker 和 controller 合在一个进程（`broker,controller`），开发够用，生产要拆开。
+- 来源：https://www.webcodingcenter.com/apache-kafka/event-streaming-concepts-and-the-publish-subscribe-log--kafka-4-x-and-the-kraft-only-release-line.html
