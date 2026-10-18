@@ -127,3 +127,16 @@ async function pLimit(tasks, n) {
 
 - 防抖 vs 节流一句话：防抖等停手，节流限频率。
 - `pLimit` 是 p-limit 库的核心思想，20 行自己就能写，不用引库。
+
+## ESM vs CJS（模块化的恩怨）
+
+```js
+// ESM（浏览器/现代 Node）：import/export，静态分析
+import { debounce } from './utils.js';
+// CJS（老 Node）：require/module.exports，运行时加载
+const { debounce } = require('./utils');
+```
+
+- 新项目一律 ESM；`package.json` 加 `"type": "module"`。
+- `__dirname` 在 ESM 里没有了，用 `import.meta.dirname`（Node 20.11+）。
+- 引第三方库报错 `ERR_REQUIRE_ESM`：说明它只发了 ESM 版，你的 CJS 项目 require 不动——解法是项目切 ESM，或找它的 CJS 分发。
