@@ -140,3 +140,19 @@ const { debounce } = require('./utils');
 - 新项目一律 ESM；`package.json` 加 `"type": "module"`。
 - `__dirname` 在 ESM 里没有了，用 `import.meta.dirname`（Node 20.11+）。
 - 引第三方库报错 `ERR_REQUIRE_ESM`：说明它只发了 ESM 版，你的 CJS 项目 require 不动——解法是项目切 ESM，或找它的 CJS 分发。
+
+## 性能优化三板斧
+
+1. **长任务拆分**：`setTimeout`/`requestIdleCallback` 把 200ms+ 的计算切片，别 block 主线程（INP 指标就看这个）。
+2. **虚拟列表**：万级数据渲染只画可视区（`vue-virtual-scroller` / 手写 `IntersectionObserver`）。
+3. **防抖 + 缓存**：搜索框防抖 300ms，结果按 query 缓存，同样输入不发第二次请求。
+
+```js
+// 大数据分片处理，不卡 UI
+async function processBig(arr) {
+  for (let i = 0; i < arr.length; i += 1000) {
+    doChunk(arr.slice(i, i + 1000));
+    await new Promise(r => setTimeout(r, 0));  // 让出主线程
+  }
+}
+```
