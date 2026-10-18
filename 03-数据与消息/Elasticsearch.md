@@ -110,3 +110,16 @@ PUT _ilm/policy/logs-30d {
 - 日志类索引必配 ILM：hot 写 → warm 缩分片省资源 → 30 天删，不配的话磁盘早晚被吃光。
 - 分片数拍脑袋公式：单分片 20-50GB，`分片数 = 数据量/30GB`，别一上来就 5 分片（小数据 1 分片最快）。
 - 写入慢先看三件套：`refresh_interval` 调大、bulk 批量、副本数写入时暂时设 0。
+
+## 写入调优三板斧
+
+1. **bulk 批量**：单条 index 是灾难，用 `_bulk`，一批 5-15MB。
+2. **refresh_interval**：默认 1s，批量导入时调到 `30s` 甚至 `-1`，导完再调回来。
+3. **副本**：大批量写入时先把 `number_of_replicas` 设 0，写完再加回去（省一半写入量）。
+
+```json
+PUT /logs-2026.10/_settings { "index": { "refresh_interval": "30s", "number_of_replicas": 0 } }
+```
+
+- 写入慢 90% 是 refresh 和副本的锅，调完这两个再怀疑人生。
+- 监控看 `indexing` 线程池 reject 数，开始 reject 就说明集群写入到顶了。
