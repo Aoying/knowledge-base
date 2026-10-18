@@ -131,3 +131,14 @@ canal.mq.topic = db_sync
 - 场景：MySQL → ES / MySQL → Redis / MySQL → 数仓，业务代码零侵入。
 - Canal 伪装成从库拉 binlog，挂了从上次位点续拉，不丢（但下游要幂等）。
 - OceanBase 也有自己的增量同步（OMS），MySQL 那套照搬过去先看兼容性。
+
+## 执行计划进阶：join 算法
+
+```sql
+EXPLAIN FORMAT=TREE SELECT * FROM a JOIN b ON a.id=b.a_id;
+```
+
+- **Nested Loop**：小表驱动大表，`b.a_id` 必须有索引，不然每次全表扫。
+- **Hash Join**（8.0.18+）：无索引等值 join 的救星，内存够就快，`join_buffer_size` 给大点。
+- **BNL**（Block Nested Loop）：没索引时的保底，慢，看到它就去加索引。
+- `EXPLAIN` 看到 `Using filesort` + 大数据量：加复合索引让"排序"变"顺序读"。
