@@ -148,3 +148,15 @@ if (s.tryAcquire()) { try { /* 干活 */ } finally { s.release(); } }
 
 - 比手写 Lua 省心：Redisson 的 Lua 脚本久经考验，自己写容易漏边界。
 - 注意：Redisson 客户端版本要和 Redis Server 版本对上，差太多会有命令不支持。
+
+## 内存分析：MEMORY DOCTOR
+
+```bash
+MEMORY STATS                    # 总览：peak、fragmentation ratio
+MEMORY USAGE mykey              # 单个 key 占多少
+--bigkeys                       # 找大 key（redis-cli --bigkeys）
+MEMORY DOCTOR                   # 一句话诊断
+```
+
+- `mem_fragmentation_ratio` < 1 说明内存碎片严重（used 比 RSS 小），重启或等碎片整理。
+- 大 key 治理：拆（hash 分片）、压（序列化选 msgpack 不用 json）、限（value 别超 10KB）。
