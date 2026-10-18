@@ -62,7 +62,7 @@ EXPLAIN SELECT * FROM t_order WHERE user_id=1;
 
 ## 待补充
 
--  binlog / Canal 同步实战
+
 
 
 ## 疑难杂症
@@ -115,3 +115,19 @@ SELECT * FROM oceanbase.DBA_OB_UNITS;  -- 资源单元（CPU/内存配额）
 - 分片键选查询最常用的维度（用户 ID），别选时间（热点都挤在最新分片）。
 - 能不分就不分：先读写分离 + 缓存，分表是最后手段（跨分片 join/事务是深渊）。
 - 分了之后主键用雪花算法，别用自增（各分片自增会冲突）。
+
+## binlog / Canal 同步实战
+
+```bash
+# MySQL 开 binlog（8.x 默认 ROW 格式一般已开，检查）
+SHOW VARIABLES LIKE 'log_bin';  # ON 才行
+```
+```yaml
+# canal.properties 关键
+canal.serverMode = kafka
+canal.mq.topic = db_sync
+```
+
+- 场景：MySQL → ES / MySQL → Redis / MySQL → 数仓，业务代码零侵入。
+- Canal 伪装成从库拉 binlog，挂了从上次位点续拉，不丢（但下游要幂等）。
+- OceanBase 也有自己的增量同步（OMS），MySQL 那套照搬过去先看兼容性。
