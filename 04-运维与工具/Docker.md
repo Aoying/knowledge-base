@@ -129,3 +129,23 @@ docker compose pull && docker compose up -d --no-deps app
 - `latest` 是玄学 tag，多机部署时各机器 pull 到的可能不是同一版，出问题查都查不清。
 - 回滚就是 `up -d` 上一个 tag，5 秒完成，所以每个 tag 都要能独立跑（数据库 migration 要向后兼容）。
 - 健康检查写上（`healthcheck`），compose 等容器 healthy 才切流量，不然刚启动就接请求直接 500。
+
+## 多阶段构建实战（Java 版）
+
+```dockerfile
+# 阶段1：构建
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline          # 先下依赖，利用缓存
+COPY src ./src
+RUN mvn package -DskipTests
+# 阶段2：运行（只要 JRE + jar，镜像从 800MB 压到 200MB）
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+ENTRYPOINT ["java","-jar","app.jar"]
+```
+
+- `COPY pom.xml` 先于 `COPY src`：依赖层缓存，只有改 pom 才重下依赖。
+- Python 版同理：`python:3.12-slim` 做运行阶段，`pip install` 放构建阶段。
