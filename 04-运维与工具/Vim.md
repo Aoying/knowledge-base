@@ -116,3 +116,24 @@ nnoremap <leader>q :q<CR>
 
 - 改完 `:source ~/.vimrc` 即时生效，不用重启。
 - 想再进一步直接上 Neovim + lazy.nvim，但先把原生 vim 玩熟。
+
+## 多文件：buffer / window / tab
+
+```vim
+:e file2.py        " 再开一个文件（当前窗口切换，旧文件进 buffer）
+:ls               " 列出所有 buffer
+:b2               " 切到 2 号 buffer
+:bn / :bp         " 下一个 / 上一个 buffer
+:bd               " 关掉当前 buffer
+
+:sp file3.py      " 横向分屏
+:vsp file4.py     " 纵向分屏
+Ctrl+w h/j/k/l    " 分屏间跳转
+Ctrl+w =          " 分屏等宽
+
+:tabnew file5.py  " 新标签页
+gt / gT           " 标签页左右切
+```
+
+- 一句话区分：buffer 是"打开的文件"，window 是"看 buffer 的格子"，tab 是"格子的布局"。
+- 日常够用组合：`buffer + 分屏`，tab 很少需要。
