@@ -88,3 +88,13 @@ node --watch app.js     # 文件变化自动重启（开发用）
 - **现象**：`JSON.parse(JSON.stringify(obj))` 报 `Converting circular structure to JSON`。
 - **原因**：对象互相引用，JSON 序列化无限递归。
 - **解决**：用 `structuredClone`（现代浏览器/Node 17+），自带循环引用处理；老环境手写 WeakMap 版深拷贝。
+
+## ES2023+ 新特性（面试和日常都用得上）
+
+- `Array.prototype.findLast / findLastIndex`：从后往前找，不用 `reverse()` 污染原数组。
+- `Array.prototype.toSorted / toReversed / toSpliced`：不改变原数组的版本（`sort` 是原地改的，这个坑很多人踩过）。
+- `Array.prototype.at(-1)`：取最后一个，比 `arr[arr.length-1]` 干净。
+- `Object.groupBy(arr, fn)`：一行分组，替代手写 reduce。
+- `Promise.withResolvers()`：不用在 executor 里"偷" resolve 了。
+- `structuredClone(obj)`：深拷贝官方版，循环引用、Map/Set、Date 都处理。
+- Import Attributes：`import data from './x.json' with { type: 'json' }`，JSON 模块标准化。
