@@ -98,3 +98,32 @@ node --watch app.js     # 文件变化自动重启（开发用）
 - `Promise.withResolvers()`：不用在 executor 里"偷" resolve 了。
 - `structuredClone(obj)`：深拷贝官方版，循环引用、Map/Set、Date 都处理。
 - Import Attributes：`import data from './x.json' with { type: 'json' }`，JSON 模块标准化。
+
+## 防抖 / 节流 / 并发控制（手写版，面试常考）
+
+```js
+// 防抖：最后一次触发后等 ms 才执行（搜索框输入）
+const debounce = (fn, ms) => {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+};
+// 节流：ms 内只执行一次（滚动加载）
+const throttle = (fn, ms) => {
+  let last = 0; return (...a) => {
+    const now = Date.now();
+    if (now - last > ms) { last = now; fn(...a); }
+  };
+};
+// 并发控制：最多 n 个同时跑（批量调 Ollama 必备）
+async function pLimit(tasks, n) {
+  const res = [], pool = new Set();
+  for (const t of tasks) {
+    const p = t().finally(() => pool.delete(p));
+    pool.add(p); res.push(p);
+    if (pool.size >= n) await Promise.race(pool);
+  }
+  return Promise.all(res);
+}
+```
+
+- 防抖 vs 节流一句话：防抖等停手，节流限频率。
+- `pLimit` 是 p-limit 库的核心思想，20 行自己就能写，不用引库。
