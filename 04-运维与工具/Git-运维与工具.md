@@ -197,3 +197,15 @@ git subtree add --prefix=lib/y https://github.com/x/y main  # subtree：合并�
 | 适合 | 第三方库、主题 | 偶尔同步的小模块 |
 
 - 个人知识库引第三方模板用 subtree，省心；团队协作的公共库用 submodule，版本锁定清楚。
+
+### 17. reflog 救命三件套
+
+```bash
+git reflog                  # 所有操作历史，reset --hard 救回就靠它
+git reset --hard HEAD@{2}   # 回到 2 个操作前
+git fsck --lost-found       # 找悬空 commit（删分支误删的）
+```
+
+- `reset --hard` 丢了代码别慌，reflog 里 90 天内都找得回来。
+- 分支删错了：`git branch <name> <reflog里的sha>` 原地复活。
+- 终极：reflog 也清了才算真没了，所以别手贱 `git reflog expire`。
