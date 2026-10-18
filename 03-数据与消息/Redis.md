@@ -82,7 +82,7 @@ String lua = "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del'
 5. **序列化**：Java 项目用 `GenericJackson2JsonRedisSerializer` 或 String，别用 JDK 原生序列化（臃肿且跨语言不可读）。
 
 ## 待补充
-- Redis Cluster 槽位与扩缩容
+
 
 - Redisson 常用件（限流、信号量）
 
@@ -124,3 +124,10 @@ XPENDING orders g1                         # 查未确认的（掉线消费者�
 - 命令执行快 87%（官方数据）；Community Edition 改名 Redis Open Source。
 - 许可注意：Redis 2024 年后一度换 SSPL，2025-05 已改回 AGPL；纯自用/内网无影响，云上托管 Redis 注意合规。
 - 来源：https://redis.io/docs/latest/develop/whats-new/8-0/
+
+## Cluster 槽位与扩缩容
+
+- 16384 个槽位按 CRC16(key) % 16384 分配，`{tag}` 花括号内相同才同槽（见疑难杂症 CROSSSLOT）。
+- 扩容：`redis-cli --cluster add-node` 加节点 → `reshard` 迁槽 → `rebalance`，槽是逐步搬的，在线不中断。
+- 缩容反向操作，先 `reshard` 把槽搬空再 `del-node`，直接下掉节点会丢槽。
+- 槽位没覆盖全（`cluster info` 看 `cluster_state:fail`）时整个集群拒绝写，先 `fix` 再查应用。
