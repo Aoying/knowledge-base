@@ -34,3 +34,12 @@
 - **安装**：`npx skills add https://github.com/vercel-labs/agent-skills --skill "react-best-practices"`（按需单装）。
 - **依赖**：支持 Agent Skills 的客户端；React 项目。
 - **安全注意**：只收集不安装；引入前检查 SKILL.md 是否有外部网络请求或读取仓库外文件。
+
+## 4. grill-me（mattpocock/skills）开工前拷问计划
+
+- **功能**：在你动手写代码前，Agent 化身"魔鬼代言人"拷问你的计划：边界条件、失败模式、有没有更简单的方案。过不了拷问就不开工。
+- **适用场景**：小说引擎这种长周期项目，每次大功能（如 RAG 接入、沙盒推演）开工前先被拷问一遍，比写完返工便宜得多。
+- **来源**：https://github.com/mattpocock/skills（`npx skills add https://github.com/mattpocock/skills --skill grill-me`）
+- **热度/更新**：Matt Pocock（知名 TS/AI 教育者）维护，2026-09-30 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；引入前检查 SKILL.md。
