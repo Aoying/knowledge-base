@@ -90,3 +90,29 @@ set clipboard=unnamedplus   " 与系统剪贴板互通（需 +clipboard）
 - **现象**：`Found a swap file by the name ...`，问你要恢复还是删除。
 - **原因**：上次 vim 非正常退出（断网、kill），swap 残留；或另一个 vim 正开着这文件。
 - **解决**：确认没别的 vim 在编辑，选 `D` 删除 swap；经常断网的话把 `directory` 指到本地 tmp，避免残留。
+
+## 最小可用 vimrc
+
+```vim
+" ~/.vimrc（Windows 下是 ~/_vimrc）
+set nocompatible
+syntax on
+set number relativenumber
+set tabstop=4 shiftwidth=4 expandtab
+set autoindent smartindent
+set ignorecase smartcase        " 搜索忽略大小写，有大写时区分
+set incsearch hlsearch
+set mouse=a
+set clipboard=unnamedplus       " 和系统剪贴板互通（需 +clipboard）
+set encoding=utf-8
+set nobackup noswapfile         " 不想要 .swp 残留就关掉
+" jk 快速退出插入模式
+inoremap jk <Esc>
+" 空格当 leader 键
+let mapleader=" "
+nnoremap <leader>w :w<CR>
+nnoremap <leader>q :q<CR>
+```
+
+- 改完 `:source ~/.vimrc` 即时生效，不用重启。
+- 想再进一步直接上 Neovim + lazy.nvim，但先把原生 vim 玩熟。
