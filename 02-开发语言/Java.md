@@ -185,3 +185,14 @@ public List<Order> listFromOb() { return mapper.selectList(null); }
 ## Flowable 实战
 
 见 [05-框架/Flowable.md](05-框架/Flowable.md)，Java 侧的调用、驳回、网关、会签、异步 job 全在那边沉淀。
+
+## JVM GC 调优速查
+
+```bash
+java -Xms2g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -jar app.jar
+```
+
+- **Xms=Xmx**：别让堆动态伸缩，伸缩时的 Full GC 最伤。
+- **G1** 是 8+ 默认，`MaxGCPauseMillis=200` 给目标值（不是保证值）。
+- 看 GC 日志：`-Xlog:gc*:file=gc.log:time`，找"停顿>1s"和"Full GC 频繁"。
+- 神农这种长跑服务：先保证堆够（`jstat -gc` 看 Old 区涨速），再调暂停目标，别反过来。
