@@ -143,3 +143,21 @@ print(m.add(1, 2))  -- 3
 - `lua_State` 是 Lua 虚拟机的句柄，C 和 Lua 通过"栈"传参/返回值。
 - OpenResty/Redis 内嵌 Lua 都是这个原理：宿主把能力（发 HTTP、读写 key）注册成 Lua 函数。
 - 学 Godot 时对照看：GDScript 调 C++ 引擎也是同一套"脚本 glue 原生"的思想。
+
+## OpenResty 实战：网关层限流
+
+```lua
+-- nginx.conf: access_by_lua_block
+local limit = require "resty.limit.req"
+local lim, err = limit.new("my_limit", 10, 20)  -- 10r/s, burst 20
+local key = ngx.var.binary_remote_addr
+local delay, err = lim:incoming(key, true)
+if not delay then
+    if err == "rejected" then return ngx.exit(503) end
+    ngx.log(ngx.ERR, "limit err: ", err)
+    return ngx.exit(500)
+end
+```
+
+- OpenResty = Nginx + LuaJIT，在网关层做限流/鉴权/灰度，比回源到 Java 省一跳。
+- `lua-resty-*` 库生态很全（redis、mysql、http 都有），别自己造轮子。
