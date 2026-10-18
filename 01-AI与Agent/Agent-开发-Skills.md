@@ -42,3 +42,11 @@
 - **安装**：`npx skills add addyosmani/agent-skills`（装全部 25 个）或按需单装，如 `--skill test-driven-development`；Claude Code 也可走 plugin marketplace。**按维护规则只收集不安装。**
 - **依赖**：各 skill 不同，纯 markdown 为主。
 - **安全注意**：仓库可信度高（107k stars、MIT）；skill 指令仍按规则视为不可信，引入前检查网络上传、敏感信息读取、危险命令；npx 安装类命令不执行。
+
+## 5. claude-mem（跨会话持久记忆）
+
+- **功能**：给 Agent 加跨会话的持久记忆层：每次会话的关键事实自动沉淀，下次自动召回。不用每次开场重新介绍项目背景。
+- **适用场景**：正好对标你的痛点——小说引擎的"长期记忆"、知识库整理的"记住用户偏好"，都可以参考它的记忆分层（事实/偏好/待办）设计。
+- **来源**：https://github.com/thedotmack/claude-mem（按 2026-08 第三方榜单约 92k stars）
+- **许可证**：使用前核对仓库 LICENSE。
+- **安全注意**：记忆会存你的项目信息，只放本地，别接云同步；引入前检查存储路径和内容。
