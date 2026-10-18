@@ -74,3 +74,27 @@ func _physics_process(delta):
 - **现象**：昨天还能导出，今天导出预设没了。
 - **原因**：`export_presets.cfg` 没进版本控制，或换了机器/重装 Godot。
 - **解决**：`export_presets.cfg` 提交进 git；导出模板（export templates）按版本装好，别和编辑器版本搞混。
+
+## GDScript 进阶
+
+```gdscript
+# await：等信号/等一帧，不用回调地狱
+await get_tree().create_timer(1.0).timeout
+await $Button.pressed
+
+# signal 带参数 + 动态连接
+signal hp_changed(old, new)
+hp_changed.emit(100, 80)
+$Enemy.hp_changed.connect(_on_hp_changed)
+
+# Callable 存起来当回调
+var cb: Callable = _on_hp_changed
+cb.call(100, 80)
+
+# 上下文无关的工具函数放 static
+static func clamp_hp(v): return clampi(v, 0, 100)
+```
+
+- `await` 后面跟信号是最常用的写法（等动画播完、等网络回来），比 `_process` 里轮询干净。
+- 信号连重了会触发多次，连接前 `if not is_connected(...)` 判一下。
+- 性能敏感处（每帧跑的）别频繁 `get_node`，`@onready` 缓存引用。
