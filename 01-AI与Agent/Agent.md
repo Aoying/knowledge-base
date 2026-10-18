@@ -52,6 +52,16 @@
 - 沙盒推演 → 本质是"分支 + 并行跑多个 Agent + 对比结果"，LangGraph 的分支能力正好对上。
 - 冲突检测 → 二层架构：小模型常驻扫全量章节，大模型按需做最终裁决。
 
+
+## Agent 设计模式（四种常用）
+
+1. **ReAct**：Reason + Act 循环，"想一步 → 调一个工具 → 看结果 → 再想"。最通用，LangChain 默认就是这个。
+2. **Plan-and-Execute**：先让 LLM 出完整计划，再一步步执行，执行偏离时重计划。适合长流程（如你的小说多章生成）。
+3. **Reflection**：做完自己评审一遍，"这段剧情有没有矛盾？"，有问题就改。对应你的 ChapterAnalysisService → 修正循环。
+4. **Multi-Agent**：分工，一专多能不如多专：抽取 Agent、矛盾检测 Agent、文风 Agent 各干各的，最后汇总。LangGraph 的 supervisor 模式就是干这个的。
+
+- 小说引擎现在用的是"单 Agent + 结构化输出"，下一步可以试 ReAct（抽取时主动查时间线）+ Reflection（生成后自检矛盾）。
+
 ## 来源
 
 - 概念部分为通用知识整理（ReAct / Tool Calling / MCP / LangGraph 官方文档）。
