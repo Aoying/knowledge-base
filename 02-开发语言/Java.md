@@ -85,7 +85,7 @@ lambdaQuery().eq(StringUtils.isNotBlank(name), User::getName, name);
 ## 待补充
 - Flowable 6.7 实战（见 flowable/ 方向）
 
-- 本地多数据源 dynamic-datasource 笔记
+
 
 ## 疑难杂症
 
@@ -161,3 +161,23 @@ List<Map<String,Object>> slow = facade.getDataSourceStatDataList(1).get(0)...;
 - 浏览器开 `/druid/index.html` 看 SQL 监控页：执行次数、慢 SQL、 max 并发，一目了然（生产记得加账号密码）。
 - 慢 SQL 定位链路：druid 慢日志 → `EXPLAIN` 看执行计划 → 索引/分页优化 → 回 druid 验证耗时下降。
 - 神农这种金融项目：`slow-sql-millis` 设 500ms，定时扫监控页，比等用户投诉强。
+
+## 多数据源 dynamic-datasource
+
+```yaml
+spring:
+  datasource:
+    dynamic:
+      primary: master
+      datasource:
+        master: { url: jdbc:mysql://.../db1, username: root, password: xxx }
+        oceanbase: { url: jdbc:mysql://.../db2, username: root, password: xxx }
+```
+```java
+@DS("oceanbase")   // 方法/类上一个注解就切库
+public List<Order> listFromOb() { return mapper.selectList(null); }
+```
+
+- 依赖：`com.baomidou:dynamic-datasource-spring-boot-starter`（和 MyBatis-Plus 同门）。
+- 事务注意：`@DS` + `@Transactional` 混用时事务只管主库，跨库事务得上 Seata，别想当然。
+- 神农 e 贷这种"MySQL + OceanBase"双跑的场景就靠它。
