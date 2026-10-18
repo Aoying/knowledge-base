@@ -74,6 +74,27 @@ Agent 自主跑不等于没人看，关键节点必须有人拍板：
 - 落到小说引擎：章节生成（高风险）→ 人确认；章节分析抽取（低风险）→ 自动跑 + 抽查。
 - 别走极端：全自动=翻车没人知道，全人工=Agent 白做了。
 
+
+## MCP 实战：最小 stdio Server（Python）
+
+```python
+from mcp.server.fastmcp import FastMCP
+mcp = FastMCP("novel-tools")
+
+@mcp.tool()
+def get_chapter_summary(chapter_id: int) -> str:
+    '按章节ID查剧情摘要'
+    # 查 SQLite 的 Chapter 表
+    return "..."
+
+if __name__ == "__main__":
+    mcp.run()  # stdio 模式，Claude Code / 5ire 里配一下就能调
+```
+
+- 小说引擎的查询能力（查章节/查人物/查伏笔）包成 MCP tools，任何支持 MCP 的 Agent 客户端都能直接用。
+- stdio 给本地用，SSE/HTTP 给远程用；先 stdio 跑通再考虑远程。
+- 和 Skill 的区别：Skill 是"教 Agent 怎么做"（文档），MCP 是"给 Agent 递工具"（接口），两个都要。
+
 ## 来源
 
 - 概念部分为通用知识整理（ReAct / Tool Calling / MCP / LangGraph 官方文档）。
