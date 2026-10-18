@@ -98,3 +98,19 @@ static func clamp_hp(v): return clampi(v, 0, 100)
 - `await` 后面跟信号是最常用的写法（等动画播完、等网络回来），比 `_process` 里轮询干净。
 - 信号连重了会触发多次，连接前 `if not is_connected(...)` 判一下。
 - 性能敏感处（每帧跑的）别频繁 `get_node`，`@onready` 缓存引用。
+
+## 2D 实战：TileMap + 碰撞层
+
+```gdscript
+# TileMapLayer（4.x 写法）+ CharacterBody2D 移动模板
+extends CharacterBody2D
+@export var speed := 200.0
+func _physics_process(_delta):
+    var dir := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+    velocity = dir * speed
+    move_and_slide()
+```
+
+- 地形画在 TileMapLayer 上，碰撞用"物理层"单独画，别和美术层混一起。
+- 碰撞层（Layer）vs 监测掩码（Mask）：Layer 是"我是谁"，Mask 是"我撞谁"；玩家 Layer=1、Mask=2（墙），子弹 Layer=4、Mask=2。
+- 调物理手感三个数：`speed`、`acceleration`（用 `velocity.move_toward` 做平滑）、跳跃的 `gravity`。
