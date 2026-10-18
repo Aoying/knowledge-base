@@ -96,7 +96,7 @@ docker compose down -v    # 连数据卷一起删，慎用
 
 ## 待补充
 - 本地 Ollama 进阶：不用 Docker，直接本机跑（已在用）
-- 生产发布：镜像 tag 规范、滚动更新
+
 
 ## 疑难杂症
 
@@ -114,3 +114,18 @@ docker compose down -v    # 连数据卷一起删，慎用
 - **现象**：Docker Desktop 挂载 Windows 目录，读写巨慢，偶发 permission denied。
 - **原因**：跨 OS 文件共享走网络文件系统，性能差且权限映射复杂。
 - **解决**：代码放 WSL2 文件系统里再挂载；或尽量用 COPY 进镜像而不是挂载；生产环境用 Linux 宿主机。
+
+## 生产发布：tag 规范与滚动更新
+
+```bash
+# tag 规范：git short sha，永远别用 latest 当生产 tag
+docker build -t registry/app:$(git rev-parse --short HEAD) .
+docker push registry/app:abc1234
+
+# compose 滚动更新
+docker compose pull && docker compose up -d --no-deps app
+```
+
+- `latest` 是玄学 tag，多机部署时各机器 pull 到的可能不是同一版，出问题查都查不清。
+- 回滚就是 `up -d` 上一个 tag，5 秒完成，所以每个 tag 都要能独立跑（数据库 migration 要向后兼容）。
+- 健康检查写上（`healthcheck`），compose 等容器 healthy 才切流量，不然刚启动就接请求直接 500。
