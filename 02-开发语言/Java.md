@@ -125,3 +125,18 @@ String city = Optional.ofNullable(user)
 - `map` 里别再 `return null`，用 `flatMap` + `Optional` 保持链式。
 - Stream 是"用一次就废"，复用同一个 stream 会抛 `IllegalStateException`。
 - 性能敏感的大循环还是老 for，Stream 的可读性优先于那点性能。
+
+## 虚拟线程（Java 21+，值得升级的理由）
+
+```java
+// 以前：平台线程 1:1 内核线程，开几千个就 OOM
+// 现在：虚拟线程轻量到可以"一个请求一个线程"
+try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+    for (int i = 0; i < 10000; i++)
+        exec.submit(() -> callDownstream());
+}
+```
+
+- 写同步代码，跑异步性能：`Thread.sleep`/`Lock` 在虚拟线程里不会 pin 住载体线程（`synchronized` 块里别调阻塞方法，仍会 pin）。
+- 神农这种 IO 密集型（调 OceanBase/Redis/下游接口）最吃香，Tomcat 换虚拟线程执行器吞吐直接涨。
+- 升级路径：JDK 17→21 主要是 `--release` 和依赖兼容性，先在测试环境跑一遍。
