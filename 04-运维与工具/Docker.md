@@ -149,3 +149,18 @@ ENTRYPOINT ["java","-jar","app.jar"]
 
 - `COPY pom.xml` 先于 `COPY src`：依赖层缓存，只有改 pom 才重下依赖。
 - Python 版同理：`python:3.12-slim` 做运行阶段，`pip install` 放构建阶段。
+
+## Dockerfile 安全：别用 root 跑
+
+```dockerfile
+FROM eclipse-temurin:17-jre
+RUN addgroup --system app && adduser --system --ingroup app app
+WORKDIR /app
+COPY --chown=app:app app.jar .
+USER app
+ENTRYPOINT ["java","-jar","app.jar"]
+```
+
+- 容器逃逸的新闻年年有，非 root 是最低成本的防线。
+- `COPY --chown` 一步到位，别 `RUN chown`（多一层还慢）。
+- 只读文件系统更进一步：`docker run --read-only`，写操作走 volume。
