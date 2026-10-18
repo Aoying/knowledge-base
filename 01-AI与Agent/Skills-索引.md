@@ -70,3 +70,20 @@
 - **热度/更新**：Vercel Labs 出品，2026-09-28 仍在更新。
 - **许可证**：MIT。
 - **安全注意**：同其他 skill，引入前检查。
+
+### 8. ECC（affaan-m/ECC）Agent harness 性能优化体系
+
+- **功能**：311 个 skills + 71 个 subagent + 97 条命令 + hooks + memory vault 的完整 Agent 工作流系统：plan → test → implement → review → verify → remember → improve，覆盖开发全链路；另有安全扫描与记忆优化模块。
+- **适用场景**：想给小说引擎/知识库任务搭"常驻工作流纪律"时的参考实现；memory vault 的设计可直接借鉴到小说引擎长期记忆。
+- **来源**：https://github.com/affaan-m/ECC
+- **热度/更新**：283k+ stars（2026-10-18 核验），2026-10-15 仍在更新，v2.2.3。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；hooks 会拦截工具调用，引入前逐个通读 SKILL.md 与 hook 脚本。
+
+### 9. claude-skills（alirezarezvani/claude-skills）380 个 skills 精选集
+
+- **功能**：380+ 个实测过的 skill / agent / 自定义命令精选：PR 评审、API 设计评审、测试生成、文档写作等日常工程 skills 开箱即用。
+- **适用场景**：和 gamai-skills（992 合集）互补的"精选版"——先在这里找，找不到再去 gamai-skills 大海捞针。
+- **来源**：https://github.com/alirezarezvani/claude-skills
+- **热度/更新**：28k+ stars（2026-10-18 核验），MIT。
+- **安全注意**：量大，挑中的单个 skill 引入前通读 SKILL.md；不熟悉的脚本不要直接跑。
