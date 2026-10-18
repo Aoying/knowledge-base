@@ -154,3 +154,17 @@ gh api repos/{owner}/{repo}/commits --paginate  # 直接调 API
 
 - `gh auth login` 一次登录，后面全自动，比在网页上点来点去快得多。
 - 写脚本批量管仓库（如 50 个仓库统一改 branch 保护）就靠它。
+
+### 14. rebase 工作流 + commit 规范
+
+```bash
+git checkout -b feat/xxx
+# ...开发...
+git fetch origin && git rebase origin/main   # 变基，保持线性历史
+git push --force-with-lease                  # 自己分支才 force
+# 合并：PR 用 Squash merge，一个功能一个 commit
+```
+
+- **commit 规范**（Conventional Commits）：`feat: xxx` / `fix: xxx` / `docs: xxx` / `refactor: xxx`，`git log` 一眼看懂。
+- 个人分支用 rebase（历史干净），公共分支（main）永远 merge（别改写别人历史）。
+- rebase 冲突 mid-way 想放弃：`git rebase --abort`，毫发无损。
