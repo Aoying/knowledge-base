@@ -50,3 +50,11 @@
 - **来源**：https://github.com/thedotmack/claude-mem（按 2026-08 第三方榜单约 92k stars）
 - **许可证**：使用前核对仓库 LICENSE。
 - **安全注意**：记忆会存你的项目信息，只放本地，别接云同步；引入前检查存储路径和内容。
+
+## 6. andrej-karpathy-skills（Karpathy 的 LLM 编程坑位总结）
+
+- **功能**：从 Karpathy 对 LLM 写代码的观察提炼的 skill：LLM 最容易在哪类任务上翻车、prompt 怎么写命中率高。相当于"前人踩坑清单"。
+- **适用场景**：你调教小说引擎的抽取/生成 prompt 时，对着这份清单自查一遍（"是不是给了模糊指令""有没有要求结构化输出"）。
+- **来源**：https://github.com/karpathy/skills（按 2026-09 第三方榜单约 208k stars，社区整理版）
+- **许可证**：使用前核对仓库 LICENSE。
+- **安全注意**：纯文档型 skill，风险低。
