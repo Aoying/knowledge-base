@@ -63,7 +63,7 @@ taskService.complete(taskId, variables);
 ## 待补充
 
 
-- 自定义节点行为（JavaDelegate vs 表达式）
+
 - 结合神农 e 贷的真实审批流沉淀案例
 
 ## 疑难杂症
@@ -117,3 +117,23 @@ builder.migrate(processInstanceId);  // 单个迁；批量自己循环
 
 - 迁移要求新老定义的 activity id 能对上，对不上的用 mapping 显式指定。
 - 神农 e 贷这种金融审批流：先在测试环境迁 10 个实例验证，再全量；迁之前先备 `act_*` 表。
+
+## 自定义节点行为：JavaDelegate vs 表达式
+
+```java
+// JavaDelegate：重逻辑
+@Component("riskCheck")
+public class RiskCheckDelegate implements JavaDelegate {
+    public void execute(DelegateExecution ex) {
+        ex.setVariable("riskScore", score(ex.getVariable("orderId")));
+    }
+}
+```
+```xml
+<serviceTask id="t1" flowable:delegateExpression="${riskCheck}"/>
+<!-- 轻逻辑直接表达式 -->
+<serviceTask id="t2" flowable:expression="${order.amount > 10000}"/>
+```
+
+- 选型：超过 10 行、一处以上复用、要单元测试 → JavaDelegate；简单赋值/判断 → 表达式。
+- delegate 丢异常整个事务回滚，想"失败继续"用 async + 边界错误事件接住。
