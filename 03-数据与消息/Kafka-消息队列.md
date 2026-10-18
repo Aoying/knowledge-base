@@ -86,3 +86,15 @@ docker compose up -d
 
 - 单机把 broker 和 controller 合在一个进程（`broker,controller`），开发够用，生产要拆开。
 - 来源：https://www.webcodingcenter.com/apache-kafka/event-streaming-concepts-and-the-publish-subscribe-log--kafka-4-x-and-the-kraft-only-release-line.html
+
+## 分区 key 设计
+
+```java
+// 按业务主键分区：同一用户的消息永远进同一分区 → 分区内有序
+producer.send(new ProducerRecord<>("orders", userId, orderJson));
+```
+
+- **key 选谁**：需要保序的维度就是 key（用户 ID、订单 ID）；不需要保序就别设 key，让它轮询打散。
+- **分区数**：`分区数 >= 消费线程数`，不然加机器也白加；但别一上来 100 个分区，controller 负担重。
+- 改分区数只能调大不能调小（调大后 key 的归属会变，保序要求高的业务要停机迁移）。
+- 选型对比见待补充：RocketMQ vs Kafka（`03-数据与消息/RocketMQ.md` 的顺序消息可对照看）。
