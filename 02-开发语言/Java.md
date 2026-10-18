@@ -103,3 +103,25 @@ lambdaQuery().eq(StringUtils.isNotBlank(name), User::getName, name);
 - **现象**：服务跑着跑着部分请求卡死，重启就好。
 - **原因**：数据库端杀掉了空闲连接（如 wait_timeout），但连接池不知道，拿到的是死连接。
 - **解决**：Druid 开 `testWhileIdle=true` + `validationQuery=SELECT 1`，`timeBetweenEvictionRunsMillis` 小于数据库的 wait_timeout。
+
+## Stream + Optional 实战
+
+```java
+// Stream：集合管道，一行顶五行 for
+List<String> names = users.stream()
+    .filter(u -> u.getAge() >= 18)
+    .sorted(Comparator.comparing(User::getScore).reversed())
+    .limit(10)
+    .map(User::getName)
+    .collect(Collectors.toList());
+
+// Optional：告别 != null 金字塔
+String city = Optional.ofNullable(user)
+    .map(User::getAddress)
+    .map(Address::getCity)
+    .orElse("未知");
+```
+
+- `map` 里别再 `return null`，用 `flatMap` + `Optional` 保持链式。
+- Stream 是"用一次就废"，复用同一个 stream 会抛 `IllegalStateException`。
+- 性能敏感的大循环还是老 for，Stream 的可读性优先于那点性能。
