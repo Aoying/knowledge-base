@@ -79,3 +79,23 @@ coroutine.resume(co)  -- co 2
 - **现象**：`coroutine.resume(co)` 调用了，函数体没执行。
 - **原因**：协程已经 dead（函数 return 了）再 resume 会静默返回 false；或者 yield/resume 配对错乱。
 - **解决**：resume 前查 `coroutine.status(co)`；调试时打印 resume 的第二个返回值（错误信息）。
+
+## Redis Lua 实战
+
+Redis 里 Lua 跑在服务端，原子执行，适合"读+写"必须一起成功的场景。
+
+### 限流（令牌桶简化版：固定窗口计数）
+```lua
+-- KEYS[1]=限流key, ARGV[1]=窗口内最大次数, ARGV[2]=窗口秒数
+local c = redis.call('INCR', KEYS[1])
+if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
+return c <= tonumber(ARGV[1]) and 1 or 0
+```
+```bash
+redis-cli --eval limit.lua ratelimit:api , 100 60
+```
+
+### 要点
+- 脚本里别做耗时操作，Redis 单线程，慢脚本阻塞所有请求。
+- `redis.replicate_commands()` / effects：5.0+ 脚本的写复制更可靠，老版本用 `redis.call` 即可。
+- 调试：`redis-cli --eval` 本地先跑，生产用 `EVALSHA` 省带宽。
