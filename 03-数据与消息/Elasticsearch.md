@@ -123,3 +123,17 @@ PUT /logs-2026.10/_settings { "index": { "refresh_interval": "30s", "number_of_r
 
 - 写入慢 90% 是 refresh 和副本的锅，调完这两个再怀疑人生。
 - 监控看 `indexing` 线程池 reject 数，开始 reject 就说明集群写入到顶了。
+
+## 聚合实战：PV/UV 一把梭
+
+```json
+GET /logs/_search
+{ "size": 0, "aggs": {
+  "by_hour": { "date_histogram": { "field": "@timestamp", "calendar_interval": "hour" },
+    "aggs": { "uv": { "cardinality": { "field": "user_id" } } } }
+} }
+```
+
+- `size: 0` 只要聚合不要文档，省 90% 传输。
+- UV 用 `cardinality`（HyperLogLog 近似，误差 <5%），别用 terms 全量去重。
+- 聚合嵌套别超过 3 层，bucket 爆炸（`too_many_buckets_exception`）就加 `composite` 分页。
