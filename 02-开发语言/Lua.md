@@ -99,3 +99,22 @@ redis-cli --eval limit.lua ratelimit:api , 100 60
 - 脚本里别做耗时操作，Redis 单线程，慢脚本阻塞所有请求。
 - `redis.replicate_commands()` / effects：5.0+ 脚本的写复制更可靠，老版本用 `redis.call` 即可。
 - 调试：`redis-cli --eval` 本地先跑，生产用 `EVALSHA` 省带宽。
+
+## 元表实战：只读表
+
+```lua
+function readonly(t)
+    return setmetatable({}, {
+        __index = t,
+        __newindex = function() error("只读表，不许改") end,
+        __metatable = "locked",
+    })
+end
+local cfg = readonly({host="127.0.0.1", port=6379})
+print(cfg.host)   -- 正常读
+-- cfg.host = "x" -- 报错
+```
+
+- `__index` 可以是表（查不到就去那张表找）也可以是函数（动态计算默认值）。
+- `__newindex` 拦截所有"新增键"赋值，想做校验/只读就靠它。
+- 注意：`rawset/rawget` 绕过元表，框架内部用，业务代码别碰。
