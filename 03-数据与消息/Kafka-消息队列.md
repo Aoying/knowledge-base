@@ -136,3 +136,15 @@ spring.kafka.consumer:
 
 - 神农 e 贷选 RocketMQ 是对的：金融要事务消息+延迟消息，开箱即用。
 - 日志/埋点/流计算选 Kafka：和 Flink/Spark 一家。
+
+## 监控关键指标
+
+| 指标 | 含义 | 告警线 |
+|---|---|---|
+| UnderReplicatedPartitions | 副本没跟上的分区数 | >0 就查 |
+| Consumer Lag | 消费落后 | 持续增长告警 |
+| RequestHandlerAvgIdlePercent | broker 空闲率 | <0.3 说明 broker 快顶不住了 |
+| LogEndOffset 增速 | 写入速率 | 突增查生产者 |
+
+- JMX Exporter + Prometheus + Grafana 一套，Kafka 官方推荐链路。
+- Lag 告警配"持续 5 分钟增长"而不是"绝对值"，避免正常波动误报。
