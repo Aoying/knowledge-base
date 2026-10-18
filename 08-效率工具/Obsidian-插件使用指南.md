@@ -274,3 +274,14 @@
 - 命令面板 `Open daily note` 等快捷命令
 
 **技巧**：你已经有 calendar + templater 了，三个配齐：calendar 负责点日期，periodic-notes 负责建对应周期笔记，templater 负责套模板。周记模板里可以放 dataview 查询，自动汇总本周任务。
+
+## 插件联动工作流（1+1>2 的组合）
+
+单个插件是工具，组合起来才是工作流：
+
+1. **日记流水线**：calendar（点日期）→ periodic-notes（按配置建日记）→ templater（套每日模板，自动填前后链接）→ tasks（日记里的 `- [ ]` 自动汇总）。
+2. **任务看板**：tasks（写任务）→ dataview（`看板-任务总览` 跨文件汇总未完成）→ kanban（拖拽改状态，写回 markdown）。
+3. **知识沉淀**：omnisearch（搜）→ auto-link-title（粘 URL 自动取标题）→ excalidraw（画架构图，`![[图]]` 嵌入笔记）。
+4. **定期回顾**：periodic-notes 周记模板里放 dataview 查询（本周完成任务数/新建笔记数），每周自动出一份回顾。
+
+- 新插件先问自己：它跟现有哪个插件联动？联动不上的多半用三次就吃灰。
