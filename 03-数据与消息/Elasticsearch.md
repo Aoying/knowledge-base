@@ -94,3 +94,19 @@ FROM logs-*
 - Kibana Discover 里直接切 ES|QL 模式就能跑，不用记 DSL 的 JSON 嵌套。
 - 9.x 另有 BBQ（Better Binary Quantization）让向量检索快 5 倍，做 RAG 语义检索时值得关注。
 - 来源：https://www.elastic.co/docs/release-notes/elasticsearch.md
+
+## 索引生命周期 ILM + 分片规划
+
+```json
+PUT _ilm/policy/logs-30d {
+  "policy": { "phases": {
+    "hot":   { "actions": { "rollover": { "max_age": "7d", "max_size": "50gb" } } },
+    "warm":  { "min_age": "7d",  "actions": { "shrink": { "number_of_shards": 1 } } },
+    "delete":{ "min_age": "30d", "actions": { "delete": {} } }
+  } }
+}
+```
+
+- 日志类索引必配 ILM：hot 写 → warm 缩分片省资源 → 30 天删，不配的话磁盘早晚被吃光。
+- 分片数拍脑袋公式：单分片 20-50GB，`分片数 = 数据量/30GB`，别一上来就 5 分片（小数据 1 分片最快）。
+- 写入慢先看三件套：`refresh_interval` 调大、bulk 批量、副本数写入时暂时设 0。
