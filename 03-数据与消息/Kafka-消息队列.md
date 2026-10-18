@@ -43,7 +43,7 @@ retries=Integer.MAX_VALUE
 ## 待补充
 
 
-- RocketMQ vs Kafka 选型对比（见 rocketmq/ 方向）
+
 
 
 ## 疑难杂症
@@ -122,3 +122,17 @@ spring.kafka.consumer:
 
 - 关掉自动提交，业务成功才 `ack`，这是"至少一次"的底线。
 - `max.poll.interval.ms` < 单批处理耗时会触发 rebalance，大批量调大它或调小 `max-poll-records`。
+
+## RocketMQ vs Kafka 选型对比
+
+|  | RocketMQ | Kafka |
+|---|---|---|
+| 出身 | 阿里，双十一 | LinkedIn，日志流 |
+| 顺序消息 | 原生支持（顺序队列） | key 分区保序 |
+| 事务消息 | 原生（half message+回查） | 事务 API（偏重 exactly-once） |
+| 延迟消息 | 原生 18 级延迟 | 要自己实现/4.2+ share group |
+| 运维 | NameServer 轻量 | KRaft（4.0+ 去 ZK） |
+| 生态 | 国内金融/电商多 | 大数据生态（Flink 等） |
+
+- 神农 e 贷选 RocketMQ 是对的：金融要事务消息+延迟消息，开箱即用。
+- 日志/埋点/流计算选 Kafka：和 Flink/Spark 一家。
