@@ -135,3 +135,26 @@ server {
 - 读多写少、允许分钟级延迟的接口（如排行榜、配置下发）最适合。
 - 调试先看 `X-Cache-Status` 是 HIT 还是 MISS，别上来就怀疑人生。
 - 带用户态的接口（`Authorization` 头）默认不缓存，想缓存要显式 `proxy_cache_key` 带上区分维度。
+
+## 动静分离 + 防盗链
+
+```nginx
+server {
+    # 静态走本地，动态走后端
+    location ~* \.(jpg|css|js|woff2)$ {
+        root /data/static;
+        expires 30d;
+        add_header Cache-Control "public";
+    }
+    location / { proxy_pass http://backend; }
+
+    # 图片防盗链
+    location ~* \.(png|jpg)$ {
+        valid_referers none blocked *.mydomain.com;
+        if ($invalid_referer) { return 403; }
+    }
+}
+```
+
+- `~*` 正则不区分大小写，静态资源后缀匹配用它。
+- `expires 30d` 让浏览器缓存，静态流量直接砍 90%。
