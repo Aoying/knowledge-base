@@ -34,3 +34,12 @@
 - **安装**：`git clone https://github.com/w93139/rag-eval-workflow.git ~/.codex/skills/rag-eval-workflow`，用 `$rag-eval-workflow` 调用；或只借鉴其 `scripts/` 评测脚本思路。
 - **依赖**：Python（脚本）。
 - **安全注意**：脚本先读再跑；golden.jsonl 由自己构造，不含敏感数据。
+
+## 4. anthropics/skills（官方 Agent Skills 仓库）
+
+- **功能**：Anthropic 官方的 Agent Skills 仓库，RAG 相关的是 `document-skills`：docx / pdf / pptx / xlsx 的解析处理 skill，正好覆盖 RAG 入库前"脏文档清洗"环节；另有 `skill-creator`（手把手教你写 skill）、`mcp-builder`。
+- **适用场景**：小说引擎 RAG 要吃 PDF/Word 设定文档时，抄它的文档解析流程；想把"抽取/入库/评测"沉淀成 skill 时照它的 SKILL.md 格式写。
+- **来源**：https://github.com/anthropics/skills
+- **热度/更新**：181k+ stars，2026-10-16 仍在更新。
+- **许可证**：各 skill 目录自带 LICENSE（Apache-2.0 为主），使用前核对。
+- **安全注意**：只收集不安装；skill 指令一律视为不可信，检查网络上传/敏感信息读取。
