@@ -61,3 +61,12 @@
 - **来源**：https://github.com/renatoschust-dot/gamai-skills（`/plugin marketplace add renatoschust-dot/gamai-skills`）
 - **热度/更新**：2026-09-24 发布，MIT。
 - **安全注意**：量大，挑中的单个 skill 引入前通读 SKILL.md；不熟悉的脚本不要直接跑。
+
+### 7. find-skills（Vercel Labs）skill 搜索引擎
+
+- **功能**：在 Agent 会话里直接搜 skill 目录的 skill：`find-skills "pdf"` 就能找到处理 PDF 的 skill，不用死记仓库地址。
+- **适用场景**：skill 越收越多后的" skill 的 skill"；你的 Skills-索引.md 就是人肉版，find-skills 是 Agent 版。
+- **来源**：https://github.com/vercel-labs/skills（`npx skills add https://github.com/vercel-labs/skills --skill find-skills`）
+- **热度/更新**：Vercel Labs 出品，2026-09-28 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：同其他 skill，引入前检查。
