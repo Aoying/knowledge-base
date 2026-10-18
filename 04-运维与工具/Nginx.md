@@ -158,3 +158,18 @@ server {
 
 - `~*` 正则不区分大小写，静态资源后缀匹配用它。
 - `expires 30d` 让浏览器缓存，静态流量直接砍 90%。
+
+## 日志切割 + 监控
+
+```nginx
+log_format main '$remote_addr - $request_time $status "$request"';
+access_log /var/log/nginx/access.log main buffer=64k flush=5s;
+```
+```bash
+# logrotate 每天一切（/etc/logrotate.d/nginx）
+/var/log/nginx/*.log { daily; rotate 30; compress; missingok; }
+```
+
+- `buffer=64k flush=5s`：攒批写，QPS 高了不加这个磁盘 IO 直接起飞。
+- `$request_time` 记上，慢请求分析 `awk '$2>1'` 一把梭。
+- 监控：`stub_status` 开个 `/nginx_status`，Prometheus 抓 active connections。
