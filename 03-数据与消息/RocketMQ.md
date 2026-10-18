@@ -115,3 +115,15 @@ consumer.registerMessageListener((MessageListenerOrderly) (msgs, ctx) -> {
 - 顺序消息 = "分区有序"：全局有序靠单队列，吞吐低；一般用"业务 key 分区有序"就够了。
 - 有序消费时一个消息卡住会堵住整个队列，消费逻辑必须幂等 + 快速失败。
 - 和 Kafka 对比：Kafka 用 key 分区天然有序，RocketMQ 要显式选队列，两者思想一样。
+
+## 延迟消息
+
+```java
+// 18 个固定等级：1s 5s 10s 30s 1m 2m ... 2h（不能自定义时长）
+msg.setDelayTimeLevel(3);  // 10s 后投递
+producer.send(msg);
+```
+
+- 场景：订单 30 分钟未支付关单、定时提醒。
+- 只能选固定等级，`setDelayTimeLevel(4)` = 30s，想"17 分钟"就选 10m 那档或自己轮询。
+- 延迟消息不支持重试太多次，消费失败进死信后延迟语义就没了，消费逻辑要幂等。
