@@ -61,7 +61,7 @@ EXPLAIN SELECT * FROM t_order WHERE user_id=1;
 - 执行计划用 `EXPLAIN` 照常看，但分布式计划多了数据分发算子（EXCHANGE），关注点一样：先看有没有全表扫。
 
 ## 待补充
-- 分库分表中间件选型笔记
+
 -  binlog / Canal 同步实战
 
 
@@ -103,3 +103,15 @@ SELECT * FROM oceanbase.DBA_OB_UNITS;  -- 资源单元（CPU/内存配额）
 - **资源单元（UNIT）**：租户的最小资源粒度，扩容 = 加 UNIT，不是加机器。
 - 你在神农项目里连的是 MySQL 模式租户，`SHOW VARIABLES` 看到的是租户级变量，改 `ob_trx_timeout` 这类只影响当前租户。
 - 排障先看租户资源：`__all_virtual_server_stat` 看 CPU/内存水位，满了先扩 UNIT 再查 SQL。
+
+## 分库分表中间件选型
+
+| 方案 | 类型 | 特点 |
+|---|---|---|
+| ShardingSphere-JDBC | 客户端 jar | 无额外运维，应用直连，适合中小规模 |
+| ShardingSphere-Proxy | 代理 | 对应用透明（当 MySQL 用），可独立扩缩 |
+| MyCat | 代理 | 老牌，社区活跃度下降，新项目不推荐 |
+
+- 分片键选查询最常用的维度（用户 ID），别选时间（热点都挤在最新分片）。
+- 能不分就不分：先读写分离 + 缓存，分表是最后手段（跨分片 join/事务是深渊）。
+- 分了之后主键用雪花算法，别用自增（各分片自增会冲突）。
