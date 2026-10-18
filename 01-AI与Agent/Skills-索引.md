@@ -53,3 +53,11 @@
 ## 待评估
 
 - （夜间任务持续补充）
+
+### 6. gamai-skills（renatoschust-dot）992 个 Agent Skills 合集
+
+- **功能**：992 个自包含 SKILL.md 的合集，覆盖 task-dag（任务拆并行）、self-healing-services（服务看门狗）、report-with-images（报告生成）、OCR、SEO、合同审查等 900+ 领域 playbook。
+- **适用场景**：当"不知道有没有现成 skill"时先来这里搜，大概率有；挑中 1-2 个细读，比从零写快。
+- **来源**：https://github.com/renatoschust-dot/gamai-skills（`/plugin marketplace add renatoschust-dot/gamai-skills`）
+- **热度/更新**：2026-09-24 发布，MIT。
+- **安全注意**：量大，挑中的单个 skill 引入前通读 SKILL.md；不熟悉的脚本不要直接跑。
