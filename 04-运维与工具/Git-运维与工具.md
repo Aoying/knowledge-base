@@ -139,3 +139,18 @@ git config --global http.postBuffer 157286400
 - **现象**：push 到 99% 断开，或远端拒绝超大文件。
 - **原因**：GitHub 单文件 100MB 上限；大文件进仓库后每次 clone 都慢。
 - **解决**：用 Git LFS（`git lfs track "*.psd"`）；已经误提交的大文件用 `git filter-repo` 清理历史；能放对象存储就别进仓库。
+
+### 13. GitHub CLI（gh）常用
+
+```bash
+gh repo clone aoying0619/ob_note   # 不用拼 URL
+gh pr create --fill                # 当前分支一键提 PR
+gh pr list / gh pr view 123
+gh pr checkout 123                 # 把别人的 PR 拉到本地看
+gh issue create --title "xxx" --body "yyy"
+gh workflow run nightly.yml        # 手动触发 Actions
+gh api repos/{owner}/{repo}/commits --paginate  # 直接调 API
+```
+
+- `gh auth login` 一次登录，后面全自动，比在网页上点来点去快得多。
+- 写脚本批量管仓库（如 50 个仓库统一改 branch 保护）就靠它。
