@@ -96,3 +96,22 @@ Broker 长时间没收到确认会**回查**（默认 15 次）→ 保证最终�
 - **现象**：生产者报 `SYSTEM_BUSY` / `BROKER_DISK_FULL`，消息发不出去。
 - **原因**：CommitLog 占满磁盘，broker 进入保护状态拒绝写入。
 - **解决**：紧急扩容或清理过期文件；长期看调小文件保留时长（`fileReservedTime`）；监控磁盘水位告警，别等满了才发现。
+
+## 顺序消息实战
+
+```java
+// 生产者：同一订单的消息用同一个 sharding key → 同一队列 → 有序
+SendResult r = producer.send(new Message("orders", ("order-" + orderId).getBytes()),
+    (queues, msg, arg) -> queues.get(((String) arg).hashCode() % queues.size()),
+    orderId);
+
+// 消费者：MessageListenerOrderly（单队列单线程消费，天然有序）
+consumer.registerMessageListener((MessageListenerOrderly) (msgs, ctx) -> {
+    // 处理 msgs
+    return ConsumeOrderlyStatus.SUCCESS;
+});
+```
+
+- 顺序消息 = "分区有序"：全局有序靠单队列，吞吐低；一般用"业务 key 分区有序"就够了。
+- 有序消费时一个消息卡住会堵住整个队列，消费逻辑必须幂等 + 快速失败。
+- 和 Kafka 对比：Kafka 用 key 分区天然有序，RocketMQ 要显式选队列，两者思想一样。
