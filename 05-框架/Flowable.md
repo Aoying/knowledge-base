@@ -62,7 +62,7 @@ taskService.complete(taskId, variables);
 
 ## 待补充
 
-- 流程实例迁移（6.7 的 migration API 实战）
+
 - 自定义节点行为（JavaDelegate vs 表达式）
 - 结合神农 e 贷的真实审批流沉淀案例
 
@@ -99,3 +99,21 @@ runtimeService.createChangeActivityStateBuilder()
 
 - 驳回后记得把"驳回意见"写进 comment（`taskService.addComment`），不然审批人不知道为啥被打回。
 - 会签里的驳回：先 `completionCondition` 放行，再用方案 2 跳回去，别在会签里画驳回线。
+
+## 流程实例迁移（6.7 migration API）
+
+流程定义升级 v1→v2，老实例还在 v1 上跑，两种处理：
+
+```java
+// 方案1：老实例自然结束，新实例走新定义（推荐，能等就等）
+// 方案2：批量迁移
+ProcessInstanceMigrationBuilder builder =
+    runtimeService.createProcessInstanceMigrationBuilder()
+        .migrateToProcessDefinition(newDefId)
+        .addActivityMigrationMapping(
+            ActivityMigrationMapping.createMappingFor("oldTask", "newTask"));
+builder.migrate(processInstanceId);  // 单个迁；批量自己循环
+```
+
+- 迁移要求新老定义的 activity id 能对上，对不上的用 mapping 显式指定。
+- 神农 e 贷这种金融审批流：先在测试环境迁 10 个实例验证，再全量；迁之前先备 `act_*` 表。
