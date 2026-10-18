@@ -82,3 +82,20 @@ taskService.complete(taskId, variables);
 - **现象**：生成的流程图图片里中文全是方框。
 - **原因**：服务器（Linux/TongWeb）没有中文字体，Flowable 画图时 fallback 失败。
 - **解决**：服务器装中文字体（如 `wqy-microhei`）；或在代码里指定 `activityFontName` / `labelFontName` 为已安装的字体。
+
+## 驳回 / 回退实现方案
+
+Flowable 原生没有"驳回"按钮，三种实现按推荐度排序：
+
+1. **画回去**：在 exclusiveGateway 上加一条"驳回"顺序流连回上一节点，最土但最稳，历史记录完整。
+2. **ChangeActivityStateBuilder**（7.x 推荐 API）：
+```java
+runtimeService.createChangeActivityStateBuilder()
+    .processInstanceId(piId)
+    .moveActivityIdTo(currentTaskKey, targetTaskKey)  // 当前节点 → 目标节点
+    .changeState();
+```
+3. **连线条件**：网关上 `${approved == false}` 走驳回分支，变量由表单/代码设置。
+
+- 驳回后记得把"驳回意见"写进 comment（`taskService.addComment`），不然审批人不知道为啥被打回。
+- 会签里的驳回：先 `completionCondition` 放行，再用方案 2 跳回去，别在会签里画驳回线。
