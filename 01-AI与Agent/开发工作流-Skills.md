@@ -43,3 +43,11 @@
 - **热度/更新**：Matt Pocock（知名 TS/AI 教育者）维护，2026-09-30 仍在更新。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；引入前检查 SKILL.md。
+
+## 5. ECC（Everything Claude Code）Agent 全家桶
+
+- **功能**：Claude Code 的完整 harness：68 个 agents、292 个 skills、AgentShield 安全扫描（102 条静态规则）、hooks/rules/memory、跨 Claude Code/Codex/Cursor。
+- **适用场景**：superpowers 给的是"方法论"，ECC 给的是"全套装备"；团队级 Agent 落地、需要安全扫描和质量门禁时参考它的结构。
+- **来源**：https://github.com/affaan-m/everything-claude-code（按 2026-09 第三方榜单约 267k stars）
+- **许可证**：MIT（使用前核对仓库 LICENSE）。
+- **安全注意**：量大，只借鉴结构；真要装，先读 AgentShield 规则再说。
