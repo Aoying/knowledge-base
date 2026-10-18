@@ -76,3 +76,21 @@ curl -X GET "localhost:9200/books/_search" -H 'Content-Type: application/json' -
 - **现象**：集群状态 yellow/red，有分片一直分配不下去。
 - **原因**：`GET _cluster/allocation/explain` 看，大概率是磁盘水位（flood stage）、节点属性不满足，或副本数 > 数据节点数。
 - **解决**：先看 explain 的 decision；磁盘问题清数据或扩容；单节点测试环境把副本数设 0。
+
+## ES|QL 入门（8.11+，9.x 主推）
+
+Elastic 官方新查询语言，管道式写法，比 DSL 好读一个量级（2026-10-18 按 Elastic 官方 release notes 核验，9.3 为当前版本）。
+
+```esql
+FROM logs-*
+| WHERE status >= 400
+| STATS count() BY host
+| SORT count() DESC
+| LIMIT 20
+```
+
+- `FROM` → `WHERE` → `STATS` → `SORT` → `LIMIT`，和写 shell 管道一个感觉。
+- 支持 `LOOKUP JOIN` 跨索引关联，`TS` 命令查时序数据。
+- Kibana Discover 里直接切 ES|QL 模式就能跑，不用记 DSL 的 JSON 嵌套。
+- 9.x 另有 BBQ（Better Binary Quantization）让向量检索快 5 倍，做 RAG 语义检索时值得关注。
+- 来源：https://www.elastic.co/docs/release-notes/elasticsearch.md
