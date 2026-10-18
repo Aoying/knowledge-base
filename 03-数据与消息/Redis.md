@@ -84,7 +84,7 @@ String lua = "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del'
 ## 待补充
 
 
-- Redisson 常用件（限流、信号量）
+
 
 ## 疑难杂症
 
@@ -131,3 +131,20 @@ XPENDING orders g1                         # 查未确认的（掉线消费者�
 - 扩容：`redis-cli --cluster add-node` 加节点 → `reshard` 迁槽 → `rebalance`，槽是逐步搬的，在线不中断。
 - 缩容反向操作，先 `reshard` 把槽搬空再 `del-node`，直接下掉节点会丢槽。
 - 槽位没覆盖全（`cluster info` 看 `cluster_state:fail`）时整个集群拒绝写，先 `fix` 再查应用。
+
+## Redisson 常用件（限流、信号量）
+
+```java
+// 分布式限流：每秒 10 个
+RRateLimiter limiter = redisson.getRateLimiter("api:limit");
+limiter.trySetRate(RateType.OVERALL, 10, 1, RateIntervalUnit.SECONDS);
+limiter.acquire();  // 拿不到就阻塞，可 tryAcquire(0) 非阻塞
+
+// 分布式信号量：最多 5 个并发
+RSemaphore s = redisson.getSemaphore("job:slots");
+s.trySetPermits(5);
+if (s.tryAcquire()) { try { /* 干活 */ } finally { s.release(); } }
+```
+
+- 比手写 Lua 省心：Redisson 的 Lua 脚本久经考验，自己写容易漏边界。
+- 注意：Redisson 客户端版本要和 Redis Server 版本对上，差太多会有命令不支持。
