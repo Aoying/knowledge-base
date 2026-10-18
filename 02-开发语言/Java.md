@@ -83,7 +83,7 @@ lambdaQuery().eq(StringUtils.isNotBlank(name), User::getName, name);
 3. **慢接口**：先看 SQL 执行计划（`EXPLAIN`），再看是不是事务里套了远程调用（事务+Feign 长时间占用连接是大忌）。
 
 ## 待补充
-- Flowable 6.7 实战（见 flowable/ 方向）
+
 
 
 
@@ -181,3 +181,7 @@ public List<Order> listFromOb() { return mapper.selectList(null); }
 - 依赖：`com.baomidou:dynamic-datasource-spring-boot-starter`（和 MyBatis-Plus 同门）。
 - 事务注意：`@DS` + `@Transactional` 混用时事务只管主库，跨库事务得上 Seata，别想当然。
 - 神农 e 贷这种"MySQL + OceanBase"双跑的场景就靠它。
+
+## Flowable 实战
+
+见 [05-框架/Flowable.md](05-框架/Flowable.md)，Java 侧的调用、驳回、网关、会签、异步 job 全在那边沉淀。
