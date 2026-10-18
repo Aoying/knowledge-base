@@ -55,3 +55,14 @@ skill 之外，RAG 落地真正缺的是评测口径。建 golden 集（问题�
 
 - 小说引擎落地：20 个剧情问题（"林溯父母是谁""源石第一次出现在哪章"）做 golden 集，每次改 chunking/embedding 跑一遍回归，数字说话。
 - 评测 skill 见本库第 3 条 `rag-eval-workflow`，它的分层定位（ingestion/chunking/retrieval/rerank/generation）就是按这套指标拆的。
+
+## 混合检索（BM25 + 向量）工程要点
+
+纯向量检索有个毛病：专有名词（人名"林溯"、地名"源石"）embedding 经常拉胯。生产级 RAG 都是混合：
+
+1. **两路召回**：BM25（关键词，Elasticsearch/SQLite FTS5）+ 向量（Chroma），各取 top-20。
+2. **融合排序**：RRF（倒数排名融合）`score = Σ 1/(k+rank)`，k 取 60，不用调权重。
+3. **rerank**：bge-reranker 对融合后的 top-20 重排，取 top-5 给 LLM。
+
+- 小说引擎落地：SQLite 自带 FTS5 做 BM25 路，Chroma 做向量路，RRF 融合 10 行代码。
+- 专有名词先走"实体别名表"归一化（"溯哥"→"林溯"），检索质量立竿见影。
