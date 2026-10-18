@@ -127,7 +127,7 @@ git config --global http.postBuffer 157286400
 
 ## 待补充
 
-- 大文件处理（Git LFS）
+
 - 子模块 vs subtree
 
 ### 11. push 被拒绝：non-fast-forward
@@ -168,3 +168,17 @@ git push --force-with-lease                  # 自己分支才 force
 - **commit 规范**（Conventional Commits）：`feat: xxx` / `fix: xxx` / `docs: xxx` / `refactor: xxx`，`git log` 一眼看懂。
 - 个人分支用 rebase（历史干净），公共分支（main）永远 merge（别改写别人历史）。
 - rebase 冲突 mid-way 想放弃：`git rebase --abort`，毫发无损。
+
+### 15. 大文件处理（Git LFS 完整流程）
+
+```bash
+git lfs install
+git lfs track "*.psd" "*.zip"     # 写 .gitattributes
+git add .gitattributes
+git add big.psd && git commit -m "feat: 素材"
+git lfs ls-files                  # 确认进了 LFS
+```
+
+- FAQ 12 是"救火"，这是"日常"：仓库建好第一天就把二进制后缀 track 上。
+- clone 时 `--depth 1` + LFS 拉取依然慢，大视频/数据集别进 git，用对象存储 + 版本号文件。
+- `.gitattributes` 必须提交，不然别人 clone 下来的是指针文件。
