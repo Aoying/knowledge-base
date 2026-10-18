@@ -164,3 +164,22 @@ ENTRYPOINT ["java","-jar","app.jar"]
 - 容器逃逸的新闻年年有，非 root 是最低成本的防线。
 - `COPY --chown` 一步到位，别 `RUN chown`（多一层还慢）。
 - 只读文件系统更进一步：`docker run --read-only`，写操作走 volume。
+
+## docker-compose 生产示例
+
+```yaml
+services:
+  app:
+    image: registry/app:${TAG:-latest}
+    deploy:
+      resources: { limits: { cpus: '2', memory: 2G } }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s; retries: 3
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: 100m, max-file: "3" } }
+```
+
+- `resources.limits` 必加，不加的话一个容器 OOM 能把宿主机拖死。
+- 日志 `max-size` 必加，不然 json-file 无限涨（见"磁盘爆了"疑难杂症）。
+- `${TAG:-latest}` 让 CI 传 tag，本地默认 latest。
