@@ -63,7 +63,7 @@ EXPLAIN SELECT * FROM t_order WHERE user_id=1;
 ## 待补充
 - 分库分表中间件选型笔记
 -  binlog / Canal 同步实战
--  OceanBase 租户与资源单元概念
+
 
 ## 疑难杂症
 
@@ -90,3 +90,16 @@ EXPLAIN SELECT * FROM t_order WHERE user_id=1;
 - 删掉了 MASTER/SLAVE 术语（`SHOW MASTER STATUS` 等改名），旧运维脚本要批量改。
 - OceanBase 用户注意：OceanBase MySQL 模式对标的是 5.7/8.0 语法子集，8.4 的新函数/新变量不一定兼容，联调时以 OceanBase 官方兼容性矩阵为准。
 - 来源：https://dev.mysql.com/doc/refman/8.4/en/mysql-releases.html
+
+## OceanBase 租户与资源单元
+
+```sql
+-- OceanBase 的世界：集群 > 租户 > 数据库，和 MySQL 的"实例>库"不是一回事
+SHOW TENANT;                          -- 看当前租户
+SELECT * FROM oceanbase.DBA_OB_UNITS;  -- 资源单元（CPU/内存配额）
+```
+
+- **租户**是 OceanBase 的资源隔离单位：一个集群可以开多个租户（MySQL 租户、Oracle 租户），各租户 CPU/内存/磁盘配额独立。
+- **资源单元（UNIT）**：租户的最小资源粒度，扩容 = 加 UNIT，不是加机器。
+- 你在神农项目里连的是 MySQL 模式租户，`SHOW VARIABLES` 看到的是租户级变量，改 `ob_trx_timeout` 这类只影响当前租户。
+- 排障先看租户资源：`__all_virtual_server_stat` 看 CPU/内存水位，满了先扩 UNIT 再查 SQL。
