@@ -285,3 +285,25 @@
 4. **定期回顾**：periodic-notes 周记模板里放 dataview 查询（本周完成任务数/新建笔记数），每周自动出一份回顾。
 
 - 新插件先问自己：它跟现有哪个插件联动？联动不上的多半用三次就吃灰。
+
+## dataview 高级查询（配合本库看板食用）
+
+```dataview
+-- 本周新建的笔记
+TABLE file.ctime AS 创建时间
+FROM ""
+WHERE file.ctime >= date(today) - dur(7 days)
+SORT file.ctime DESC
+```
+```dataview
+-- 哪个文件任务最多（欠债榜）
+TABLE length(file.tasks) AS 任务数,
+      length(filter(file.tasks, (t) => !t.completed)) AS 未完成
+FROM ""
+WHERE length(file.tasks) > 0
+SORT length(filter(file.tasks, (t) => !t.completed)) DESC
+LIMIT 10
+```
+
+- `dataview` 是查询，`dataviewjs` 是编程；90% 需求 DQL 就够，别一上来就 js。
+- `FLATTEN` 展开数组（一篇笔记多个 tag 时逐 tag 统计），`GROUP BY` 做聚合。
