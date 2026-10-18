@@ -81,3 +81,12 @@ EXPLAIN SELECT * FROM t_order WHERE user_id=1;
 - **现象**：刚写入的数据，读接口查出来是旧的，刷新几次才正常。
 - **原因**：写主库、读从库，从库复制有延迟。
 - **解决**：写后立即读走主库（`forceMaster`）；或业务接受最终一致；延迟持续偏高查从库的 SQL 线程/IO 线程状态。
+
+## MySQL 8.4 LTS（2026-10-18 核验）
+
+- **8.0 在 2026-04 EOL**，新项目直接上 8.4 LTS（支持到 2032），别再装 8.0。
+- 默认认证改 `caching_sha2_password`（`mysql_native_password` 默认禁用），老客户端连不上先查这个。
+- InnoDB 默认值按现代 SSD 重调：`innodb_io_capacity` 200→10000，`innodb_log_buffer_size` 16MB→64MB，`innodb_flush_method` 默认 O_DIRECT。
+- 删掉了 MASTER/SLAVE 术语（`SHOW MASTER STATUS` 等改名），旧运维脚本要批量改。
+- OceanBase 用户注意：OceanBase MySQL 模式对标的是 5.7/8.0 语法子集，8.4 的新函数/新变量不一定兼容，联调时以 OceanBase 官方兼容性矩阵为准。
+- 来源：https://dev.mysql.com/doc/refman/8.4/en/mysql-releases.html
