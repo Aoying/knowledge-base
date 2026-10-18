@@ -76,7 +76,7 @@ os.system("chcp 65001 >nul")
 
 ## 待补充
 
-- asyncio 并发模型（小说引擎批量抽取章节时用得上）
+
 - pydantic 数据校验（LLM 输出 JSON 落库前的校验层）
 
 ## 常见坑
@@ -103,3 +103,28 @@ os.system("chcp 65001 >nul")
 - **现象**：`pip install` 新包装完，旧包报 `ImportError` 或版本不兼容。
 - **原因**：pip 默认不做严格的依赖求解，新包把共享依赖升级/降级了。
 - **解决**：`pip install` 前用 `pipdeptree` 看依赖树；大项目锁版本（`pip freeze > requirements.txt`）；隔离用 venv，别往 base 环境装。
+
+## asyncio 并发模型（小说引擎批量抽取章节时用）
+
+```python
+import asyncio, httpx
+
+async def extract_one(client, chapter_id):
+    r = await client.post("http://127.0.0.1:11434/v1/chat/completions",
+                          json={"model": "qwen3:14b", "messages": [...]})
+    return chapter_id, r.json()
+
+async def main(ids):
+    async with httpx.AsyncClient(timeout=120) as client:
+        sem = asyncio.Semaphore(4)  # Ollama 并发别打太高，4 左右
+        async def bounded(i):
+            async with sem:
+                return await extract_one(client, i)
+        return await asyncio.gather(*(bounded(i) for i in ids))
+
+asyncio.run(main(range(1, 51)))
+```
+
+- IO 密集型（调 Ollama API）用 asyncio，一个线程顶几十个并发；CPU 密集型才上多进程。
+- `Semaphore` 限流是保命项：Ollama 默认并发一高就排队甚至超时。
+- 结构化输出别忘了 `response_format={"type":"json_object"}`，省得正则去抠。
