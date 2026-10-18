@@ -84,3 +84,27 @@ Get-Content app.log -Tail 50 -Wait
 - **现象**：`winget install` 一直转圈，或提示找不到包。
 - **原因**：默认源在国外，网络差；或包名不对。
 - **解决**：先 `winget search` 确认包名/Id；换源或挂代理；急用直接去 GitHub Releases 下安装包。
+
+## PowerShell 进阶
+
+```powershell
+# 找最吃内存的 5 个进程
+Get-Process | Sort-Object WS -Descending | Select-Object -First 5 Name, WS
+
+# 递归找大文件（>100MB）
+Get-ChildItem -Recurse -File | Where-Object Length -gt 100MB | Sort-Object Length -Descending
+
+# 并行执行（PS7+，多核跑批处理）
+1..10 | ForEach-Object -Parallel { Invoke-RestMethod "https://api/api/$_" } -ThrottleLimit 5
+
+# 查端口占用并杀掉
+Get-NetTCPConnection -LocalPort 8080 | Select-Object OwningProcess
+Stop-Process -Id <pid> -Force
+
+# 环境变量（当前会话 / 永久）
+$env:PATH += ";D:\tools"
+[Environment]::SetEnvironmentVariable("FOO","bar","User")
+```
+
+- `Where-Object`、`Sort-Object`、`Select-Object` 是三件套，管道思维和 Linux 的 `grep|sort|head` 对应。
+- PS5.1 和 PS7 语法有差（`-Parallel` 只有 7+ 有），写脚本前先 `$PSVersionTable`。
