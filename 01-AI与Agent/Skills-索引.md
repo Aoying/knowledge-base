@@ -8,6 +8,7 @@
 - [RAG 相关](01-AI与Agent/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow
 - [Agent 开发](01-AI与Agent/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills
 - [开发工作流](01-AI与Agent/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）
+- [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)
 
 ## 已收录
 
@@ -70,3 +71,38 @@
 - **热度/更新**：Vercel Labs 出品，2026-09-28 仍在更新。
 - **许可证**：MIT。
 - **安全注意**：同其他 skill，引入前检查。
+
+### 8. ECC（affaan-m/ECC）Agent harness 性能优化体系
+
+- **功能**：311 个 skills + 71 个 subagent + 97 条命令 + hooks + memory vault 的完整 Agent 工作流系统：plan → test → implement → review → verify → remember → improve，覆盖开发全链路；另有安全扫描与记忆优化模块。
+- **适用场景**：想给小说引擎/知识库任务搭"常驻工作流纪律"时的参考实现；memory vault 的设计可直接借鉴到小说引擎长期记忆。
+- **来源**：https://github.com/affaan-m/ECC
+- **热度/更新**：283k+ stars（2026-10-18 核验），2026-10-15 仍在更新，v2.2.3。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；hooks 会拦截工具调用，引入前逐个通读 SKILL.md 与 hook 脚本。
+
+### 9. claude-skills（alirezarezvani/claude-skills）380 个 skills 精选集
+
+- **功能**：380+ 个实测过的 skill / agent / 自定义命令精选：PR 评审、API 设计评审、测试生成、文档写作等日常工程 skills 开箱即用。
+- **适用场景**：和 gamai-skills（992 合集）互补的"精选版"——先在这里找，找不到再去 gamai-skills 大海捞针。
+- **来源**：https://github.com/alirezarezvani/claude-skills
+- **热度/更新**：28k+ stars（2026-10-18 核验），MIT。
+- **安全注意**：量大，挑中的单个 skill 引入前通读 SKILL.md；不熟悉的脚本不要直接跑。
+
+### 10. second-brain-os（undefined-ui/second-brain-os）AI 自维护第二大脑
+
+- **功能**：一份完整的"AI 第二大脑"实战指南 + starter vault + 18 个 skills / 72 条命令 / 6 个 subagent：Agent 自动做笔记维护（分类、建链、找孤儿笔记、补摘要），Obsidian vault 自组织。
+- **适用场景**：和你每晚 20:30 的自动维护任务是同一个思路——直接抄它的维护 workflow 设计（哪些检查 Agent 化、哪些留人工），用到你的 knowledge-base 和小说引擎记忆系统里。
+- **来源**：https://github.com/undefined-ui/second-brain-os（公开仓库）
+- **热度/更新**：1.1k+ stars（2026-10-19 核验 GitHub API），2026-10-19 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；它的维护脚本会读写 vault，引入前逐个通读 skill/脚本，确认无外部网络上传。
+
+### 11. awesome-claude-skills（ComposioHQ）skills 索引仓库
+
+- **功能**：skills 生态的 awesome-list：按分类收录热门仓库、工具、文档链接，找 skill 时的"地图"。
+- **适用场景**：当 Skills-索引.md 里找不到想要的 skill，先查这个 awesome-list 再决定去哪个仓库深挖。
+- **来源**：https://github.com/ComposioHQ/awesome-claude-skills（公开仓库）
+- **热度/更新**：77k+ stars（2026-10-19 核验 GitHub API），2026-10-19 仍在更新。
+- **许可证**：仓库未声明 LICENSE（数据类列表），引用链接即可。
+- **安全注意**：它是索引不是 skill 本体，按索引跳转到的具体 skill 再做安全检查。
