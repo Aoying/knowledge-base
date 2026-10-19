@@ -74,3 +74,82 @@ ssh -L 3306:127.0.0.1:3306 user@host  # 本地端口转发，连内网数据库
 
 - `-L` 本地转发是连内网 RDS/Redis 最常用的姿势，不用开公网端口。
 - Windows 对照见 [04-运维与工具/Windows-常用命令.md](04-运维与工具/Windows-常用命令.md)。
+
+
+## systemd service 示例（Java 后端最常用）
+
+```ini
+# /etc/systemd/system/myapp.service
+[Unit]
+Description=My SpringBoot App
+After=network.target mysql.service
+
+[Service]
+User=app
+WorkingDirectory=/data/myapp
+ExecStart=/usr/bin/java -Xms1g -Xmx2g -jar /data/myapp/app.jar --spring.profiles.active=prod
+Restart=always
+RestartSec=5
+# JVM 日志 + 应用日志统一走 journald，也可重定向到文件
+StandardOutput=append:/data/logs/myapp.log
+StandardError=append:/data/logs/myapp.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload && systemctl enable --now myapp
+journalctl -u myapp -f --since "5 min ago"
+```
+
+- `Restart=always` 是生产底线，OOM 被杀、JVM 崩溃都能自动拉起。
+- 别在 ExecStart 里写 `cd` 或管道，systemd 不认 shell 语法；要复杂逻辑包一层脚本。
+
+## crontab 定时任务
+
+```bash
+crontab -e
+# 每天 3 点清 7 天前日志；每周一 4 点重启一次防内存泄漏（无奈但实用）
+0 3 * * * find /data/logs -name "*.log" -mtime +7 -delete
+0 4 * * 1 systemctl restart myapp
+```
+
+- 五段：分 时 日 月 周；`*` 是每。`crontab -l` 看，`*/5 * * * *` = 每 5 分钟。
+- cron 里 PATH 很干净，写脚本用绝对路径，不然 `java` 找不到。
+
+## 性能排查三件套
+
+```bash
+top              # 按 M 看内存、按 P 看 CPU；load average 三个数看 1/5/15 分钟负载
+vmstat 1 5       # r(运行队列)>核数说明 CPU 排队；si/so 有值说明在 swap，内存不够了
+iostat -x 1 3    # %util 接近 100 说明磁盘是瓶颈
+ss -tlnp         # 谁在监听哪个端口（比 netstat 快）
+lsof -i :8080    # 哪个进程占了 8080
+```
+
+- Java 排查顺序：`top` 找 PID → `top -Hp <pid>` 看线程 → `jstack <pid>` 抓栈 → 死锁/忙循环一目了然。
+- `free -h` 里 available 才是真实可用内存，别看 free 那一列。
+
+## 防火墙
+
+```bash
+firewall-cmd --add-port=8080/tcp --permanent && firewall-cmd --reload
+# 或 ufw（Ubuntu）
+ufw allow 8080/tcp && ufw enable
+```
+
+- 云服务器注意：安全组 + 系统防火墙是两层，都要放行，排查连不上时两边都看。
+
+## 常用组合拳
+
+```bash
+tar -czvf app-20261019.tar.gz /data/myapp          # 打包
+rsync -avz --progress /data/myapp user@host:/data/  # 增量同步，比 scp 快
+jq '.data.list[] | .name' resp.json                 # 解析 JSON 接口返回
+du -sh /* 2>/dev/null | sort -rh | head             # 磁盘满了先看谁最大
+df -i                                              # inode 用完也会写不进文件（小文件太多时）
+```
+
+- `du -sh` 找大目录三连：先看根、再看嫌疑目录、最后 `find -size +500M`。
+- `tail -f` 看日志卡死时加 `-n 200` 先看尾部，或者 `less +F`。
