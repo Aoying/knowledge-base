@@ -43,3 +43,35 @@ new ThreadPoolExecutor(
 
 - 虚拟线程（Java 21+）让"一个请求一个线程"成为现实，见 [02-开发语言/Java.md](02-开发语言/Java.md)。
 - 注意：`synchronized` 块里调阻塞方法会 pin 住载体线程，虚拟线程下优先用 ReentrantLock。
+
+## CompletableFuture（异步编排）
+
+```java
+CompletableFuture<String> a = CompletableFuture.supplyAsync(() -> callA());
+CompletableFuture<String> b = CompletableFuture.supplyAsync(() -> callB());
+String result = a.thenCombine(b, (x, y) -> x + y).join();  // 两个都完再合并
+```
+
+- 代替"开线程 + join"的写法；`thenApply`（转换）、`thenCompose`（再调异步）、`exceptionally`（兜底）。
+- 默认用 ForkJoinPool.commonPool，IO 密集传自己的线程池：`supplyAsync(fn, myPool)`。
+- 调多个下游接口聚合时用它，别再一个个串行调。
+
+## 原子类与 LongAdder
+
+- `AtomicInteger`：CAS 自旋，竞争不激烈时比锁快。
+- `LongAdder`：高并发计数器（分段累加），统计 QPS/计数用它，不用 AtomicLong。
+- `AtomicReference` + 不可变对象：无锁更新复杂状态。
+
+## 死锁排查
+
+```bash
+jstack <pid> | grep -A 5 "deadlock"   # 直接定位
+```
+
+- 线上先 `jstack` 拿现场，再看"哪个线程拿着哪把锁在等哪把锁"。
+- 预防：全局固定加锁顺序；能用 `tryLock(超时)` 就别无限等。
+
+## AQS（理解 JUC 的钥匙）
+
+- ReentrantLock / CountDownLatch / Semaphore 底层都是 AQS：一个 `state` 整数 + CLH 等待队列。
+- 面试一句话：加锁 = CAS 改 state，抢不到就进队列 park；释放 = 改 state + unpark 下一个。
