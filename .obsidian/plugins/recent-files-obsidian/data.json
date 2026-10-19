@@ -1,8 +1,16 @@
 {
   "recentFiles": [
     {
+      "basename": "计算机网络",
+      "path": "11-计算机基础/计算机网络.md"
+    },
+    {
       "basename": "数据结构与算法",
       "path": "11-计算机基础/数据结构与算法.md"
+    },
+    {
+      "basename": "设计模式",
+      "path": "02-开发语言/设计模式.md"
     },
     {
       "basename": "神农-e贷-审批流",
@@ -15,10 +23,6 @@
     {
       "basename": "Lua",
       "path": "02-开发语言/Lua.md"
-    },
-    {
-      "basename": "设计模式",
-      "path": "02-开发语言/设计模式.md"
     },
     {
       "basename": "Python",
@@ -35,10 +39,6 @@
     {
       "basename": "Godot",
       "path": "07-游戏/Godot.md"
-    },
-    {
-      "basename": "计算机网络",
-      "path": "11-计算机基础/计算机网络.md"
     },
     {
       "basename": "Linux与Shell",
