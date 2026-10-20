@@ -40,6 +40,83 @@ retries=Integer.MAX_VALUE
 4. **分区数拍脑袋**：分区数决定最大并行度，定少了以后加分区会导致 key 到分区的映射变化（顺序性受影响）。
 5. **__consumer_offsets  itself 膨胀**：正常现象，别手贱去删。
 
+## 时效核验小结（2026-10-20）
+
+- 笔记里"4.x 已彻底去掉 ZooKeeper，全面 KRaft"——成立。4.0.0（2025-03-18）移除 ZK，4.x 只有 KRaft 一种模式；老集群升级路径是 3.x(ZK) → 3.9(KRaft) → 4.x。
+- "Share Groups（4.2 起生产可用）"——成立。4.1 为预览，4.2（2026-02）生产可用；另有 KIP-848 新 rebalance 协议 GA，重平衡更快更增量。
+- 本地单机 compose 里的 `apache/kafka:4.3.1` 镜像——存在，是官方镜像（2026-09 时的最新稳定版）；4.4.0 RC 正在投票，还没 GA，单机验证没必要追。
+- broker 需要 Java 17+（client 需 Java 11+）；4.0 起旧 wire protocol 和 v0/v1 消息格式被移除，太老的客户端连不上 4.x broker。
+
+## Spring Kafka 死信队列 DLT 实战
+
+笔记的消费片段里写了"别 ack，下次重投；记死信"，但没给死信落地做法。生产标准做法：
+
+```java
+@Configuration
+public class KafkaErrorConfig {
+    @Bean
+    public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> kafkaTemplate) {
+        // 重试耗尽后发往 <原topic>.DLT（默认后缀），带原始 topic/partition/offset/异常堆栈等 header
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+        // 指数退避：1s, 2s, 4s, 8s（封顶10s），共 5 次尝试
+        ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(4);
+        backOff.setInitialInterval(1_000L);
+        backOff.setMultiplier(2.0);
+        backOff.setMaxInterval(10_000L);
+        DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backOff);
+        handler.addNotRetryableExceptions(ValidationException.class); // 参数校验错重试没意义，直接进 DLT
+        return handler;
+    }
+}
+
+@Component
+public class OrderConsumer {
+    @KafkaListener(topics = "orders", groupId = "g1")
+    public void on(String msg) { process(msg); }   // 抛异常走上面的 handler
+
+    @DltHandler
+    public void dlt(String msg,
+            @Header(KafkaHeaders.DLT_ORIGINAL_TOPIC) String topic,
+            @Header(KafkaHeaders.DLT_EXCEPTION_MESSAGE) String errMsg) {
+        log.error("进死信 orders.DLT, 原topic={}, 原因={}", topic, errMsg);
+        alarmService.notify(...);   // 死信必须告警+可重放，别只记日志
+    }
+}
+```
+
+- DLT topic 默认分区数**至少**要和原 topic 一样（默认按原分区号投递），否则改 destinationResolver 做取模映射。
+- 重试总耗时别超过 `max.poll.interval.ms`（默认 5 分钟），否则重试中途触发 rebalance。
+- DLT 不是垃圾桶：保留期设得比原 topic 长，配"死信重放"脚本（读 DLT → 重发原 topic），故障恢复时用得上。
+- 批量消费（`List<ConsumerRecord>`）同样配 `DefaultErrorHandler`，失败的那条进 DLT、offset 照常提交，不卡住整批。
+
+## Topic 创建与服务端关键参数实战
+
+```bash
+# 建 topic：分区数>=消费线程数，副本数>=3 的集群用 3
+kafka-topics.sh --bootstrap-server localhost:9092 --create \
+  --topic orders --partitions 12 --replication-factor 3 \
+  --config min.insync.replicas=2 \
+  --config retention.ms=604800000        # 7天，默认也是7天，显式写出来防"默认"背刺
+
+# 看 topic 配置 / 加分区（只能调大）
+kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic orders
+kafka-topics.sh --bootstrap-server localhost:9092 --alter --topic orders --partitions 24
+```
+
+```properties
+# broker server.properties：生产必改
+unclean.leader.election.enable=false  # 宁可短暂不可用，不丢数据（笔记疑难杂症1已讲）
+min.insync.replicas=2                 # 和 acks=all 配套
+auto.create.topics.enable=false       # 生产关掉，topic 走评审建，防打字错误建出一堆 topic
+log.retention.ms=604800000
+```
+
+- `min.insync.replicas=2` + `acks=all` + `enable.idempotence=true` 是"不丢"的铁三角，缺一个都不完整。
+- 分区数是"只增不减"的决策：12 分区起步够中小业务；key 保序的业务扩分区前先评估 key 重映射影响（笔记"分区 key 设计"一节已讲）。
+- `__consumer_offsets` 别动是对的；另外 `auto.create.topics.enable=true` 是本地省事、生产埋雷的典型，关掉。
+
+> 来源（2026-10-20 核验）：[kafka-4.x-docker](https://www.webcodingcenter.com/apache-kafka/installing-apache-kafka-4-x-in-docker-with-kraft--kafka-4-x-docker-images-and-distributions.html)；[kafka-digest-2026-09](https://developers.redhat.com/blog/2026/10/05/kafka-monthly-digest-september-2026)；[spring-kafka-error-handling](https://docs.spring.io/spring-kafka/reference/3.3/kafka/annotation-error-handling.html)
+
 ## 待补充
 
 
