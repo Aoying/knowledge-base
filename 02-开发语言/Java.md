@@ -82,6 +82,109 @@ lambdaQuery().eq(StringUtils.isNotBlank(name), User::getName, name);
 2. **N+1**：循环里调 mapper → 改成一次 `in` 查询 + 内存组装。
 3. **慢接口**：先看 SQL 执行计划（`EXPLAIN`），再看是不是事务里套了远程调用（事务+Feign 长时间占用连接是大忌）。
 
+## @Async 异步实战与坑
+
+```java
+@Configuration
+@EnableAsync
+public class AsyncConfig implements AsyncConfigurer {
+    @Bean("bizExecutor")
+    public Executor bizExecutor() {
+        ThreadPoolTaskExecutor e = new ThreadPoolTaskExecutor();
+        e.setCorePoolSize(10);
+        e.setMaxPoolSize(50);
+        e.setQueueCapacity(500);
+        e.setThreadNamePrefix("biz-async-");
+        e.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        e.setWaitForTasksToCompleteOnShutdown(true); // 优雅停机：等任务跑完
+        e.setAwaitTerminationSeconds(60);
+        e.initialize();
+        return e;
+    }
+    @Override
+    public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
+        return (ex, method, params) ->
+            log.error("异步任务异常 {}.{} 参数={}", method.getDeclaringClass().getSimpleName(), method.getName(), Arrays.toString(params), ex);
+    }
+}
+```
+
+```java
+@Service
+public class NotifyService {
+    @Async("bizExecutor")                      // 必须指定线程池名，否则走默认
+    public CompletableFuture<Void> sendSms(String mobile) {
+        smsClient.send(mobile);
+        return CompletableFuture.completedFuture(null);
+    }
+}
+```
+
+- **默认执行器是坑**：不配线程池时 Spring 用 `SimpleAsyncTaskExecutor`，每个任务起一个新线程，无上限——流量一上来线程爆炸 OOM（官方 Javadoc 明确写了不复用线程）。生产必须配 `ThreadPoolTaskExecutor`。
+- **同类自调用失效**：跟 `@Transactional` 一个原理，`this.sendSms()` 绕过代理，同步执行。解法：注入自己调，或把异步方法拆到另一个 Bean。
+- **void 方法异常会"消失"**：调用方拿不到异常，只能靠 `AsyncUncaughtExceptionHandler` 记日志；要感知结果就返回 `CompletableFuture`。
+- **事务不传播**：`@Async` 方法里拿不到调用方的事务，新线程 = 新事务；需要事务就自己加 `@Transactional`。
+- 拒绝策略别用默认 `AbortPolicy`（直接抛异常丢任务），IO 型业务一般用 `CallerRunsPolicy` 让调用线程兜底执行，天然限流。
+
+## 参数校验 Bean Validation 实战
+
+```xml
+<!-- Boot 2.3+ 必须显式加，web starter 里没有了 -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-validation</artifactId>
+</dependency>
+```
+
+```java
+@Data
+public class LoanApplyDTO {
+    @NotBlank(message = "客户名称不能为空")
+    private String custName;
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式错误")
+    private String mobile;
+    @DecimalMin(value = "10000", message = "金额不能小于1万")
+    private BigDecimal amount;
+    @Valid // 嵌套对象级联校验，别漏
+    private List<@NotBlank String> materials;
+}
+
+@PostMapping("/apply")
+public R<String> apply(@Valid @RequestBody LoanApplyDTO dto) { ... }
+
+// 统一异常返回
+@RestControllerAdvice
+public class ValidateHandler {
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public R<?> handle(MethodArgumentNotValidException e) {
+        String msg = e.getBindingResult().getFieldErrors().stream()
+            .map(f -> f.getField() + ": " + f.getDefaultMessage())
+            .collect(Collectors.joining("; "));
+        return R.fail("参数校验失败: " + msg);
+    }
+}
+```
+
+- `@Valid` 只在 Controller 入参/ `@Validated` 的 Service 方法上才触发；DTO 字段上的注解本身不会"自动"生效。
+- 嵌套集合校验要双写：字段上 `@Valid` + 泛型上注解（`List<@NotBlank String>`），否则集合元素不校验。
+- 新增/修改共用 DTO 时用分组：`@Validated(Create.class)` / `@Validated(Update.class)`，`@NotNull(groups = Update.class)` 按场景生效。
+- 校验是第一道防线，不是唯一防线：金额、状态机流转这类业务规则放 Service 里再查一遍。
+
+## Spring Boot 2.7 → 升级路线图（2026-10-20 核验）
+
+| 线 | 状态 |
+|---|---|
+| 2.7.x（神农在用） | 2023-11 起无开源安全补丁，裸奔中 |
+| 3.5.x | 开源支持止于 2026-06-30 |
+| 4.0.x | 2025-11 发布，支持到 2026-12，别停在这 |
+| 4.1.x | 2026-06 发布，支持到 2027-07，升级目标定它 |
+
+- **现实路径**：2.7 → 3.5（JDK 17）→ 4.1，别想一步到位；先在 3.5 上把 deprecation warning 清零（4.0 删掉了所有 3.x 标记废弃的 API）。
+- **三件硬骨头**：① JDK 8→17（`--release`、反射/封装 API）；② `javax.*` → `jakarta.*` 全量改包名；③ 依赖对齐——Flowable 6.7.2 只能跑 Boot 2.7，上 Boot 3 必须升 Flowable 7.x；MyBatis-Plus / Druid 也要换支持 Boot 3（Jakarta）的版本，升级前逐个核对 release notes（待验证）。
+- **收益对得上神农这种 IO 密集型**：Boot 3.2+ 虚拟线程一键开（`spring.threads.virtual.enabled=true`），Tomcat 请求线程换虚拟线程，调 OceanBase/下游接口的等待不再占平台线程——和笔记里"虚拟线程"一节呼应。
+
+> 来源（2026-10-20 核验）：[spring-boot-4](https://www.danvega.dev/blog/spring-boot-4-is-here)；[spring-boot-3.5 EOL](https://dev.to/feezan_khattak/spring-boot-35-stopped-getting-patches-in-june-dont-migrate-to-40-4ba)；[boot-4.0.8](https://spring.io/blog/2026/08/20/spring-boot-4-0-8-available-now/)；[SimpleAsyncTaskExecutor Javadoc](https://docs.spring.io/spring/docs/5.3.24/javadoc-api/org/springframework/core/task/SimpleAsyncTaskExecutor.html)；[Flowable 7.0.0](https://www.flowable.com/blog/releases/flowable-open-source-7-0-0-release)
+
 ## 待补充
 
 
