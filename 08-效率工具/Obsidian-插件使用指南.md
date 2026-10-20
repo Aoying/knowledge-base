@@ -1,6 +1,6 @@
 # Obsidian 插件使用指南
 
-> 根据本仓库 `.obsidian/community-plugins.json` 生成（2026-10-17，共 21 个插件）。
+> 根据本仓库 `.obsidian/community-plugins.json` 生成（2026-10-20，共 22 个插件）。
 > 插件有增减时由夜间维护任务同步更新本指南。
 
 ## 目录
@@ -27,6 +27,7 @@
 - [commander](#20-commander)：自定义命令栏
 - [auto-link-title](#21-auto-link-title)：粘贴链接自动取标题
 - [periodic-notes](#22-periodic-notes)：周期笔记
+- [obsidian-hider](#23-obsidian-hider)：隐藏界面元素，极简写作
 
 ---
 
@@ -274,6 +275,16 @@
 - 命令面板 `Open daily note` 等快捷命令
 
 **技巧**：你已经有 calendar + templater 了，三个配齐：calendar 负责点日期，periodic-notes 负责建对应周期笔记，templater 负责套模板。周记模板里可以放 dataview 查询，自动汇总本周任务。
+
+## 23. obsidian-hider（Hider）
+
+**干嘛的**：隐藏 Obsidian 界面里的各种 UI 元素（标题栏、状态栏、ribbon 图标栏、滚动条、工具提示、标签页栏等），给你一个干净到近乎空白的写作/阅读界面。
+
+**核心用法**：
+- 设置 → Hider，按需开关：隐藏标题栏、隐藏状态栏、隐藏左侧 ribbon、隐藏滚动条、隐藏工具提示、隐藏标签页栏等
+- 开关即时生效，反悔随时勾回来，不用重启
+
+**技巧**：你刚装了 Minimal 主题，Hider + Minimal 是官方推荐的极简组合；写长文时再加全屏（F11），专注模式拉满。注意把 ribbon 藏掉后，常用命令就靠快捷键或 Commander/命令面板触发了，留一两个入口，别把自己锁死。
 
 ## 插件联动工作流（1+1>2 的组合）
 
