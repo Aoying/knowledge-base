@@ -1,6 +1,6 @@
 # Obsidian 插件使用指南
 
-> 根据本仓库 `.obsidian/community-plugins.json` 生成（2026-10-20，共 22 个插件）。
+> 根据本仓库 `.obsidian/community-plugins.json` 生成（2026-10-21，共 23 个插件）。
 > 插件有增减时由夜间维护任务同步更新本指南。
 
 ## 目录
@@ -28,6 +28,7 @@
 - [auto-link-title](#21-auto-link-title)：粘贴链接自动取标题
 - [periodic-notes](#22-periodic-notes)：周期笔记
 - [obsidian-hider](#23-obsidian-hider)：隐藏界面元素，极简写作
+- [zenboard](#24-zenboard)：习惯打卡仪表盘
 
 ---
 
@@ -285,6 +286,16 @@
 - 开关即时生效，反悔随时勾回来，不用重启
 
 **技巧**：你刚装了 Minimal 主题，Hider + Minimal 是官方推荐的极简组合；写长文时再加全屏（F11），专注模式拉满。注意把 ribbon 藏掉后，常用命令就靠快捷键或 Commander/命令面板触发了，留一两个入口，别把自己锁死。
+
+## 24. zenboard（ZenBoard）
+
+**干嘛的**：简单的习惯打卡追踪器（Shadabdullah/obsidian-zenboard v1.0.0），帮你建立和保持日常习惯——比如每天读 30 分钟、写一篇笔记。
+
+**核心用法**：
+- 设置里添加习惯项（名称、频率），每天点一下打卡记录
+- 仪表盘视图看日历热力图和连续打卡天数
+
+**技巧**：这个插件只在桌面端加载（isDesktopOnly），手机端不出现；习惯别定多，3–5 个能坚持的就行，太多了就变成新的负担。打卡数据存在插件目录下，换设备时记得带走（vault backup 会自动同步）。
 
 ## 插件联动工作流（1+1>2 的组合）
 
