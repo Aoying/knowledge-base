@@ -106,3 +106,30 @@
 - **热度/更新**：77k+ stars（2026-10-19 核验 GitHub API），2026-10-19 仍在更新。
 - **许可证**：仓库未声明 LICENSE（数据类列表），引用链接即可。
 - **安全注意**：它是索引不是 skill 本体，按索引跳转到的具体 skill 再做安全检查。
+
+### 12. awesome-copilot（github）Copilot 技能与 Agent 实战目录
+
+- **功能**：GitHub 官方维护的社区仓库：copilot instructions / agents / skills / prompts / hooks 的实战配置集合，不用自己从零写。
+- **适用场景**：找"别人验证过的"技能和 Agent 配置的起点（仓库级 instructions、代码审查 agent、可复用 prompt）。
+- **来源**：https://github.com/github/awesome-copilot（官方仓库）
+- **热度/更新**：40k+ stars（2026-10-21 核验 GitHub API），2026-10-21 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：内容为 Markdown 指令文件和 SKILL.md，无可疑安装指令；引用前仍通读要用的那一份。
+
+### 13. agents（wshobson/agents）跨工具 Agent 技能市场
+
+- **功能**：跨工具（Claude Code / Codex / Cursor / Copilot / OpenCode）技能市场：185 个 skills、202 个 agents、105 个 commands、94 个插件，含 python-testing-patterns、uv-package-manager 等（对 Python 转型直接有用）。
+- **适用场景**：最大的跨工具 Agent 技能库，按需单挑技能，不用整库搬。
+- **来源**：https://github.com/wshobson/agents（公开仓库）
+- **热度/更新**：41k+ stars（2026-10-19 核验 GitHub API），2026-10-19 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：社区仓库（非官方）；安装方式是 `make install-*` 把插件链接进 `~/.claude` 等配置目录——只收集不安装；要用就按 skill 逐个挑（`npx skills add wshobson/agents --skill <名>`），不整库 make install，不盲装；引入前通读该 skill 的 SKILL.md 与脚本。
+
+### 14. skills（trailofbits/skills）安全审计类 skills
+
+- **功能**：知名安全公司 Trail of Bits 出品的安全审计、差异评审、静态分析、变异测试类 skills；附带的 `modern-python` 技能（uv + ruff + ty）正好覆盖现代 Python 工具链。
+- **适用场景**：给 Agent 补"代码安全评审"能力（让 Agent 做 PR 安全审计、给代码打安全分）；modern-python 直接用作 Python 工程规范参考。
+- **来源**：https://github.com/trailofbits/skills（官方仓库）
+- **热度/更新**：7.6k+ stars（2026-10-21 核验 GitHub API），2026-10-21 仍在更新。
+- **许可证**：CC-BY-SA-4.0（内容许可，个人使用无碍）。
+- **安全注意**：安全公司官方出品，内容为指令 Markdown，风险低；审计类 skill 读代码时权限给只读。
