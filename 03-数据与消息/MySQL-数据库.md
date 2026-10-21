@@ -142,3 +142,36 @@ EXPLAIN FORMAT=TREE SELECT * FROM a JOIN b ON a.id=b.a_id;
 - **Hash Join**（8.0.18+）：无索引等值 join 的救星，内存够就快，`join_buffer_size` 给大点。
 - **BNL**（Block Nested Loop）：没索引时的保底，慢，看到它就去加索引。
 - `EXPLAIN` 看到 `Using filesort` + 大数据量：加复合索引让"排序"变"顺序读"。
+
+## MySQL 9.7 LTS / 8.4 时效更新（2026-10-21 核验）
+
+### 已验证事实
+
+1. **当前最新补丁（2026-10-21 实测）**：9.7.2 LTS、8.4.13 LTS。Innovation 线已改日历版本号：26.7.0（2026-07 GA），10 月季度发布为 26.10.0。
+   - 来源：https://sqlmirror.com/（2026-10-21 实测）、https://blogs.oracle.com/mysql/mysql-july-2026-ga-releases-now-available
+2. **8.0 已 EOL（2026-04）**：Ubuntu 24.04 官方源里还躺着 8.0.46，`apt install mysql-server` 会装到 EOL 版本——生产环境一律走 Oracle APT/YUM 源，装 8.4 或 9.7 LTS。
+   - 来源：https://www.bytebase.com/blog/postgres-vs-mysql/（2026-09-23 修订）、https://computingforgeeks.com/install-mysql-ubuntu-debian/（2026-10 实测）
+3. **9.7 LTS 的 headline：Hypergraph Optimizer 进了社区版**。多表深 join / 星型模型 / 分析型查询可做数量级优化；按语句开启最稳妥，全局开是错的（简单 OLTP 查询规划成本反而上升）。
+   ```sql
+   SET optimizer_switch = 'hypergraph_optimizer=on';          -- 会话级
+   SELECT /*+ SET_VAR(optimizer_switch = 'hypergraph_optimizer=on') */ ...;  -- 语句级
+   ```
+   - 来源：https://www.bytebase.com/blog/notes-on-mysql-9-7-lts-release/（2026-05）
+4. **9.x 彻底删了 `mysql_native_password`**（8.4 只是默认禁用、可 opt-in）。Java 老驱动/老连接池连 9.x 报错先查认证插件和驱动版本，`mysql-connector-j` 先升到 8.4+。
+   - 来源：https://computingforgeeks.com/install-mysql-ubuntu-debian/（2026-10 实测）
+5. **升级路径硬约束**：8.4.x LTS → 9.7.x LTS → 26.x 日历线。8.4 不能直接跳到 26.x。下一个 LTS 是 28.4.0，预计 2028-04。
+   - 来源：https://www.percona.com/blog/meet-mysql-26-7-a-new-versioning-era-begins/、https://blogs.oracle.com/mysql/a-more-predictable-mysql-release-model-calendar-versions-lts-and-innovation
+6. **9.7 LTS 其他值得知道的**：JSON Duality Views（关系+JSON 混合视图）、Group Replication 可观测性增强（Performance Schema 新表）、OpenTelemetry 监控。
+   - 来源：https://www.bytebase.com/blog/notes-on-mysql-9-7-lts-release/
+7. **OceanBase 4.x 近况**：V4.6.0 的 Release Notes 与 AI（向量）文档已发布；MySQL 模式兼容对标的是 MySQL 8.0 语法子集（4.1 文档确认），窗口函数、系统变量、事务行为仍有差异。
+   - 来源：OceanBase 官方文档 PDF（V4.6.0，2026-09 发布）：https://obportal.s3.ap-southeast-1.amazonaws.com/doc/product_pdf/oceanbase-database/276/OceanBase-Database-V4.6.0-Release-Notes.pdf
+
+### 个人推断（供参考，别当事实引用）
+
+- 神农项目（OceanBase MySQL 模式）短期内跟进 MySQL 8.4 新函数/新变量意义不大：OB 对标的是 5.7/8.0 子集，8.4/9.7 的新语法在 OB 上大概率不生效，SQL 写法继续按 8.0 及更早的公共子集写最保险。
+- 新项目如果不用 OB、直接上社区 MySQL：选 9.7 LTS（支持周期比 8.4 晚两年启动）；已有 8.4 集群：8.4.13 补丁跟上即可，没必要追 9.7。
+
+### 待验证
+
+- 10 月季度 CPU 后 9.7 的补丁号是否为 9.7.3、8.4 是否为 8.4.14（2026-10-21 当天实测仍是 9.7.2 / 8.4.13，下一轮夜任务再核一次）。
+- OceanBase V4.6.0 的确切 GA 日期与 MySQL 8.0 兼容性矩阵是否有变化（以 https://www.oceanbase.com/docs 为准）。
