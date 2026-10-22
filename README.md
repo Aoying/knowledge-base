@@ -16,6 +16,10 @@
 ## AI 与大模型
 
 - [Agent](AI与大模型/Agent.md)
+- [LangGraph](AI与大模型/LangGraph.md)
+- [MCP](AI与大模型/MCP.md)
+- [Tool Calling](AI与大模型/Tool-Calling.md)
+- [RAG 评测与分块策略](AI与大模型/RAG-评测与分块策略.md)
 - [大模型基础](AI与大模型/大模型基础.md)
 - [Skills 索引](AI与大模型/Skills-索引.md)
 - [RAG Skills](AI与大模型/RAG-Skills.md)
@@ -36,6 +40,10 @@
 - [Druid 监控与慢 SQL](开发语言/Java/Druid.md)
 - [多数据源](开发语言/Java/多数据源.md)
 - [JVM GC 调优](开发语言/Java/JVM-GC调优.md)
+- [HashMap](开发语言/Java/集合/HashMap.md)
+- [ConcurrentHashMap](开发语言/Java/集合/ConcurrentHashMap.md)
+- [JVM 内存模型](开发语言/Java/JVM-内存模型.md)
+- [JVM 类加载](开发语言/Java/JVM-类加载.md)
 - [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)
 - [设计模式](开发语言/Java/设计模式.md)
 
@@ -46,6 +54,8 @@
 - [pydantic](开发语言/Python/pydantic.md)
 - [dataclass 与 typing](开发语言/Python/dataclass与typing.md)
 - [pytest](开发语言/Python/pytest.md)
+- [装饰器](开发语言/Python/装饰器.md)
+- [生成器](开发语言/Python/生成器.md)
 
 ### 其他语言
 
@@ -58,9 +68,12 @@
 - [MySQL 数据库](数据库/MySQL-数据库.md)
 - [MySQL binlog](数据库/MySQL-binlog.md)
 - [Redis](数据库/Redis.md)
+- [Redis 集群与哨兵](数据库/Redis-集群.md)
+- [分库分表](数据库/分库分表.md)
 - [Elasticsearch](数据库/Elasticsearch.md)
 - [RocketMQ](消息队列/RocketMQ.md)
 - [Kafka 消息队列](消息队列/Kafka-消息队列.md)
+- [Kafka 与 RocketMQ 对比](消息队列/Kafka与RocketMQ对比.md)
 
 ## 工程实践
 
@@ -72,12 +85,16 @@
 - [快捷键速查](工程实践/快捷键速查.md)
 - [Linux 与 Shell](工程实践/Linux与Shell.md)
 - [Flowable](工程实践/Flowable.md)
+- [CI/CD](工程实践/CICD.md)
+- [监控告警](工程实践/监控告警.md)
 - [前端开发](工程实践/前端开发.md)
 - [前端基础 HTML-CSS](工程实践/前端基础-HTML-CSS.md)
 
 ## 计算机基础
 
 - [数据结构与算法](计算机基础/数据结构与算法.md)
+- [编译原理](计算机基础/编译原理.md)
+- [组成原理](计算机基础/组成原理.md)
 - [操作系统 进程线程](计算机基础/操作系统-进程线程.md)
 - [计算机网络](计算机基础/计算机网络.md)
 - [编码 字符集 内存 文件系统](计算机基础/编码-字符集-内存-文件系统.md)
