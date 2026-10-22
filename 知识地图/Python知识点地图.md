@@ -33,4 +33,4 @@
 
 ## 知识缺口
 
-- LangGraph、MCP 待随学习进度建篇（MCP 实战目前在 [[Agent]] 内）
+- 暂无登记缺口（装饰器、生成器已补篇；LangGraph、MCP 已在 AI 领域建篇）

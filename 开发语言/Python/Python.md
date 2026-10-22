@@ -25,6 +25,8 @@
 - [pydantic 数据校验](开发语言/Python/pydantic.md)
 - [dataclass 与 typing](开发语言/Python/dataclass与typing.md)
 - [pytest 实战](开发语言/Python/pytest.md)
+- [装饰器](开发语言/Python/装饰器.md)
+- [生成器](开发语言/Python/生成器.md)
 
 ## 环境与依赖
 

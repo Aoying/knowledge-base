@@ -9,6 +9,9 @@
 - [[Agent-开发-Skills]]：Agent 开发相关 Skills
 - [[开发工作流-Skills]]：开发工作流相关 Skills
 
+- Agent 进阶：[[LangGraph]]、[[MCP]]、[[Tool-Calling]]
+- RAG 进阶：[[RAG-评测与分块策略]]
+
 ## 学习路径
 
 ```text
@@ -30,5 +33,5 @@
 
 ## 知识缺口
 
-- LangGraph、MCP、Tool Calling 尚无独立篇（散见于 [[Agent]]）
-- RAG 评测与分块策略待随小说引擎原型验证后补篇
+- RAG 评测实测数据待小说引擎原型验证后回填 [[RAG-评测与分块策略]]
+- Agent 记忆与多 Agent 协作尚无独立篇（按需）
