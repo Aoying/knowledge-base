@@ -4,6 +4,7 @@
 适用版本: Spring Boot 2.7 / Flowable 6.7.2
 更新日期: 2026-10-22
 关联:
+  - 神农-e贷-法人版
   - Flowable
   - Java知识点地图
 标签:

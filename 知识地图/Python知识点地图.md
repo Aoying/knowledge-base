@@ -1,15 +1,23 @@
 # Python 知识点地图
 
+> Python 位于 `开发语言/Python/`，按知识点拆分：`Python.md` 为语言基础与总索引。
+
 ## 知识点清单
 
-- [[Python]]：语法、常用库、工程实践与常见坑
-- 开发语言（同层领域目录）：[[JavaScript]]、[[Lua]]、[[正则表达式]]
+- [[Python]]：语言基础、环境与依赖、标准库速查、sqlite3、Ollama 调用、常见坑
+- [[asyncio]]：并发模型（小说引擎批量抽取章节时用）
+- [[pydantic]]：数据校验（LLM 输出 JSON 落库前）
+- [[dataclass与typing]]：dataclass + typing，告别 dict 满天飞
+- [[pytest]]：测试实战
+- 开发语言同层：[[JavaScript]]、[[Lua]]、[[正则表达式]]
 
 ## 学习路径
 
 ```text
 [[Python]]
-  → [[正则表达式]]（文本处理）
+  → [[dataclass与typing]] → [[pydantic]]
+  → [[asyncio]]
+  → [[pytest]]
   → [[Agent]] / [[RAG-Skills]]（Python + LLM 应用方向）
 ```
 
@@ -25,6 +33,5 @@
 
 ## 知识缺口
 
-- 装饰器、生成器、异步（asyncio）尚无独立篇
-- 类型标注与 pydantic、虚拟环境与打包待补
-- LangGraph、MCP 待随学习进度建篇
+- 装饰器、生成器尚无独立篇
+- LangGraph、MCP 待随学习进度建篇（MCP 实战目前在 [[Agent]] 内）

@@ -69,7 +69,7 @@ func _physics_process(delta):
 ## 相关
 
 - [探索/探索方向建议.md](探索/探索方向建议.md)：方向 3 Godot 入门（可实践项目：给《无空剑门》做像素风小场景 demo）
-- [Python/Python.md](Python/Python.md)：GDScript 语法接近 Python，可对照看
+- [开发语言/Python/Python.md](开发语言/Python/Python.md)：GDScript 语法接近 Python，可对照看
 
 ## 疑难杂症
 

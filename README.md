@@ -22,15 +22,33 @@
 - [Agent 开发 Skills](AI与大模型/Agent-开发-Skills.md)
 - [开发工作流 Skills](AI与大模型/开发工作流-Skills.md)
 
-## Java
+## 开发语言
 
-- [Java](Java/Java.md)
-- [Java 并发编程](Java/并发/Java-并发编程.md)
-- [设计模式](Java/设计模式.md)
+### Java（开发语言/Java/，按知识点拆分）
 
-## Python 与开发语言
+- [Java](开发语言/Java/Java.md)：语言基础与总索引
+- [Spring Boot](开发语言/Java/Spring-Boot.md)
+- [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
+- [Async 异步](开发语言/Java/Async-异步.md)
+- [Bean Validation](开发语言/Java/Bean-Validation.md)
+- [Stream 与 Optional](开发语言/Java/Stream与Optional.md)
+- [虚拟线程](开发语言/Java/虚拟线程.md)
+- [Druid 监控与慢 SQL](开发语言/Java/Druid.md)
+- [多数据源](开发语言/Java/多数据源.md)
+- [JVM GC 调优](开发语言/Java/JVM-GC调优.md)
+- [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)
+- [设计模式](开发语言/Java/设计模式.md)
 
-- [Python](Python/Python.md)
+### Python（开发语言/Python/，按知识点拆分）
+
+- [Python](开发语言/Python/Python.md)：语言基础与总索引
+- [asyncio](开发语言/Python/asyncio.md)
+- [pydantic](开发语言/Python/pydantic.md)
+- [dataclass 与 typing](开发语言/Python/dataclass与typing.md)
+- [pytest](开发语言/Python/pytest.md)
+
+### 其他语言
+
 - [JavaScript](开发语言/JavaScript.md)
 - [Lua](开发语言/Lua.md)
 - [正则表达式](开发语言/正则表达式.md)
@@ -38,6 +56,7 @@
 ## 数据库与消息队列
 
 - [MySQL 数据库](数据库/MySQL-数据库.md)
+- [MySQL binlog](数据库/MySQL-binlog.md)
 - [Redis](数据库/Redis.md)
 - [Elasticsearch](数据库/Elasticsearch.md)
 - [RocketMQ](消息队列/RocketMQ.md)
@@ -63,11 +82,21 @@
 - [计算机网络](计算机基础/计算机网络.md)
 - [编码 字符集 内存 文件系统](计算机基础/编码-字符集-内存-文件系统.md)
 
-## 游戏 / 探索 / 项目沉淀
+## 游戏 / 探索
 
 - [Godot](游戏/Godot.md)
 - [探索方向建议](探索/探索方向建议.md)
-- [神农 e 贷审批流](项目沉淀/神农-e贷-审批流.md)
+
+## 项目沉淀（按简历项目整理）
+
+- [神农 e 贷法人版](项目沉淀/神农-e贷-法人版.md)
+- [神农 e 贷审批流](项目沉淀/神农-e贷-审批流.md)（审批流专题）
+- [督办系统](项目沉淀/督办系统.md)
+- [数据分析平台及统一门户](项目沉淀/数据分析平台及统一门户.md)
+- [翼安反诈平台](项目沉淀/翼安反诈平台.md)
+- [交行企业网银](项目沉淀/交行企业网银.md)
+- [重庆文旅大数据](项目沉淀/重庆文旅大数据.md)
+- [解抵押平台](项目沉淀/解抵押平台.md)
 
 ## 效率工具
 

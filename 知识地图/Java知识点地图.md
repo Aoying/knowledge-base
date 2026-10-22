@@ -1,21 +1,28 @@
 # Java 知识点地图
 
+> Java 位于 `开发语言/Java/`，按知识点拆分：一篇一个知识点，`Java.md` 为语言基础与总索引。
+
 ## 知识点清单
 
-- [[Java]]：语言核心与 Spring Boot 实战（神农 e 贷同款技术栈）
-- [[Java-并发编程]]：线程、锁、并发容器、线程池（位于 Java/并发/）
-- [[设计模式]]：常用设计模式与取舍
-- [[Flowable]]：工作流引擎（文件在工程实践，Java 体系内使用）
-- [[神农-e贷-审批流]]：项目案例，Flowable 在真实审批流中的落地
+- 语言基础：[[Java]]（含基础知识补强、排查三板斧、疑难杂症）
+- 框架实战：[[Spring-Boot]]、[[MyBatis-Plus]]、[[Bean-Validation]]
+- 数据访问：[[Druid]]、[[多数据源]]
+- 语言进阶：[[Async-异步]]、[[Stream与Optional]]、[[虚拟线程]]
+- JVM：[[JVM-GC调优]]
+- 并发：[[Java-并发编程]]（位于 开发语言/Java/并发/）
+- 设计：[[设计模式]]
+- 工作流：[[Flowable]]（文件在工程实践，Java 体系内使用）
+- 项目案例：[[神农-e贷-法人版]]、[[神农-e贷-审批流]]、[[督办系统]]
 
 ## 学习路径
 
 ```text
 [[Java]]
+  → [[Spring-Boot]] → [[MyBatis-Plus]] / [[Bean-Validation]]
+  → [[Stream与Optional]] → [[Async-异步]] → [[虚拟线程]]
   → [[Java-并发编程]]
   → [[设计模式]]
-  → [[Flowable]]
-  → [[神农-e贷-审批流]]（案例复盘）
+  → [[Flowable]]（案例：[[神农-e贷-审批流]]、[[督办系统]]）
 ```
 
 ## 前置依赖
@@ -31,6 +38,5 @@
 
 ## 知识缺口
 
-- 集合：HashMap、ConcurrentHashMap 待从 [[Java]] 拆篇，拆后建 Java/集合/ 子目录
-- JVM：内存模型、GC、类加载尚无独立篇
-- Spring：Boot 自动配置、事务传播待拆篇
+- 集合：HashMap、ConcurrentHashMap 待从 [[Java]] 拆篇，拆后建 开发语言/Java/集合/ 子目录
+- JVM：内存模型、类加载尚无独立篇（GC 调优已有 [[JVM-GC调优]]）

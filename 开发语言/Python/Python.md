@@ -5,6 +5,8 @@
 更新日期: 2026-10-22
 关联:
   - Python知识点地图
+  - asyncio
+  - pydantic
   - 正则表达式
 标签:
   - Python
@@ -14,6 +16,15 @@
 # Python
 
 > 每晚 20:30 自动补充完善。
+
+## 知识点拆分索引
+
+本篇为 Python 语言基础与总索引，以下知识点已拆为独立文档：
+
+- [asyncio 并发模型](开发语言/Python/asyncio.md)
+- [pydantic 数据校验](开发语言/Python/pydantic.md)
+- [dataclass 与 typing](开发语言/Python/dataclass与typing.md)
+- [pytest 实战](开发语言/Python/pytest.md)
 
 ## 环境与依赖
 
@@ -116,97 +127,6 @@ os.system("chcp 65001 >nul")
 - **现象**：`pip install` 新包装完，旧包报 `ImportError` 或版本不兼容。
 - **原因**：pip 默认不做严格的依赖求解，新包把共享依赖升级/降级了。
 - **解决**：`pip install` 前用 `pipdeptree` 看依赖树；大项目锁版本（`pip freeze > requirements.txt`）；隔离用 venv，别往 base 环境装。
-
-## asyncio 并发模型（小说引擎批量抽取章节时用）
-
-```python
-import asyncio, httpx
-
-async def extract_one(client, chapter_id):
-    r = await client.post("http://127.0.0.1:11434/v1/chat/completions",
-                          json={"model": "qwen3:14b", "messages": [...]})
-    return chapter_id, r.json()
-
-async def main(ids):
-    async with httpx.AsyncClient(timeout=120) as client:
-        sem = asyncio.Semaphore(4)  # Ollama 并发别打太高，4 左右
-        async def bounded(i):
-            async with sem:
-                return await extract_one(client, i)
-        return await asyncio.gather(*(bounded(i) for i in ids))
-
-asyncio.run(main(range(1, 51)))
-```
-
-- IO 密集型（调 Ollama API）用 asyncio，一个线程顶几十个并发；CPU 密集型才上多进程。
-- `Semaphore` 限流是保命项：Ollama 默认并发一高就排队甚至超时。
-- 结构化输出别忘了 `response_format={"type":"json_object"}`，省得正则去抠。
-
-## pydantic 数据校验（LLM 输出 JSON 落库前）
-
-```python
-from pydantic import BaseModel, Field, ValidationError
-
-class EntityChange(BaseModel):
-    name: str = Field(min_length=1)
-    type: str = Field(pattern="^(人物|地点|物品|组织)$")
-    change: str
-    chapter: int = Field(ge=1)
-
-raw = {"name": "林溯", "type": "人物", "change": "得知身世", "chapter": 12}
-try:
-    ec = EntityChange(**raw)   # LLM 吐的 JSON 先过这一层
-except ValidationError as e:
-    print("打回重抽:", e.errors()[0])
-```
-
-- 小说引擎 ChapterAnalysisService 的 JSON 落库前必须过 pydantic，LLM 偶尔吐 `chapter: "第十二章"` 这种，直接进 SQLite 就是脏数据。
-- v2 用 `model_validate`，别再用 v1 的 `parse_obj`（v1 已停止维护）。
-
-## dataclass + typing（告别 dict 满天飞）
-
-```python
-from dataclasses import dataclass, field
-from typing import Optional
-
-@dataclass
-class Chapter:
-    id: int
-    title: str
-    summary: str = ""
-    entities: list[str] = field(default_factory=list)  # 可变默认值必须用它
-
-def get_chapter(cid: int) -> Optional[Chapter]: ...
-```
-
-- 小说引擎的 Entity/Relation 传来传去全用 dict 的话，字段名拼错只有运行时才知道；dataclass + 类型注解让 IDE 直接标红。
-- 重一点的校验上 pydantic（见上节），轻量结构用 dataclass，零依赖。
-
-## pytest 实战
-
-```python
-# test_extract.py
-import pytest
-from extractor import parse_entities
-
-def test_parse_normal():
-    assert parse_entities("林溯走进源石矿") == ["林溯", "源石矿"]
-
-@pytest.mark.parametrize("text,expected", [
-    ("", []),
-    ("无实体的纯风景描写", []),
-])
-def test_parse_edge(text, expected):
-    assert parse_entities(text) == expected
-```
-```bash
-pytest -q                    # 跑全部
-pytest test_extract.py -k edge -v
-pytest --lf                  # 只跑上次失败的
-```
-
-- 小说引擎的抽取函数、RAG 的 chunk 函数，先写 3 个用例再写实现，TDD 在这种"输入输出明确"的场景最划算。
-- `parametrize` 一行变 N 个用例，边界条件全覆盖。
 
 ## 基础知识补强
 

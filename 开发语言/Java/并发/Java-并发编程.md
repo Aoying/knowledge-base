@@ -57,7 +57,7 @@ new ThreadPoolExecutor(
 
 ## 和虚拟线程的衔接
 
-- 虚拟线程（Java 21+）让"一个请求一个线程"成为现实，见 [Java/Java.md](Java/Java.md)。
+- 虚拟线程（Java 21+）让"一个请求一个线程"成为现实，见 [开发语言/Java/Java.md](开发语言/Java/Java.md)。
 - 注意：`synchronized` 块里调阻塞方法会 pin 住载体线程，虚拟线程下优先用 ReentrantLock。
 
 ## CompletableFuture（异步编排）
