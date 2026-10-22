@@ -8,7 +8,8 @@
 - 框架实战：[[Spring-Boot]]、[[MyBatis-Plus]]、[[Bean-Validation]]
 - 数据访问：[[Druid]]、[[多数据源]]
 - 语言进阶：[[Async-异步]]、[[Stream与Optional]]、[[虚拟线程]]
-- JVM：[[JVM-GC调优]]
+- JVM：[[JVM-GC调优]]、[[JVM-内存模型]]、[[JVM-类加载]]
+- 集合：[[HashMap]]、[[ConcurrentHashMap]]（`开发语言/Java/集合/`）
 - 并发：[[Java-并发编程]]（位于 开发语言/Java/并发/）
 - 设计：[[设计模式]]
 - 工作流：[[Flowable]]（文件在工程实践，Java 体系内使用）
@@ -38,5 +39,4 @@
 
 ## 知识缺口
 
-- 集合：HashMap、ConcurrentHashMap 待从 [[Java]] 拆篇，拆后建 开发语言/Java/集合/ 子目录
-- JVM：内存模型、类加载尚无独立篇（GC 调优已有 [[JVM-GC调优]]）
+- JVM：JIT、字节码尚无独立篇（按需再补）

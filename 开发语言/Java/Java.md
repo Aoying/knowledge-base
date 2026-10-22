@@ -31,6 +31,10 @@
 - [Druid 监控与慢 SQL 定位](开发语言/Java/Druid.md)
 - [多数据源](开发语言/Java/多数据源.md)
 - [JVM GC 调优](开发语言/Java/JVM-GC调优.md)
+- [HashMap](开发语言/Java/集合/HashMap.md)
+- [ConcurrentHashMap](开发语言/Java/集合/ConcurrentHashMap.md)
+- [JVM 内存模型](开发语言/Java/JVM-内存模型.md)
+- [JVM 类加载](开发语言/Java/JVM-类加载.md)
 - [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)
 - [设计模式](开发语言/Java/设计模式.md)
 
