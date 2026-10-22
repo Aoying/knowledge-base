@@ -1,8 +1,60 @@
 {
   "recentFiles": [
     {
-      "basename": "维护规则",
-      "path": "维护规则.md"
+      "basename": "Linux与Shell",
+      "path": "工程实践/Linux与Shell.md"
+    },
+    {
+      "basename": "Windows-常用命令",
+      "path": "工程实践/Windows-常用命令.md"
+    },
+    {
+      "basename": "Docker",
+      "path": "工程实践/Docker.md"
+    },
+    {
+      "basename": "交行企业网银",
+      "path": "项目沉淀/交行企业网银.md"
+    },
+    {
+      "basename": "Lua",
+      "path": "开发语言/Lua.md"
+    },
+    {
+      "basename": "pydantic",
+      "path": "开发语言/Python/pydantic.md"
+    },
+    {
+      "basename": "知识库规范",
+      "path": "知识库规范.md"
+    },
+    {
+      "basename": "Skills-索引",
+      "path": "AI与大模型/Skills-索引.md"
+    },
+    {
+      "basename": "总览",
+      "path": "知识地图/总览.md"
+    },
+    {
+      "basename": "大模型基础",
+      "path": "AI与大模型/大模型基础.md"
+    },
+    {
+      "basename": "标签索引",
+      "path": "标签索引.md"
+    },
+    {
+      "basename": "Flowable",
+      "path": "工程实践/Flowable.md"
+    },
+    {
+      "basename": "Java知识点地图",
+      "path": "知识地图/Java知识点地图.md"
+    },
+    {
+      "basename": "Elasticsearch",
+      "path": "数据库/Elasticsearch.md"
     },
     {
       "basename": "README",
