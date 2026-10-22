@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "11-计算机基础/计算机网络.md",
+                "file": "维护规则.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "计算机网络"
+              "title": "维护规则"
             }
           }
         ]
@@ -213,6 +213,7 @@
   },
   "active": "af67408a5beb63a3",
   "lastOpenFiles": [
+    "11-计算机基础/计算机网络.md",
     "11-计算机基础/数据结构与算法.md",
     "02-开发语言/设计模式.md",
     "12-项目沉淀/神农-e贷-审批流.md",
@@ -222,7 +223,6 @@
     "06-前端/前端开发.md",
     "06-前端/前端基础-HTML-CSS.md",
     "07-游戏/Godot.md",
-    "11-计算机基础/计算机网络.md",
     "11-计算机基础/Linux与Shell.md",
     "02-开发语言/正则表达式.md",
     "01-AI与Agent/大模型基础.md",

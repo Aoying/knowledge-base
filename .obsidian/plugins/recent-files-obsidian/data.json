@@ -1,6 +1,10 @@
 {
   "recentFiles": [
     {
+      "basename": "维护规则",
+      "path": "维护规则.md"
+    },
+    {
       "basename": "计算机网络",
       "path": "11-计算机基础/计算机网络.md"
     },
@@ -51,10 +55,6 @@
     {
       "basename": "大模型基础",
       "path": "01-AI与Agent/大模型基础.md"
-    },
-    {
-      "basename": "维护规则",
-      "path": "维护规则.md"
     },
     {
       "basename": "Java-并发编程",
