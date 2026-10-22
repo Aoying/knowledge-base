@@ -7,7 +7,8 @@
   - Java
   - MyBatis-Plus
   - Java知识点地图
-标签:
+  - Druid
+  - 多数据源标签:
   - Java
   - 实践
 ---
@@ -70,3 +71,7 @@ mybatis-plus:
 
 > 来源（2026-10-20 核验）：[spring-boot-4](https://www.danvega.dev/blog/spring-boot-4-is-here)；[spring-boot-3.5 EOL](https://dev.to/feezan_khattak/spring-boot-35-stopped-getting-patches-in-june-dont-migrate-to-40-4ba)；[boot-4.0.8](https://spring.io/blog/2026/08/20/spring-boot-4-0-8-available-now/)；[SimpleAsyncTaskExecutor Javadoc](https://docs.spring.io/spring/docs/5.3.24/javadoc-api/org/springframework/core/task/SimpleAsyncTaskExecutor.html)；[Flowable 7.0.0](https://www.flowable.com/blog/releases/flowable-open-source-7-0-0-release)
 
+## 关联知识
+
+- [Druid 监控与慢 SQL 定位](开发语言/Java/Druid.md)
+- [多数据源（dynamic-datasource）](开发语言/Java/多数据源.md)

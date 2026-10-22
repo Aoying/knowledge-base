@@ -6,7 +6,8 @@
 关联:
   - Python
   - Python知识点地图
-标签:
+  - pydantic
+  - dataclass与typing标签:
   - Python
   - 并发
   - 实践
@@ -39,3 +40,7 @@ asyncio.run(main(range(1, 51)))
 - `Semaphore` 限流是保命项：Ollama 默认并发一高就排队甚至超时。
 - 结构化输出别忘了 `response_format={"type":"json_object"}`，省得正则去抠。
 
+## 关联知识
+
+- [pydantic](开发语言/Python/pydantic.md)
+- [dataclass 与 typing](开发语言/Python/dataclass与typing.md)

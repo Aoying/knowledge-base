@@ -275,3 +275,7 @@ PUBLISH ch:notify "hello"   # 发布（发后即忘，没订阅就丢，不做�
 - 循环里逐条发命令：网络往返比命令本身贵得多，批量取用 MGET、批量写用 pipeline，别在 for 里一条条 GET。
 - 计数器 INCR 后忘了它对不存在的 key 从 0 开始：`INCR newkey` 直接得 1 并生成永久 key，做限流计数时记得补 EXPIRE。
 - 在 Cluster 下还按单机习惯用 SELECT 切库、多 key 命令不带 hash tag：Cluster 只有 0 号库，多 key 操作要同槽（花括号 hash tag）。
+
+## 实战案例（项目沉淀）
+
+- [神农-e贷-法人版](项目沉淀/神农-e贷-法人版.md)：Redis 在贷款平台中的使用

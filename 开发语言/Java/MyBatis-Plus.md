@@ -47,3 +47,7 @@ lambdaQuery().eq(StringUtils.isNotBlank(name), User::getName, name);
 4. **大批量插入**：`saveBatch` 默认 1000 一批，调大 batchSize；超大批量考虑原生 JDBC batch。
 5. **枚举映射**：`@EnumValue` 标在存库的字段上，别标错。
 
+## 实战案例（项目沉淀）
+
+- [解抵押平台](项目沉淀/解抵押平台.md)：MyBatis-Plus 与 MySQL → Oracle SQL 迁移
+- [神农-e贷-法人版](项目沉淀/神农-e贷-法人版.md)：企业级数据访问实战
