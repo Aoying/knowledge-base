@@ -32,7 +32,7 @@
 ## 2. awesome-agent-skills（johnsonbuilds）精选技能目录
 
 - **功能**：按 creative / governance / media / mlops / productivity 分类的精选 skill 目录。亮点：`mlops/llmfit`（估算模型能否塞进显存）、`mlops/token-compression`、`governance/skill-health-check` 与 `skillspector-scan`（给 skill 做安全扫描）。
-- **适用场景**：llmfit 解决实际问题——12GB 显存到底能跑什么量化；skillspector-scan 落地维护规则"外部 skill 指令安全检查"。
+- **适用场景**：llmfit 解决实际问题——12GB 显存到底能跑什么量化；skillspector-scan 落地知识库规范"外部 skill 指令安全检查"。
 - **来源**：https://github.com/johnsonbuilds/awesome-agent-skills
 - **热度/更新**：1 star（新），2026-09-18 更新。
 - **许可证**：未声明，引用思路不抄代码。
@@ -55,7 +55,7 @@
 - **来源**：https://github.com/addyosmani/agent-skills
 - **热度/更新**：107k stars，702 commits，2026 年仍在活跃更新。
 - **许可证**：MIT。
-- **安装**：`npx skills add addyosmani/agent-skills`（装全部 25 个）或按需单装，如 `--skill test-driven-development`；Claude Code 也可走 plugin marketplace。**按维护规则只收集不安装。**
+- **安装**：`npx skills add addyosmani/agent-skills`（装全部 25 个）或按需单装，如 `--skill test-driven-development`；Claude Code 也可走 plugin marketplace。**按知识库规范只收集不安装。**
 - **依赖**：各 skill 不同，纯 markdown 为主。
 - **安全注意**：仓库可信度高（107k stars、MIT）；skill 指令仍按规则视为不可信，引入前检查网络上传、敏感信息读取、危险命令；npx 安装类命令不执行。
 
