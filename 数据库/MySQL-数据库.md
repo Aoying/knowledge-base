@@ -329,3 +329,109 @@ EXPLAIN FORMAT=TREE SELECT * FROM a JOIN b ON a.id=b.a_id;
 
 - 10 月季度 CPU 后 9.7 的补丁号是否为 9.7.3、8.4 是否为 8.4.14（2026-10-21 当天实测仍是 9.7.2 / 8.4.13，下一轮夜任务再核一次）。
 - OceanBase V4.6.0 的确切 GA 日期与 MySQL 8.0 兼容性矩阵是否有变化（以 https://www.oceanbase.com/docs 为准）。
+
+## 基础知识补强
+
+### 核心概念与术语
+
+- 心智模型：实例 > 数据库（schema）> 表 > 行 > 列；一行是一条记录，一列是一个字段，表结构先于数据存在。
+- 主键：唯一标识一行，不能为 NULL，一张表只能有一个（可多列联合）；外键：引用另一张表主键的列，用来保证两张表的数据对得上。
+- 约束：建表时给列定的规矩——主键、唯一（UNIQUE）、非空（NOT NULL）、默认值（DEFAULT）、外键（FOREIGN KEY），入库前先校验，不合规直接报错。
+- 事务四特性 ACID：原子性（全成或全不成）、一致性（数据不自相矛盾）、隔离性（并发事务互不干扰到约定程度）、持久性（提交了就不丢）。
+- 范式：拆表的基本准则，记结论即可——1NF：每列不可再分；2NF：非主键列完全依赖整个主键；3NF：非主键列不依赖另一个非主键列（消除「订单表里冗余存用户名」这类传递依赖）。实际业务常适度反范式换查询性能，但要先懂范式再谈反范式。
+- 字符集与排序规则：字符集决定能存哪些字符（统一用 utf8mb4）；排序规则（collation，如 utf8mb4_general_ci）决定字符串怎么比大小，ci = 大小写不敏感，两表 JOIN 时排序规则不一致会报错或索引失效。
+
+常用数据类型速选：
+
+| 类别 | 类型 | 用法 |
+|---|---|---|
+| 整数 | TINYINT / INT / BIGINT | 状态用 TINYINT、ID 用 BIGINT，别用 INT 存手机号（会溢出且丢前导 0） |
+| 小数 | DECIMAL(M,D) | 存钱必须 DECIMAL；FLOAT/DOUBLE 有精度误差，只存测量值 |
+| 字符串 | VARCHAR(n) | 变长短文本；n 按实际设计，别无脑 255 |
+| 文本 | TEXT | 长文本，不设默认值、少建索引，和主表查询分开考虑 |
+| 日期 | DATETIME / TIMESTAMP | DATETIME 存绝对时间；TIMESTAMP 带时区转换、范围小，跨时区业务慎用 |
+| 枚举替代 | TINYINT + 字典 | 别用 ENUM，加值要改表 |
+
+### 基础语法与用法
+
+```sql
+-- 库与表的基础操作
+CREATE DATABASE shop DEFAULT CHARACTER SET utf8mb4;
+USE shop;
+SHOW TABLES;
+DESC t_order;                 -- 看列定义
+SHOW CREATE TABLE t_order;    -- 看完整建表语句，排查字符集/引擎最准
+
+-- 建表示例：约束写全
+CREATE TABLE t_order (
+  id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+  user_id     BIGINT       NOT NULL COMMENT '下单用户',
+  order_no    VARCHAR(32)  NOT NULL COMMENT '订单号',
+  amount      DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '金额',
+  status      TINYINT      NOT NULL DEFAULT 0 COMMENT '0待支付 1已支付',
+  create_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_order_no (order_no),
+  KEY idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单表';
+
+-- DML 四件套
+INSERT INTO t_order (user_id, order_no, amount) VALUES (1001, 'NO2026001', 99.00);
+SELECT id, order_no, amount FROM t_order WHERE user_id = 1001 AND status = 0;
+UPDATE t_order SET status = 1 WHERE id = 10;          -- 必须带 WHERE
+DELETE FROM t_order WHERE id = 10;                    -- 必须带 WHERE（见易错点）
+
+-- 排序、分页、去重
+SELECT * FROM t_order WHERE user_id = 1001 ORDER BY create_time DESC LIMIT 20;
+SELECT DISTINCT status FROM t_order;
+
+-- 聚合与分组（GROUP BY 后 SELECT 只能出分组列和聚合结果）
+SELECT status, COUNT(*) AS cnt, SUM(amount) AS total
+FROM t_order GROUP BY status HAVING COUNT(*) > 10;    -- HAVING 过滤分组结果，WHERE 过滤行
+
+-- JOIN 三连：内连接（两边都有才出）、左连接（左表全出）、右连接（少用，换成左连）
+SELECT o.order_no, u.name
+FROM t_order o
+LEFT JOIN t_user u ON o.user_id = u.id;
+
+-- 子查询：先想清楚能不能改成 JOIN，子查询可读性差且常更慢
+SELECT * FROM t_user WHERE id IN (SELECT user_id FROM t_order WHERE amount > 1000);
+
+-- 事务四句：多条语句要么一起成、要么一起退
+START TRANSACTION;
+UPDATE t_account SET balance = balance - 100 WHERE id = 1;
+UPDATE t_account SET balance = balance + 100 WHERE id = 2;
+COMMIT;                                  -- 确认无误才提交；出问题用 ROLLBACK 回滚
+-- SAVEPOINT s1 / ROLLBACK TO s1：事务内打点，只回滚后半段
+
+-- 基础条件速查：IN（多值任一）、BETWEEN（闭区间）、LIKE（%任意字符 _单个字符）
+SELECT * FROM t_user WHERE city IN ('深圳', '广州');
+SELECT * FROM t_order WHERE amount BETWEEN 100 AND 500;
+SELECT * FROM t_user WHERE name LIKE '张%';           -- 前缀匹配可走索引，'%张' 不行
+
+-- 改表结构 ALTER（大表慎用，上线前先在测试环境试；加列带默认值在新版多为秒级，老版本可能锁表）
+ALTER TABLE t_order ADD COLUMN remark VARCHAR(128) NOT NULL DEFAULT '';
+ALTER TABLE t_order ADD INDEX idx_status_time (status, create_time);
+ALTER TABLE t_order MODIFY COLUMN remark VARCHAR(256) NOT NULL DEFAULT '';
+
+-- 授权基础（DCL）
+CREATE USER 'app'@'%' IDENTIFIED BY '******';
+GRANT SELECT, INSERT, UPDATE, DELETE ON shop.* TO 'app'@'%';  -- 按最小权限给，别给 *.*
+```
+
+### 关键机制速览
+
+- 存储引擎：默认 InnoDB——支持事务、行锁、外键；MyISAM 无事务、只有表锁，只在只读老系统里见到，新表一律 InnoDB。
+- 一条查询的旅程：连接器鉴权 → 查询缓存（8.0 已移除）→ 解析/优化器选执行计划 → 执行器按计划调存储引擎取行 → 返回。慢查询多数卡在优化器选错索引或引擎扫太多行。
+- 连接与会话：每个连接是一个会话，`SET` 的变量分会话级和全局级；连接池的意义是复用连接，避免频繁三次握手 + 鉴权。
+- 自增 ID 的本质：表级计数器，保证本表单调递增，不保证连续（回滚、删除都会留空洞），更不能当业务序号用。
+
+### 新手易错点
+
+- UPDATE / DELETE 忘写 WHERE：全表被改/删。养成习惯：先用相同 WHERE 跑一遍 SELECT 确认行数，再执行；生产删改优先逻辑删除（加 del_flag）。
+- DROP TABLE / TRUNCATE vs DELETE：DROP 连表结构一起删，TRUNCATE 清空全表且不可回滚、自增归零——危险命令，执行前必须确认连的是哪个库、表里数据要不要留档；DELETE 是逐行删、可回滚、可带 WHERE。
+- 用 `= NULL` 判断空：永远查不到，判空用 `IS NULL` / `IS NOT NULL`。
+- 把聚合条件写进 WHERE：WHERE 在分组前执行，不能写 COUNT() 这类聚合，过滤分组结果用 HAVING。
+- SELECT *：取回无用列、覆盖索引失效、表结构变更时代码易炸，按需列出字段。
+- 钱用 FLOAT 存、时间用字符串存、枚举用中文字符串存：三类经典建模错误，分别改 DECIMAL、DATETIME、TINYINT + 字典表。
+- VARCHAR 长度按字符算不是字节：utf8mb4 下一个汉字占 3~4 字节但算 1 个字符，`VARCHAR(255)` 指 255 个字符，别按字节估算。

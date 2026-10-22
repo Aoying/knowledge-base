@@ -186,3 +186,108 @@ access_log /var/log/nginx/access.log main buffer=64k flush=5s;
 - `buffer=64k flush=5s`：攒批写，QPS 高了不加这个磁盘 IO 直接起飞。
 - `$request_time` 记上，慢请求分析 `awk '$2>1'` 一把梭。
 - 监控：`stub_status` 开个 `/nginx_status`，Prometheus 抓 active connections。
+
+## 基础知识补强
+
+### 核心概念与术语
+
+- **Nginx 是什么**：高性能的 Web 服务器软件，同时常被用作反向代理和负载均衡器。一个软件三种常见角色，别混淆：
+  - **静态 Web 服务器**：直接把硬盘上的 HTML、图片、前端打包产物返回给浏览器，不经过后端应用。
+  - **反向代理**：站在后端应用前面接收请求再转发，客户端只知道 Nginx，不知道后端在哪。
+  - **负载均衡器**：把请求按规则分发到多台后端，是反向代理的延伸用法。
+- **正向代理 vs 反向代理**：正向代理代理的是客户端（替你上网，服务端不知道你是谁）；反向代理代理的是服务端（替后端接客，客户端不知道后端是谁）。Nginx 做的是反向代理。
+- **指令与配置块**：配置由一条条指令组成。简单指令是 `名字 参数;`，以分号结尾；配置块是 `名字 参数 { ... }`，里面嵌套其他指令。少个分号是新手最常见的语法错误。
+- **worker 进程**：Nginx 运行时是一个 master 进程加多个 worker 进程。master 负责读配置、管 worker，不处理请求；worker 才是真正接收和处理连接的。改配置 reload 时 master 让新 worker 用新配置、旧 worker 处理完存量连接再退出，所以 reload 不断连接。
+- **server 块**：一个虚拟主机配置，对应一个站点（按域名和端口区分）。一台 Nginx 里可以有很多个 server 块。
+- **location 块**：server 内部按 URL 路径分流的规则块，决定这类请求是读静态文件、转发后端还是直接返回。
+- **root 与 alias**：都是把 URL 路径映射到磁盘目录。`root` 是把完整 URI 拼到 root 后面；`alias` 是把 location 匹配掉的那段前缀替换掉。两者拼接规则不同，混用最容易 404。
+
+### 基础语法与用法
+
+先看配置文件的骨架层级，任何配置都只能写在它该在的层级里：
+
+```nginx
+# 主配置 nginx.conf
+user  nginx;                    # 全局层：worker 用什么用户跑
+worker_processes  auto;         # worker 数量，auto 表示按 CPU 核数
+error_log  /var/log/nginx/error.log;
+pid        /run/nginx.pid;
+
+events {                        # 事件层：连接处理模型，只能写连接类参数
+    worker_connections  1024;   # 单个 worker 最多同时处理多少连接
+}
+
+http {                          # HTTP 层：所有 Web 服务配置的根
+    include       mime.types;   # 文件扩展名到响应类型的对照表
+    default_type  application/octet-stream;
+    sendfile      on;           # 静态文件零拷贝发送，保持开
+
+    server {                    # 站点层：一个域名一个 server
+        listen       80;
+        server_name  example.com;
+
+        location / {            # 路径层：以 / 开头的所有请求
+            root   /data/www;   # 去这个目录找文件
+            index  index.html;  # 访问目录时默认找这个文件
+        }
+    }
+}
+```
+
+最基础的静态站点，只有三行核心配置：
+
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+    location / {
+        root /data/www;         # 网站文件放这个目录
+        index index.html;       # 不写文件名时默认返回它
+    }
+}
+```
+
+日常操作命令（改配置的标准动作是先测再加载）：
+
+```bash
+nginx -t          # 只测试配置语法对不对，不动正在跑的服务
+nginx -s reload   # 语法没问题后平滑重载，新请求走新配置，不断连接
+nginx -s stop     # 快速停止（直接终止进程，可能掐断正在处理的请求）
+nginx -s quit     # 优雅停止（处理完已有连接再退出）
+nginx -T          # 打印全部生效配置（含被 include 进来的），排查以它为准
+systemctl restart nginx   # 完全重启，会断连接；改配置优先用 reload
+```
+
+两个高频基础指令：
+
+```nginx
+# 访问根路径时直接找后端目录下的首页，找不到再返回 404 页
+location / {
+    try_files $uri $uri/ =404;
+}
+
+# 统一错误页：后端返回 500 系列时展示自己的页面
+error_page 500 502 503 504 /50x.html;
+```
+
+- `try_files` 按从左到右顺序试：先当文件找，再当目录找，都没有就返回最后一个状态码。前后端分离项目里常写成找不到就回退到 `index.html`，让前端路由接管。
+- `return 301 https://example.com$request_uri;` 是最简单的跳转写法，`301` 是永久重定向，`302` 是临时。
+
+### 关键机制速览
+
+- **请求处理流程**：连接进来先按端口和 `Host` 头选中一个 server 块，再在 server 内选出最匹配的 location，最后按该 location 的指令执行：读文件、转发或直接返回。全程没有匹配上时走默认处理。
+- **默认 server**：同一个端口下，域名对不上任何 `server_name` 时，请求落到该端口的第一个 server 块（或显式标了 `default_server` 的那个）。用 IP 直接访问看到意外页面，多半是落到了默认 server。
+- **变量**：配置里的 `$host`、`$remote_addr`、`$request_uri`、`$scheme` 等是 Nginx 内置变量，运行时替换为当前请求的实际值。写日志格式、转发头、跳转地址都靠它们，不用背全，用时查。
+- **include 机制**：主配置常用 `include conf.d/*.conf;` 把每个站点的配置拆成单独文件。主文件找不到你的 server 时，先查 include 的目录和文件名后缀对不对。
+- **静态文件为什么快**：`sendfile on` 时文件内容不经过用户态反复拷贝，内核直接把文件发到网卡。静态资源交给 Nginx 而不是后端应用，图的就是这个。
+- **upstream 与转发的关系**：`proxy_pass` 写单个地址就是简单转发；写成一组命名的后端集合（upstream）再引用，Nginx 才能在多台之间做分发和故障剔除。
+
+### 新手易错点
+
+- **改完配置直接 restart**：语法有错时 restart 会让服务起不来直接宕机。固定动作：`nginx -t` 通过后再 `nginx -s reload`，顺序不能反。
+- **分号和花括号漏写**：配置不是脚本，指令必须以分号结尾，块必须闭合。报错信息会给出文件名和行号，顺着行号往上找通常是上一行漏了分号。
+- **root 写在错误层级理解偏差**：location 里的 root 拼接的是完整请求路径。例如 `root /data;` 加请求 `/img/a.png`，找的是 `/data/img/a.png`；想把 `/img/` 这段去掉要改用 alias，别硬试 root。
+- **index 不生效**：访问目录返回 403，多半是目录里没有 index 指定的文件，或者目录权限不允许 Nginx 的运行用户读取。先查文件在不在，再查权限链每一层目录有没有执行权限。
+- **把后端端口暴露的锅扣给 Nginx**：请求绕过 Nginx 直连后端端口能通，是后端监听和防火墙的问题，Nginx 配置里没有能拦这个的指令。
+- **server_name 写了域名但用 IP 测试**：按域名选 server 靠的是请求里的 Host 头，浏览器输 IP 时 Host 就是 IP，自然落到默认 server。用域名测试，或手动带 Host 头验证。
+- **日志不看 error_log 只盯 access_log**：access_log 记录请求结果，error_log 才记录为什么出错（文件找不到、后端连不上、配置问题）。排障先看 error_log 的最后几行。

@@ -238,3 +238,99 @@ spring.kafka.consumer:
 
 - JMX Exporter + Prometheus + Grafana 一套，Kafka 官方推荐链路。
 - Lag 告警配"持续 5 分钟增长"而不是"绝对值"，避免正常波动误报。
+
+## 基础知识补强
+
+### 核心概念与术语
+
+- 心智模型：Kafka 是「分布式提交日志」——消息按顺序追加写进分区尾部，永不修改，消费就是拿着书签（offset）从某个位置往后读，读过不删，到保留期才整段清掉。和传统队列「取出即删」是两种世界观。
+- 记录（record）的结构：key（决定进哪个分区，可为空）+ value（正文）+ timestamp + headers（附带元数据，如 traceId）；业务数据放 value，链路信息放 header，别把正文塞进 key。
+- 副本与 ISR：每个分区一个 leader 处理读写，若干 follower 被动复制；与 leader 保持同步的副本集合叫 ISR，leader 挂了只能从 ISR 里选新 leader。副本数（replication factor）= 数据有几份，ISR 是「跟上进度的那几份」。
+- 投递语义三档（记定义，别只记名字）：at-most-once（至多一次，可能丢）、at-least-once（至少一次，可能重复，Kafka 默认实际效果）、exactly-once（恰好一次，要幂等+事务+消费端配合才成立）。绝大多数业务正确答案是 at-least-once + 消费端幂等。
+- 日志段（segment）：分区在磁盘上按段滚动存文件，写满或到期换新段；清理按段整段删（delete 策略）或按 key 压缩保留最新值（compact 策略，配置/状态类 topic 用）。
+- 消费者坐标系：一个消费组订阅一个 topic 时，分区是分配单位；组名（group.id）就是身份，改了组名等于换了身份，位移记录对不上，默认从最新或最早重新开始。
+
+### 基础语法与用法
+
+```bash
+# 命令行四件套（本地调试、排障都靠它们；--bootstrap-server 填任一 broker 即可，它会自己发现全集群）
+
+# 1) 造数据：控制台生产者（每回车一条；带 key 用第二种，key 和 value 用冒号分隔要加 parse.key）
+kafka-console-producer.sh --bootstrap-server localhost:9092 --topic orders
+kafka-console-producer.sh --bootstrap-server localhost:9092 --topic orders \
+  --property "parse.key=true" --property "key.separator=:"
+
+# 2) 看数据：--from-beginning 从最早读；不加默认只读新消息（新手最常踩）
+kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic orders --from-beginning
+kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic orders \
+  --property print.key=true --max-messages 10
+
+# 3) 查消费进度：lag 看这一列（组在消费哪个 topic、每个分区落后多少）
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group g1
+
+# 4) 重置位移（危险操作：先停消费者再执行，要加 --dry-run 先预览）
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group g1 \
+  --reset-offsets --to-earliest --topic orders --dry-run
+```
+
+```java
+// 原生客户端最小骨架（理解 Spring Kafka 封装之前先看懂这层）
+Properties p = new Properties();
+p.put("bootstrap.servers", "localhost:9092");          // 集群入口列表，写 2~3 个防单点
+p.put("group.id", "g1");                               // 消费者必填：组身份
+p.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+p.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+p.put("enable.auto.commit", "false");                  // 先关自动提交，处理成功再手动 commitSync
+
+KafkaConsumer<String, String> c = new KafkaConsumer<>(p);
+c.subscribe(List.of("orders"));                        // 订阅即加入组，分区自动分配
+while (true) {
+    ConsumerRecords<String, String> rs = c.poll(Duration.ofMillis(500)); // 长轮询拉一批
+    for (ConsumerRecord<String, String> r : rs) {
+        process(r.value());                            // r.partition()/r.offset() 是定位三件套
+    }
+    c.commitSync();                                    // 整批成功后才提交位移
+}
+```
+
+```java
+// 原生生产者最小骨架（和消费者对称，先看懂再用 Spring 封装）
+Properties pp = new Properties();
+pp.put("bootstrap.servers", "localhost:9092");
+pp.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+pp.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+pp.put("acks", "all");
+KafkaProducer<String, String> producer = new KafkaProducer<>(pp);
+// 异步发 + 回调确认：get() 阻塞等结果是同步发，新手排障可用，业务主链路别这么写
+producer.send(new ProducerRecord<>("orders", userId, orderJson), (meta, ex) -> {
+    if (ex != null) { /* 发送失败兜底：记失败表重试 */ }
+    else { /* meta.topic()/partition()/offset() 就是这条消息的最终坐标 */ }
+});
+producer.close();   // 退出前必须 close/flush，没发完就关进程会丢消息
+```
+
+清理策略二选一（建 topic 时按数据性质定）：
+
+| 策略 | 配置 | 行为 | 适合 |
+|---|---|---|---|
+| delete | cleanup.policy=delete | 到保留期/保留量整段删 | 订单、日志等流水型消息（默认） |
+| compact | cleanup.policy=compact | 同 key 只留最新一条 | 配置下发、实体最新状态（如商品价格） |
+
+分区副本读图法：`kafka-topics.sh --describe` 输出里 `Leader` 是当前干活的副本，`Replicas` 是全部副本，`Isr` 是跟上进度的副本；Replicas 比 Isr 多，说明有副本掉队，先查那台 broker。
+
+### 关键机制速览
+
+- 为什么快，三件套：顺序追加写磁盘（避开随机 IO）+ 页缓存（数据先写 OS cache，读也走 cache，不吃 JVM 堆）+ 零拷贝 sendfile（文件直接进网卡，不在用户态来回搬）。推论：给 Kafka 的机器内存比 CPU 更重要，堆别调太大，留给页缓存。
+- 位移存在哪：消费组的位移存在内部 topic `__consumer_offsets`，不是客户端本地文件；所以换机器消费能接上进度，改组名则接不上。
+- 拉模式（pull）而非推模式：消费者按自己的节奏 poll，天然削峰；代价是要自己处理「没数据时别空转」（poll 本身是长轮询，不用再 sleep 忙等）。
+- 分区内有序、分区外无序：同一分区的 offset 就是全局顺序的定义；跨分区没有先后可言，下单类消息想有序必须同 key 进同分区（或业务侧带序号自理）。
+
+### 新手易错点
+
+- 控制台消费「什么都看不到」：默认从最新位移开始，只收启动之后的新消息；看存量加 `--from-beginning`，这不是丢消息。
+- bootstrap.servers 只写一个地址还以为高可用：它只是初始入口名单，写的那台恰好宕机时新客户端连不上集群，常态写 2~3 台。
+- key 传 null 还指望有序：null key 走轮询/粘性分配打散到各分区，顺序无从谈起；要保序必须给业务 key。
+- 靠改大 retention 以为能「找回」被删数据：保留到期整段删除，删了就是删了，延长保留期只能从设置之后生效，存量找不回。
+- 随手改 group.id 上线：新组没有历史位移，按 auto.offset.reset（默认 latest）从尾巴开始，等于跳过全部存量；要重消费必须明确指定并评估下游幂等。
+- poll 循环里做长耗时同步调用又不调参数：单批处理超过 max.poll.interval.ms 会被判定掉线踢出组引发 rebalance，先算单批最长耗时再配置。
+- 在分区数上贪多求快：分区数是并行上限也是元数据负担，几十个分区和几千个分区是两回事，按消费并行需求定，别给每个小 topic 都 100 分区。

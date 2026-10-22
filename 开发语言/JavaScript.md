@@ -169,3 +169,135 @@ async function processBig(arr) {
   }
 }
 ```
+
+## 基础知识补强
+
+### 核心概念与术语
+
+- **弱类型动态语言**：变量没有固定类型，值有类型；同一个变量可以先后装数字、字符串、对象。
+- **七种原始类型**：`number`、`string`、`boolean`、`null`、`undefined`、`symbol`、`bigint`，其余一切都是对象。
+- **undefined 与 null**：undefined 是"还没赋值/不存在"（系统给的）；null 是"明确表示为空"（开发者主动给的）。
+- **变量声明三兄弟**：`var` 函数作用域且可重复声明（老写法）；`let` 块作用域可改值；`const` 块作用域不可重新赋值。新代码默认 `const`，需要改值用 `let`。
+- **作用域**：变量能被访问的范围，分全局、函数、块（大括号）三级；内层能读外层，外层读不到内层。
+- **提升（hoisting）**：声明会被"提"到作用域顶部，`var` 和函数声明可先用后声明（值未赋时是 undefined）；`let/const` 有暂时性死区，用早了直接报错。
+- **闭包**：函数记住并能访问它出生时所在作用域的变量，哪怕外层函数已经执行完。
+- **对象**：键值对的集合，键是字符串（或 symbol）；属性访问用点号或方括号，方括号里可以是变量。
+- **数组是特殊对象**：下标是字符串键，有 `length`；可以混装不同类型，但业务里别这么干。
+- **函数是一等公民**：函数可以赋值给变量、作参数、作返回值，回调与高阶函数都建立在这一点上。
+- **原型链**：对象查找属性时，自己没有就沿 `__proto__` 往上找，直到 null；类与继承只是这套机制的语法糖。
+- **事件循环**：JS 单线程执行，耗时任务靠回调排队；先跑完同步代码，再清空微任务（Promise），最后取宏任务（定时器、事件）。
+
+### 基础语法与用法
+
+```js
+// 声明与基本类型
+const name = 'ao';        // const 不能重新赋值
+let count = 0;            // let 可以改
+count += 1;
+const price = 9.9;        // number，整数浮点同一种
+const ok = true;
+const empty = null;       // 主动为空
+let notSet;               // undefined，没赋值
+
+console.log(typeof name);     // 'string'
+console.log(typeof null);     // 'object'（历史遗留，别被它误导）
+console.log(typeof notSet);   // 'undefined'
+```
+
+```js
+// 控制流
+if (count > 0) {
+  console.log('正数');
+} else if (count === 0) {
+  console.log('零');
+} else {
+  console.log('负数');
+}
+
+for (let i = 0; i < 3; i++) console.log(i);       // 传统 for
+for (const item of [10, 20]) console.log(item);  // for...of 遍历值
+const user = { name: 'ao', age: 5 };
+for (const key in user) console.log(key, user[key]);  // for...in 遍历键
+
+// 逻辑运算返回的是操作数本身，不一定是布尔值
+const title = '' || '默认标题';        // title 为 '默认标题'
+const cfg = null ?? { size: 10 };      // null/undefined 才兜底时用 ??
+```
+
+```js
+// 函数的四种常见形态
+function add(a, b) { return a + b; }                 // 函数声明（有提升）
+const mul = function (a, b) { return a * b; };       // 函数表达式
+const sub = (a, b) => a - b;                         // 箭头函数，单表达式可省 return
+const greet = (who = '匿名') => `你好, ${who}`;      // 默认参数
+
+// 对象与数组基础操作
+const u = { name: 'ao', age: 5 };
+u.city = '深圳';                  // 加属性
+console.log('age' in u);          // true，查键是否存在
+delete u.city;                    // 删属性
+const arr = [1, 2, 3];
+arr.push(4);                      // 末尾加（改原数组）
+console.log(arr.length, arr[0]);  // 长度与下标（从 0 开始）
+```
+
+```js
+// 闭包：最常见的实际用途——计数器与私有变量
+function makeCounter() {
+  let n = 0;                    // 外部访问不到，只能通过返回的函数动它
+  return () => ++n;
+}
+const next = makeCounter();
+console.log(next(), next());    // 1, 2
+
+// 类的基本形态（原型机制的语法糖）
+class Chapter {
+  constructor(title, words = 0) {
+    this.title = title;
+    this.words = words;
+  }
+  isLong() { return this.words > 5000; }
+}
+const ch = new Chapter('第一章', 6200);
+console.log(ch.title, ch.isLong());
+```
+
+```js
+// DOM 基础（浏览器环境）：选中元素、改内容、听事件
+const btn = document.querySelector('#save');      // 按 CSS 选择器取一个
+const items = document.querySelectorAll('.row');  // 取全部，返回类数组
+btn.textContent = '保存';                          // 改纯文本（安全，不解析 HTML）
+btn.addEventListener('click', () => {              // 绑定点击事件
+  console.log('被点了');
+});
+
+// JSON：与后端和本地模型打交道的通用格式
+const text = JSON.stringify({ a: 1 });   // 对象 -> 字符串 '{"a":1}'
+const obj = JSON.parse(text);            // 字符串 -> 对象，非法 JSON 会抛错，要 try 包
+```
+
+### 关键机制速览
+
+- **单线程加事件循环**：JS 本身只跑一条线程，长计算会冻结页面；异步靠的是把活交给浏览器/Node 环境，完事再把回调排回队列。
+- **微任务优先**：每段同步代码跑完先清微任务队列（Promise 回调），再取下一个宏任务，所以 Promise 通常比 setTimeout 先执行。
+- **类型转换三条路**：转字符串 `String(x)`、转数字 `Number(x)`、转布尔 `Boolean(x)`；隐式转换规则复杂，手动转最省心。
+- **真值表要背熟**：`false、0、''、null、undefined、NaN` 是假值，其余（含空数组、空对象）全是真值。
+- **NaN 的脾气**：`NaN !== NaN`，判断要用 `Number.isNaN(x)`；`typeof NaN` 是 'number'。
+- **对象传引用**：函数收到对象参数时改属性，外面能看见；想不影响原对象先做一份拷贝再改。
+- **浅拷贝只拷一层**：展开运算符和 `Object.assign` 都是浅拷贝，嵌套对象仍然共享（深拷贝另有办法，原文已述）。
+- **this 由调用方式决定**：谁调用就指向谁；对象方法被单独取出来传走，this 就丢了（原文已述解决法）。
+- **严格模式**：`'use strict'` 或模块默认开启，未声明变量赋值直接报错，很多静默错误变成显式异常。
+- **相等判断**：`===` 不转类型先比类型再比值；`Object.is` 多处理了 NaN 与正负零两个边角。
+
+### 新手易错点
+
+- **数组下标与 length**：下标从 0 开始，最大合法下标是 `length - 1`；给不存在的下标赋值会把数组拉长并留空洞。
+- **for...in 遍历数组**：它遍历的是键（字符串）还会带上额外属性，遍历数组值请用 for...of。
+- **对象键顺序误解**：整数样键会按数值升序排在前面，字符串键按插入顺序，依赖顺序的业务别赌这个。
+- **const 对象的误会**：const 只保证变量不重新赋值，对象属性照样能改；想真冻结用 `Object.freeze`（也只是浅冻结）。
+- **字符串方法不改原串**：字符串不可变，`replace/slice` 都返回新串，不接返回值等于白调。
+- **parseInt 不带进制**：`parseInt('08')` 在老环境有坑，养成 `parseInt(s, 10)` 的习惯。
+- **switch 用严格相等**：`switch (x)` 内部是 `===` 比较，x 是字符串 '1' 时匹配不上 `case 1`。
+- **return 后自动分号**：`return` 单独一行、值写在下一行，会被自动补分号变成返回 undefined；值跟 return 写同行。
+- **在条件里写单个等号**：`if (a = 1)` 是赋值不是比较，还恒为真；比较永远写两个或三个等号并配合 lint。
+- **定时器里的 this 与参数**：`setTimeout(obj.method, 100)` 会丢 this，包一层箭头函数 `() => obj.method()` 再传。

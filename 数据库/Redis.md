@@ -174,3 +174,104 @@ MEMORY DOCTOR                   # 一句话诊断
 
 - `mem_fragmentation_ratio` < 1 说明内存碎片严重（used 比 RSS 小），重启或等碎片整理。
 - 大 key 治理：拆（hash 分片）、压（序列化选 msgpack 不用 json）、限（value 别超 10KB）。
+
+## 基础知识补强
+
+### 核心概念与术语
+
+- 心智模型：Redis 是跑在内存里的键值数据库——key 永远是字符串，value 是带类型的结构（String/Hash/List/Set/ZSet 等）；所有操作先想「这个 key 是什么类型」。
+- 为什么快：纯内存读写 + 单线程执行命令（命令按顺序一条条来，单条命令天然原子）+ IO 多路复用。推论：一条慢命令会堵住后面所有命令。
+- 数据库编号：单机默认 16 个逻辑库（0~15），用 `SELECT 3` 切换；只是命名空间隔离，不做权限/资源隔离，Cluster 模式只用 0 号库。团队项目一般约定只用一个库 + key 前缀区分业务。
+- key 命名规范：`业务:对象:ID` 冒号分层，如 `order:detail:1001`；便于按前缀排查和批量管理，禁止无意义的 `a`、`test1` 混进生产库。
+- 过期是惰性 + 定时双机制：key 到期不会立刻删（访问时发现过期才删，后台再定期抽查清理），所以「已过期」的 key 短时间还占内存是正常现象。
+- 序列化心智：value 最终都是字节，存对象要选定一种序列化方式全队统一，中途换格式老数据会全部反序列化失败。
+
+### 基础语法与用法
+
+```bash
+# 连接与自检
+redis-cli -h 127.0.0.1 -p 6379 -a ******   # 带密码连接
+PING                        # 回 PONG 说明通了
+INFO                        # 服务器全景：内存、连接数、命中率；INFO memory 只看内存段
+DBSIZE                      # 当前库 key 数量
+CONFIG GET maxmemory        # 看配置（改配置用 CONFIG SET，但重启失效，要落配置文件）
+
+# 通用 key 命令（五大类型都适用）
+EXISTS order:detail:1001        # 存在返回 1
+TYPE order:detail:1001          # 看类型：string/hash/list/set/zset/none
+EXPIRE pay:lock:1001 60         # 60 秒后过期；PEXPIRE 用毫秒
+PERSIST pay:lock:1001           # 取消过期，变永久
+RENAME oldkey newkey            # 改名（目标存在会被覆盖，慎用）
+DEL key1 key2                   # 返回实际删掉的个数
+
+# Hash 补全（对象字段）
+HSET user:1 name "张三" age 18
+HGET user:1 name
+HMGET user:1 name age
+HINCRBY user:1 age 1
+HDEL user:1 age
+HEXISTS user:1 name
+
+# List（双端队列，LPUSH+RPOP 就是队列）
+LPUSH queue:task t1 t2      # 从左塞入
+RPOP queue:task             # 从右取出（FIFO 队列）；BLPOP 是阻塞版取不到就等
+LRANGE list 0 -1            # 看全部（0 到 -1）；LTRIM 可裁掉多余部分
+LLEN queue:task             # 长度，做队列积压监控
+
+# Set（无序不重复）
+SADD tag:java u1 u2 u3
+SADD tag:python u2 u4
+SISMEMBER tag:java u2       # 是否在集合内（权限/黑名单判断）
+SINTER tag:java tag:python  # 交集：共同成员
+SUNION / SDIFF              # 并集 / 差集
+SMEMBERS tag:java           # 全量成员——大集合禁用，改 SSCAN 分批
+
+# String / ZSet 补全（基础高频）
+APPEND counter_log "x"          # 末尾追加，不存在当新建
+STRLEN order:detail:1001        # value 长度，排查大 value 用
+SET session:abc token EX 1800   # 登录会话经典写法：半小时过期
+ZINCRBY rank 10 "u1"            # 分数 +10（游戏积分、热度榜）
+ZRANGE rank 0 9 WITHSCORES      # 正序前 10；榜单展示常用
+ZRANK rank "u1"                 # 查名次（从 0 开始），查不到返回 nil
+ZREM rank "u1"                  # 移除成员
+ZCARD rank                      # 成员总数
+
+# 数据选型速决（先问访问模式，再选结构）
+# 只存一个值/计数     → String
+# 一个对象多个字段    → Hash（别把对象 JSON 塞 String 又想改单字段）
+# 队列/最近 N 条      → List
+# 去重/成员判断/交集  → Set
+# 排序/榜单/按分取范围 → ZSet
+# 要交集并集就别用 Hash 硬凑，用 Set 的 SINTER/SUNION 原生命令。
+
+# 慢命令自查
+SLOWLOG GET 10              # 最近 10 条慢命令（默认阈值 10ms，slowlog-log-slower-than）
+CLIENT LIST                 # 当前连接一览：谁在连、各连了多久
+OBJECT ENCODING mykey       # 看底层编码，同一结构数据形态不同编码不同（排查内存异常用）
+
+# 事务与发布订阅（基础了解）
+MULTI                       # 开事务，后续命令入队不执行
+SET a 1
+INCR a
+EXEC                        # 一次性顺序执行；中途某条出错其余照常执行（不是关系型事务，不回滚）
+SUBSCRIBE ch:notify         # 订阅频道
+PUBLISH ch:notify "hello"   # 发布（发后即忘，没订阅就丢，不做可靠消息用）
+```
+
+### 关键机制速览
+
+- 单命令原子 ≠ 组合操作原子：`GET` 后判断再 `SET` 两步之间别人能插进来，组合逻辑要靠 Lua 脚本一次发送、整体执行。
+- 命中率看 `INFO stats` 的 keyspace_hits /（hits + misses）：长期低于 90% 说明缓存策略或容量有问题，先查再扩容。
+- 主从复制是异步的：主机写完立刻返回，从机稍后同步，所以「写完马上读从机可能读不到」是设计如此不是 bug。
+- 内存上限与淘汰是一对：只设过期不设 maxmemory，冷数据堆积照样能打满内存；两个一起设。
+- value 大小经验线：单 value 控制在 10KB 以内、集合元素数控制在万级以内，超过就拆 key 或换存储。
+
+### 新手易错点
+
+- 把 Redis 当主数据库：关了持久化、又没备份，重启/宕机数据就没；重要数据必须有权威来源（MySQL），Redis 里只放可重建的副本。
+- FLUSHDB / FLUSHALL 清空数据：危险命令，FLUSHALL 连其他逻辑库一起清；生产环境建议改名或禁用（rename-command），执行前三确认。
+- key 不设过期：缓存、验证码、临时锁都必须带过期时间，否则内存只涨不降，最后靠淘汰误删业务 key。
+- 用一个大 Hash/大 Set 装全量数据：元素越多操作越慢且无法按元素过期，拆成多个小 key。
+- 循环里逐条发命令：网络往返比命令本身贵得多，批量取用 MGET、批量写用 pipeline，别在 for 里一条条 GET。
+- 计数器 INCR 后忘了它对不存在的 key 从 0 开始：`INCR newkey` 直接得 1 并生成永久 key，做限流计数时记得补 EXPIRE。
+- 在 Cluster 下还按单机习惯用 SELECT 切库、多 key 命令不带 hash tag：Cluster 只有 0 号库，多 key 操作要同槽（花括号 hash tag）。
