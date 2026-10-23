@@ -2,11 +2,12 @@
 知识点: Redis
 层级: 进阶
 适用版本: Redis 7
-更新日期: 2026-10-22
+更新日期: 2026-10-23
 关联:
   - 数据库知识点地图
   - MySQL-数据库
-  - Redis-集群标签:
+  - Redis-集群
+标签:
   - 数据库
   - 缓存
   - 实践
@@ -51,41 +52,25 @@ DEL key                        # 大 key 用 UNLINK（异步删，不阻塞）
 SCAN 0 MATCH "user:*" COUNT 1000  # 生产禁用 KEYS *
 ```
 
-## 持久化
+## 持久化（速记）
 
-- **RDB**：定时快照，恢复快，丢最近数据。`save 900 1`（900秒内1次写则快照）。
-- **AOF**：记录写命令，`appendfsync everysec`（每秒刷盘，折中之选）。
-- 生产一般 RDB+AOF 都开，AOF 优先恢复。
+RDB 定时快照（恢复快、丢快照后的数据）；AOF 记录写命令，`appendfsync everysec` 为折中；生产一般两者都开。深挖见专题篇：[Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)。
 
-## 缓存三大问题
+## 缓存三大问题（速记）
 
-### 缓存穿透（查不存在的 key，打爆 DB）
-- 布隆过滤器前置拦截。
-- 空值也缓存：`SET null_key "" EX 60`（短过期）。
+- **穿透**（查不存在的数据）：布隆过滤器 + 空值缓存短过期。
+- **击穿**（单热点 key 过期瞬间回源）：互斥锁只放一个回源，或逻辑过期 + 异步刷新。
+- **雪崩**（大量 key 同时过期/宕机）：过期时间加随机抖动 + 高可用 + 本地缓存兜底。
 
-### 缓存击穿（热点 key 过期瞬间，大量请求打 DB）
-- 热点 key 永不过期（后台异步更新）。
-- 互斥锁：只放一个请求去 DB，其他等。
+区分口径、逻辑过期与一致性方案见专题篇：[Redis 缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md)。
 
-### 缓存雪崩（大量 key 同时过期 / Redis 挂了）
-- 过期时间加随机值，打散。
-- Redis 集群+哨兵/Cluster 高可用；本地加一级进程内缓存（Caffeine）兜底。
+## 分布式锁（速记）
 
-## 分布式锁（重点）
+四件套：`SET key uuid NX PX 超时`、uuid 标识归属、Lua 比对后解锁、超时大于业务耗时；耗时不可控用 Redisson 看门狗，锁只做削峰、强一致靠 DB 兜底。深挖见上行专题篇。
 
-```java
-// 1. 加锁：SET key uuid NX PX 30000（值用 uuid 防误删）
-// 2. 业务
-// 3. 解锁：Lua 脚本比对 uuid 一致才 DEL（保证原子）
-String lua = "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end";
-```
-- 锁超时 < 业务耗时 → 锁提前释放：用 Redisson 看门狗自动续期，或业务做幂等。
-- 要求不高直接 Spring Integration / Redisson；自己手写只记住 **NX+PX+uuid+Lua** 四件套。
+## 内存淘汰策略（速记）
 
-## 内存淘汰策略
-
-`maxmemory-policy`：`noeviction`（默认，写满报错）/ `allkeys-lru` / `volatile-lru` / `allkeys-lfu`。
-缓存场景一般选 `allkeys-lru`，并设 `maxmemory`（比如 4GB），别让 Redis 吃光机器内存。
+缓存场景一般 `allkeys-lru` + 设 `maxmemory` 上限；默认 `noeviction` 写满报错。8 种策略的分组与选型见专题篇：[Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)。
 
 ## 常见坑
 
@@ -94,11 +79,6 @@ String lua = "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del'
 3. **pipeline**：批量操作一次 RTT，用 pipeline 别循环单条。
 4. **连接池**：Lettuce 默认够用，别每个请求 new 连接。
 5. **序列化**：Java 项目用 `GenericJackson2JsonRedisSerializer` 或 String，别用 JDK 原生序列化（臃肿且跨语言不可读）。
-
-## 待补充
-
-
-
 
 ## 疑难杂症
 
@@ -139,12 +119,9 @@ XPENDING orders g1                         # 查未确认的（掉线消费者�
 - 许可注意：Redis 2024 年后一度换 SSPL，2025-05 已改回 AGPL；纯自用/内网无影响，云上托管 Redis 注意合规。
 - 来源：https://redis.io/docs/latest/develop/whats-new/8-0/
 
-## Cluster 槽位与扩缩容
+## Cluster 槽位与扩缩容（导读）
 
-- 16384 个槽位按 CRC16(key) % 16384 分配，`{tag}` 花括号内相同才同槽（见疑难杂症 CROSSSLOT）。
-- 扩容：`redis-cli --cluster add-node` 加节点 → `reshard` 迁槽 → `rebalance`，槽是逐步搬的，在线不中断。
-- 缩容反向操作，先 `reshard` 把槽搬空再 `del-node`，直接下掉节点会丢槽。
-- 槽位没覆盖全（`cluster info` 看 `cluster_state:fail`）时整个集群拒绝写，先 `fix` 再查应用。
+16384 槽按 CRC16(key) % 16384 分配，多 key 同槽靠 `{tag}`；扩缩容走加节点 → `reshard` 迁槽 → `rebalance`。完整机制见专题篇：[Redis 集群与哨兵](数据库/Redis-集群.md)。
 
 ## Redisson 常用件（限流、信号量）
 
@@ -173,7 +150,7 @@ MEMORY DOCTOR                   # 一句话诊断
 ```
 
 - `mem_fragmentation_ratio` < 1 说明内存碎片严重（used 比 RSS 小），重启或等碎片整理。
-- 大 key 治理：拆（hash 分片）、压（序列化选 msgpack 不用 json）、限（value 别超 10KB）。
+- 碎片处理与大 key / 热 key 的发现和治理，见专题篇：[Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)。
 
 ## 基础知识补强
 

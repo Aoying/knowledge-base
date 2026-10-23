@@ -2,7 +2,7 @@
 知识点: MySQL 数据库
 层级: 进阶
 适用版本: MySQL 5.7 / 8.x
-更新日期: 2026-10-22
+更新日期: 2026-10-23
 关联:
   - 数据库知识点地图
   - MySQL-binlog
@@ -19,45 +19,20 @@
 
 > 每晚 20:30 自动补充完善。项目用 OceanBase MySQL 模式，兼容 MySQL 5.7 语法，绝大多数经验直接通用；OB 特有差异见文末。
 
-## 索引
+## 索引速记（深挖见专题篇）
 
-### 最左前缀原则
-```sql
--- 联合索引 (a, b, c)
-WHERE a=1 AND b=2          -- 走索引
-WHERE b=2 AND c=3          -- 不走（缺 a）
-WHERE a=1 AND c=3          -- 走 a 部分，c 不走
-```
+- **最左前缀**：联合索引 `(a, b, c)` 必须从最左列开始连续使用，缺 a 则 b、c 都用不上。
+- **失效速记**：索引列做函数/运算、`varchar` 列用数字查（隐式转换）、`LIKE '%xxx'`、OR 一边没索引、`!=`/`NOT IN`、优化器判断全表更快。
+- **覆盖索引**：查询列全在索引里就不回表；索引下推（ICP）能在索引层先过滤再回表。
+- **EXPLAIN 速看**：type 由好到差 `const` > `ref` > `range` > `index` > `ALL`，见 `ALL` 先警觉；key 为 NULL 是没用上；Extra 的 `Using index` 是好事，`Using filesort` / `Using temporary` 尽量消掉。
 
-### 索引失效的 6 个经典场景
-1. 对索引列做函数/运算：`WHERE DATE(create_time)='2024-01-01'` → 改范围查询。
-2. 隐式类型转换：`varchar` 列用数字查 `WHERE phone=138001` → 索引失效，必须加引号。
-3. `LIKE '%xxx'` 前缀模糊：改后缀 `LIKE 'xxx%'` 或上 ES。
-4. `OR` 两边有一边没索引。
-5. `!=` / `NOT IN`：一般不走索引。
-6. 优化器觉得全表更快（小表、过滤度极低）。
+原理、索引设计口诀、EXPLAIN 完整读法与慢 SQL 闭环见专题篇：[MySQL 索引与执行计划](数据库/MySQL-索引与执行计划.md)。
 
-### 覆盖索引与回表
-- `SELECT` 的列全在索引里 → 覆盖索引，不回表，最快。
-- 索引下推（ICP）：5.6+，在索引层先过滤再回表。
+## 慢查询排查速记
 
-## EXPLAIN 速看
-
-```sql
-EXPLAIN SELECT * FROM t_order WHERE user_id=1;
-```
-关键列：
-- **type**：`const` > `ref` > `range` > `index` > `ALL`。看到 `ALL` 先警觉。
-- **key**：实际用的索引；`NULL` = 没用上。
-- **rows**：预估扫描行数，越大越可疑。
-- **Extra**：`Using filesort` / `Using temporary` 尽量消掉；`Using index` 是好消息（覆盖索引）。
-
-## 慢查询排查流程
-
-1. 开慢查询日志：`slow_query_log=1`，`long_query_time=1`。
-2. `EXPLAIN` 看执行计划，先加索引解决 80% 问题。
-3. 索引加了还慢：看是不是**深分页** `LIMIT 1000000,20` → 改游标分页（记住上次 id，`WHERE id>xxx LIMIT 20`）。
-4. 再看：大事务、锁等待（`SHOW ENGINE INNODB STATUS`）、连接打满。
+1. 先开慢查询日志圈定 Top SQL，再用 `EXPLAIN` 看计划——完整流程见上行专题篇。
+2. **深分页**（总篇独有要点）：`LIMIT 1000000,20` 越翻越慢，改游标分页（`WHERE id>上次id LIMIT 20`）。
+3. 索引没问题还慢，再查大事务、锁等待（`SHOW ENGINE INNODB STATUS`）和连接数；事务与锁深挖见专题篇：[MySQL 事务与 MVCC](数据库/MySQL-事务与MVCC.md)。
 
 ## 常见坑
 
@@ -76,11 +51,6 @@ EXPLAIN SELECT * FROM t_order WHERE user_id=1;
 - 自增列行为与单机 MySQL 不同（不保证连续），主键优先雪花 ID。
 - 部分 MySQL 系统表/函数不支持，迁移 SQL 先在 OB 测试环境跑一遍。
 - 执行计划用 `EXPLAIN` 照常看，但分布式计划多了数据分发算子（EXCHANGE），关注点一样：先看有没有全表扫。
-
-## 待补充
-
-
-
 
 ## 疑难杂症
 
@@ -108,18 +78,9 @@ EXPLAIN SELECT * FROM t_order WHERE user_id=1;
 - OceanBase 用户注意：OceanBase MySQL 模式对标的是 5.7/8.0 语法子集，8.4 的新函数/新变量不一定兼容，联调时以 OceanBase 官方兼容性矩阵为准。
 - 来源：https://dev.mysql.com/doc/refman/8.4/en/mysql-releases.html
 
-## OceanBase 租户与资源单元
+## OceanBase 租户与资源单元（导读）
 
-```sql
--- OceanBase 的世界：集群 > 租户 > 数据库，和 MySQL 的"实例>库"不是一回事
-SHOW TENANT;                          -- 看当前租户
-SELECT * FROM oceanbase.DBA_OB_UNITS;  -- 资源单元（CPU/内存配额）
-```
-
-- **租户**是 OceanBase 的资源隔离单位：一个集群可以开多个租户（MySQL 租户、Oracle 租户），各租户 CPU/内存/磁盘配额独立。
-- **资源单元（UNIT）**：租户的最小资源粒度，扩容 = 加 UNIT，不是加机器。
-- 你在神农项目里连的是 MySQL 模式租户，`SHOW VARIABLES` 看到的是租户级变量，改 `ob_trx_timeout` 这类只影响当前租户。
-- 排障先看租户资源：`__all_virtual_server_stat` 看 CPU/内存水位，满了先扩 UNIT 再查 SQL。
+链条是集群 > 租户 > 数据库，不等于 MySQL 的"实例 > 库"：租户是资源隔离单位（配额独立），资源单元（UNIT）是最小粒度，扩容 = 加 UNIT。神农连的是 MySQL 模式租户，`SHOW VARIABLES` 是租户级变量（如 `ob_trx_timeout` 只影响当前租户）；排障先看 `DBA_OB_UNITS` 配额与租户水位。完整展开见专题篇：[OceanBase](数据库/OceanBase.md)。
 
 ## 分库分表中间件选型
 
