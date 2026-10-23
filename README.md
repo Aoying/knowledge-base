@@ -44,6 +44,8 @@
 - [Spring 事务](开发语言/Java/Spring-事务.md)
 - [Spring IOC 与 AOP](开发语言/Java/Spring-IOC与AOP.md)
 - [Spring Cache](开发语言/Java/Spring-Cache.md)
+- [Spring Security](开发语言/Java/Spring-Security.md)
+- [Netty](开发语言/Java/Netty.md)
 - [Quartz 定时任务](开发语言/Java/Quartz定时任务.md)
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
 - [Async 异步](开发语言/Java/Async-异步.md)
@@ -86,6 +88,7 @@
 - [SQLAlchemy](开发语言/Python/SQLAlchemy.md)
 - [FastAPI](开发语言/Python/FastAPI.md)
 - [Python 打包与环境管理](开发语言/Python/Python-打包与环境管理.md)
+- [Python 多进程与 GIL](开发语言/Python/Python-多进程与GIL.md)
 
 ### 其他语言
 
@@ -105,10 +108,13 @@
 - [OceanBase](数据库/OceanBase.md)
 - [Redis 缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md)
 - [Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)
+- [分布式事务](数据库/分布式事务.md)
 - [Elasticsearch](数据库/Elasticsearch.md)
 - [RocketMQ](消息队列/RocketMQ.md)
 - [Kafka 消息队列](消息队列/Kafka-消息队列.md)
 - [Kafka 与 RocketMQ 对比](消息队列/Kafka与RocketMQ对比.md)
+- [Kafka 消费者组与 Rebalance](消息队列/Kafka-消费者组与Rebalance.md)
+- [Kafka 生产者可靠性](消息队列/Kafka-生产者可靠性.md)
 - [消息可靠性](消息队列/消息可靠性.md)
 
 ## 工程实践
@@ -120,7 +126,7 @@
 - [Windows 常用命令](工程实践/Windows-常用命令.md)
 - [快捷键速查](工程实践/快捷键速查.md)
 - [Linux 与 Shell](工程实践/Linux与Shell.md)
-- [Flowable](工程实践/Flowable.md)
+- [Flowable](工程实践/Flowable.md)（汇总；子篇在 工程实践/Flowable/：多实例与网关、事件与监听器、历史与部署）
 - [CI/CD](工程实践/CICD.md)
 - [监控告警](工程实践/监控告警.md)
 - [单元测试与 Mock](工程实践/单元测试与Mock.md)
@@ -128,6 +134,7 @@
 - [JMeter 压测](工程实践/JMeter压测.md)
 - [Maven 与依赖管理](工程实践/Maven与依赖管理.md)
 - [Logback 与日志规范](工程实践/Logback与日志规范.md)
+- [REST 接口设计](工程实践/REST接口设计.md)
 - [前端开发](工程实践/前端开发.md)
 - [前端基础 HTML-CSS](工程实践/前端基础-HTML-CSS.md)
 
