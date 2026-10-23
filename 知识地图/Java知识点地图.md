@@ -8,6 +8,7 @@
 - 框架实战：[[Spring-Boot]]、[[MyBatis-Plus]]、[[Bean-Validation]]
 - Spring 深度：[[Spring-事务]]、[[Spring-IOC与AOP]]
 - 框架补件：[[Spring-Cache]]、[[Quartz定时任务]]、[[Java-IO与NIO]]
+- 网络与安全：[[Netty]]、[[Spring-Security]]
 - JVM 排错：[[JVM-故障排查]]（与 [[JVM-GC调优]] 配套）
 - 数据访问：[[Druid]]、[[多数据源]]
 - 语言进阶：[[Async-异步]]、[[Stream与Optional]]、[[虚拟线程]]
