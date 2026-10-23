@@ -57,7 +57,7 @@
 
 ## 4. 实战应用：小说引擎的长期记忆
 
-小说引擎把这套原则做成了数据库：Entity / EntityState / StateHistory 存人物与实体的当前状态和变更史，Relation 存关系，Timeline / Event 存事件序列，StoryFact 存已确立的剧情事实，ChapterContextService 在写每章前聚合出一份「世界状态上下文」给 LLM。这正是「状态外置 + 结构化写回 + 按需聚合检索」的完整形态，细节见 [小说创作引擎](../项目沉淀/小说创作引擎.md)。
+小说引擎把这套原则做成了数据库：Entity / EntityState / StateHistory 存人物与实体的当前状态和变更史，Relation 存关系，Timeline / Event 存事件序列，StoryFact 存已确立的剧情事实，ChapterContextService 在写每章前聚合出一份「世界状态上下文」给 LLM。这正是「状态外置 + 结构化写回 + 按需聚合检索」的完整形态，细节见 [小说创作引擎](项目沉淀/小说创作引擎.md)。
 
 而它当前最大的痛点也在这里：几百章尺度上，哪些旧事实该进上下文、伏笔状态怎么维护、过期状态如何不干扰新章——本质都是记忆系统的淘汰与检索问题，不是生成模型够不够大的问题。
 
