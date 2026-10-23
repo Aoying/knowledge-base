@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "开发语言/Java/JVM-类加载.md",
+                "file": "开发语言/Java/Java.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "JVM-类加载"
+              "title": "Java"
             }
           }
         ]
@@ -115,7 +115,7 @@
         }
       }
     ],
-    "currentTab": 0
+    "currentTab": 5
   },
   "right": {
     "id": "e29916749b71a433",
@@ -160,7 +160,7 @@
         "state": {
           "type": "outline",
           "state": {
-            "file": "维护规则.md",
+            "file": "开发语言/Java/Java.md",
             "followCursor": false,
             "showSearch": false,
             "searchQuery": ""
@@ -211,8 +211,10 @@
       "file-cleaner-redux:Clean files": false
     }
   },
-  "active": "af67408a5beb63a3",
+  "active": "e5f54ab26afc44ad",
   "lastOpenFiles": [
+    "工程实践/CICD.md",
+    "工程实践/监控告警.md",
     "开发语言/Java/JVM-类加载.md",
     "开发语言/Java/Java.md",
     "AI与大模型/微调入门-LoRA.md",
@@ -238,8 +240,6 @@
     "开发语言/Java/设计模式/装饰器模式.md",
     "开发语言/Python/SQLAlchemy.md",
     "开发语言/Python/Python-打包与环境管理.md",
-    "开发语言/Python/FastAPI.md",
-    "开发语言/Java/Spring-Cache.md",
     "开发语言/Java/设计模式",
     "开发语言/Java/集合",
     "开发语言/Java/并发",
