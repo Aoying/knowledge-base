@@ -2,8 +2,9 @@
 知识点: Elasticsearch
 层级: 进阶
 适用版本: Elasticsearch 7 / 8
-更新日期: 2026-10-22
+更新日期: 2026-10-24
 关联:
+  - ES-倒排索引与查询
   - 数据库知识点地图
   - MySQL-数据库
 标签:
@@ -14,6 +15,8 @@
 ---
 
 # Elasticsearch
+
+> 本篇是 ES 的汇总与索引：概念全景、选型、集群运维、写入与聚合实战留在本篇；搜索内核部分（倒排索引、分析器、mapping、Query DSL、相关性打分）已拆为独立篇（见下方索引），正文不再重复。
 
 分布式搜索与分析引擎，基于 Lucene；核心能力是全文检索，靠倒排索引实现毫秒级关键词搜索。
 
@@ -28,8 +31,12 @@
 | shard（分片） | 分库分表 |
 | replica（副本） | 主从复制 |
 
-- **倒排索引**：传统索引是"文档→词"，倒排是"词→文档列表"，关键词搜索时查表求交集，不用扫全表。
-- **mapping**：定义字段类型；`text` 做分词全文搜索，`keyword` 做精确匹配/聚合/排序。
+- **倒排索引**：传统索引是"文档→词"，倒排是"词→文档列表"，关键词搜索时查表求交集，不用扫全表。结构细节（词典、倒排列表、词频与位置）见子篇。
+- **mapping**：定义字段类型；`text` 做分词全文搜索，`keyword` 做精确匹配/聚合/排序。类型选型与动态映射纪律见子篇。
+
+## 子篇索引
+
+- [ES-倒排索引与查询](数据库/ES-倒排索引与查询.md)：倒排表结构（词典+倒排列表）、分析器三段链与中文分词、mapping 要点与字段类型速查、Query DSL（match/term/bool/range 与 query/filter 上下文）、BM25 打分的三个直觉——搜索效果不对、查不到、排序怪，先去这篇。
 
 ## 快速上手
 
@@ -42,14 +49,6 @@ curl -X PUT "localhost:9200/books/_doc/1" -H 'Content-Type: application/json' -d
 curl -X GET "localhost:9200/books/_search" -H 'Content-Type: application/json' -d'
 {"query":{"match":{"title":"Java"}}}'
 ```
-
-## Query DSL 常用
-
-- `match`：全文搜索（先分词再匹配）
-- `term`：精确匹配（不分词，查 keyword 字段用它）
-- `bool`：组合查询（must/should/must_not/filter）
-- `range`：范围，如 `{"range":{"year":{"gte":2000}}}`
-- `aggs`：聚合，相当于 GROUP BY / AVG / MAX
 
 ## 与 MySQL 对比
 
@@ -157,12 +156,10 @@ GET /logs/_search
 
 ### 核心概念与术语
 
-- 心智模型：ES = 分布式文档库 + 搜索引擎；文档是 JSON，进索引时被「分析」成词条建倒排索引，查询就是拿词去倒排表里查文档集合。
+- 心智模型：ES = 分布式文档库 + 搜索引擎；文档是 JSON，进索引时被「分析」成词条建倒排索引，查询就是拿词去倒排表里查文档集合。分析与倒排的细节见 [ES-倒排索引与查询](数据库/ES-倒排索引与查询.md)。
 - 集群与节点：一个 cluster 由多个 node 组成；节点分工——master 负责集群元数据（建索引、分片分配），data node 存数据跑查询，coordinating node 只转发请求。单节点时一个进程把活全干了。
 - 分片再认识：一个 index 的数据被切成若干 primary shard 分散到各节点，每个主分片可有若干 replica shard 做备份；主分片数建索引时定死（改要重建），副本数随时可改。
 - 集群健康三色：green = 主分片和副本全就位；yellow = 主分片齐、副本缺（能读写，但没冗余，单节点集群常年 yellow 是因为副本没地方放，把副本设 0 即转 green）；red = 有主分片缺失，部分数据不可查，先救集群别查业务。
-- 分析器（analyzer）：写入和查询都要过它，流程 = 字符过滤 → 分词器切词 → 词元过滤（转小写、停用词、同义词）；英文默认 standard 分词器按空格/标点切，中文必须换 IK 等中文分词器，否则整句被当一个词，搜什么都搜不到。
-- 相关性得分 _score：match 查询会按词频/逆文档频率算每篇文档和查询的相似度排序，默认结果按得分从高到低；term 这类精确查询通常不打分（在 filter 上下文里）。
 
 ### 基础语法与用法
 
@@ -172,55 +169,23 @@ curl "localhost:9200/_cluster/health?pretty"        # 三色状态、分片数
 curl "localhost:9200/_cat/indices?v"                 # 各索引文档数、大小、健康
 curl "localhost:9200/_cat/shards?v"                  # 分片分布在哪些节点
 
-# 建索引：settings + mappings 一次定清（事后改 mapping 类型要 reindex）
+# 建索引：settings 在这里定，mappings 的字段类型写法见子篇（定错类型要 reindex）
 curl -X PUT "localhost:9200/books" -H 'Content-Type: application/json' -d'
-{
-  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },
-  "mappings": { "properties": {
-    "title":  { "type": "text", "analyzer": "ik_max_word" },
-    "author": { "type": "keyword" },
-    "year":   { "type": "integer" },
-    "price":  { "type": "double" },
-    "pub_date": { "type": "date", "format": "yyyy-MM-dd" }
-  } }
-}'
+{ "settings": { "number_of_shards": 1, "number_of_replicas": 0 },
+  "mappings": { "properties": { "title": { "type": "text", "analyzer": "ik_max_word" } } } }'
 
 # 文档 CRUD 补全
 curl "localhost:9200/books/_doc/1"                              # 按 ID 取
 curl -X POST "localhost:9200/books/_update/1" -H 'Content-Type: application/json' -d'
 {"doc": {"year": 2008}}'                                        # 局部更新（整篇 PUT 是覆盖）
 curl -X DELETE "localhost:9200/books/_doc/1"                    # 删一篇；删整个索引也是 DELETE，打错名字很危险，先 GET 确认再删
-
-# 查询上下文 filter：不打分、可缓存，精确条件都放这里（比 must 快）
+# 带条件查询（bool+filter 的完整写法与各查询子句讲解在子篇）：
 curl -X GET "localhost:9200/books/_search" -H 'Content-Type: application/json' -d'
-{
-  "query": { "bool": {
-    "must":   { "match": { "title": "Java" } },
-    "filter": [
-      { "term":  { "author": "Bruce Eckel" } },
-      { "range": { "year": { "gte": 2000, "lte": 2020 } } }
-    ]
-  } },
-  "sort": [ { "year": { "order": "desc" } } ],
-  "from": 0, "size": 10,
-  "highlight": { "fields": { "title": {} } }
-}'
-# 存在判断：exists；多值任一命中：terms；短语不拆：match_phrase
+{ "query": { "bool": { "must": { "match": { "title": "Java" } },
+    "filter": [ { "term": { "author": "Bruce Eckel" } } ] } },
+  "sort": [ { "year": { "order": "desc" } } ], "from": 0, "size": 10,
+  "highlight": { "fields": { "title": {} } } }'
 ```
-
-- 字段类型再记一遍选型口诀：要搜 → text；要等值/聚合/排序 → keyword；两者都要就建多字段 `"fields": {"kw": {"type": "keyword"}}`，查时用 `title` 搜、用 `title.kw` 聚合。
-- 通配与正则查询（wildcard/regexp）不走倒排加速，数据量大时是全扫，能用前缀/分词解决的别用。
-
-字段类型补全速查（建 mapping 时对号入座）：
-
-| 类型 | 存什么 | 注意 |
-|---|---|---|
-| long / integer | 整数 | ID 不要用数值型存「可能带前导 0」的编号，用 keyword |
-| double / scaled_float | 小数 | 钱用 scaled_float（放大成整数存）或在 MySQL 侧算清 |
-| boolean | true/false | 只存真假，别拿字符串 "true" 冒充 |
-| date | 时间 | 格式在 mapping 写全，写入端统一 |
-| ip / geo_point | IP、经纬度 | 用了专有类型才能做 IP 段查询、地理距离查询 |
-| object / nested | 嵌套 JSON | 数组对象要按元素独立检索必须用 nested，普通 object 会把元素字段揉在一起查错 |
 
 ```bash
 # _bulk 批量写法要点：每篇文档两行（动作行 + 数据行），结尾必须有换行
@@ -242,17 +207,14 @@ curl "localhost:9200/books/_count" -H 'Content-Type: application/json' -d'
 - 近实时（NRT）：文档写入先进内存缓冲，refresh 后（默认 1s）生成可搜索的段，所以是「近」实时；急查刚写的数据可用 `?refresh=wait_for`，但别在高频写入里这么用。
 - 段（segment）不可变：Lucene 把每次 refresh 的数据写成一个不可变段文件，查询查所有段的并集；删除只是打标记，后台合并（merge）时才真正清掉——这解释了为什么频繁更新又贵又胀。
 - 写入走主分片、查询可打到副本：副本不只是备份，也分担读流量；写放大和读能力都随副本数线性变化。
-- 打分只在 query 上下文：同一条件放 must 算分、放 filter 不算分，结果集相同但性能和排序不同，精确条件一律先考虑 filter。
 
 ### 新手易错点
 
-- term 查 text 字段查不到：text 已被分词成多个词，term 拿整串去对单个词必然对不上；精确查要查 keyword 字段或多字段的 .kw。
-- 靠动态映射裸奔上线：不写 mapping 让 ES 猜类型，第一个文档把 year 存成字符串，后面全乱；且字符串默认同时建成 text+keyword，长文本白占一份倒排。上线前显式写 mapping。
-- 中文不装中文分词器：standard 分词器把中文整句切成单字或整段，搜索效果全废，建索引时就定好 analyzer。
 - 把 ES 当主库用：没有真正的多文档事务、更新代价高，主数据放 MySQL，ES 只做可重建的搜索副本（重建靠全量导入或同步链路）。
 - size 设巨大一次全取：单次查询默认最多返回 10000 条（max_result_window），要导全量用 scroll / search_after 游标，别调大窗口硬扛。
 - 日期字段格式混写：同一字段一会儿 `2026-10-22` 一会儿时间戳，会写入失败或排序错乱，mapping 里把 format 写全、写入端统一格式。
 - 单节点副本留 1：副本无节点可放，集群常年 yellow 还吓人一跳；单节点测试环境副本设 0。
+- 搜索类易错点（term 查 text 查不到、动态映射裸奔、中文不装分词器）已随查询内容拆到 [ES-倒排索引与查询](数据库/ES-倒排索引与查询.md)，排查搜索问题先看那篇。
 
 ## 实战案例（项目沉淀）
 
