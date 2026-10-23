@@ -10,7 +10,7 @@
 - 语言进阶：[[Async-异步]]、[[Stream与Optional]]、[[虚拟线程]]
 - JVM：[[JVM-GC调优]]、[[JVM-内存模型]]、[[JVM-类加载]]
 - 集合：[[HashMap]]、[[ConcurrentHashMap]]、[[ArrayList与扩容]]、[[LinkedHashMap与LRU]]、[[TreeMap与红黑树]]、[[Queue与Deque]]、[[CopyOnWriteArrayList]]（`开发语言/Java/集合/`）
-- 并发：[[Java-并发编程]]（位于 开发语言/Java/并发/）
+- 并发：[[Java-并发编程]]（汇总，位于 `开发语言/Java/并发/`）；子篇：[[线程池]]、[[synchronized与锁]]、[[volatile与JMM]]、[[CAS与原子类]]、[[AQS]]、[[ThreadLocal]]
 - 设计：[[设计模式]]（汇总；26 篇模式独立文档在 `开发语言/Java/设计模式/` 子目录）
 - 工作流：[[Flowable]]（文件在工程实践，Java 体系内使用）
 - 项目案例：[[神农-e贷-法人版]]、[[神农-e贷-审批流]]、[[督办系统]]
