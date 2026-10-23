@@ -27,5 +27,7 @@
   "file-recovery": true,
   "publish": false,
   "sync": true,
-  "bases": true
+  "bases": true,
+  "markdown-importer": false,
+  "webviewer": false
 }

@@ -1,6 +1,22 @@
 {
   "recentFiles": [
     {
+      "basename": "Git-运维与工具",
+      "path": "工程实践/Git-运维与工具.md"
+    },
+    {
+      "basename": "ArrayList与扩容",
+      "path": "开发语言/Java/集合/ArrayList与扩容.md"
+    },
+    {
+      "basename": "Java",
+      "path": "开发语言/Java/Java.md"
+    },
+    {
+      "basename": "CICD",
+      "path": "工程实践/CICD.md"
+    },
+    {
       "basename": "Linux与Shell",
       "path": "工程实践/Linux与Shell.md"
     },
