@@ -9,6 +9,9 @@
 - [[pydantic]]：数据校验（LLM 输出 JSON 落库前）
 - [[dataclass与typing]]：dataclass + typing，告别 dict 满天飞
 - [[pytest]]：测试实战
+- [[SQLAlchemy]]：小说引擎的 ORM 与数据层
+- [[FastAPI]]：给 Agent 与本地工具做服务
+- [[Python-打包与环境管理]]：venv、pyproject、uv
 - 开发语言同层：[[JavaScript]]、[[Lua]]、[[正则表达式]]
 
 ## 学习路径
@@ -18,6 +21,7 @@
   → [[dataclass与typing]] → [[pydantic]]
   → [[asyncio]]
   → [[pytest]]
+  → [[SQLAlchemy]] → [[FastAPI]]
   → [[Agent]] / [[RAG-Skills]]（Python + LLM 应用方向）
 ```
 

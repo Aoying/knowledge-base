@@ -1,0 +1,111 @@
+---
+知识点: FastAPI
+层级: 基础
+适用版本: FastAPI（基于 Starlette + pydantic v2）
+更新日期: 2026-10-23
+关联:
+  - Python
+  - pydantic
+  - asyncio
+标签:
+  - Python
+  - 实践
+---
+
+# FastAPI
+
+## 1. 核心概念
+
+FastAPI 是基于 Starlette（ASGI 框架）+ pydantic 的现代 Web 框架，核心卖点是**用类型注解同时驱动三件事**：请求参数解析、数据校验、OpenAPI 文档生成。函数签名写清楚类型，框架就知道怎么收参、怎么验、文档怎么写，不再手写一套、文档另维护一套。
+
+与 Flask 的分工判断：一次性脚本、内部小工具 Flask 够用；要长期维护、要给前端/Agent 当接口契约、要异步并发的服务，FastAPI 更合适。小说引擎的落点就是后者——把章节分析、RAG 检索、矛盾检测包成本地 HTTP 服务（`127.0.0.1` 监听），UI 或其他 Agent 进程通过接口调用，而不是全塞在一个进程里。
+
+启动与运行：开发用 `fastapi dev` / `uvicorn app:app --reload`，本质都是 uvicorn 这个 ASGI 服务器在跑；版本与命令细节以官方文档为准。
+
+## 2. 路由与参数：注解即契约
+
+```python
+from fastapi import FastAPI, Query
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class ChapterIn(BaseModel):
+    project_id: int
+    number: int
+    content: str
+
+@app.get("/chapters/{chapter_id}")
+def get_chapter(chapter_id: int, project_id: int = Query(...)):
+    ...
+
+@app.post("/chapters/analyze", status_code=202)
+def analyze(payload: ChapterIn):
+    ...
+```
+
+- 路径参数、查询参数、请求体由**参数位置和类型自动区分**：单值类型是查参，`BaseModel` 是请求体，不用手写解析。
+- 校验失败自动返回 422 + 结构化错误清单（就是 pydantic 的 `errors()` 格式），调用方能直接读。请求模型上加 `model_config = ConfigDict(extra="forbid")`，多余字段直接拒，和 LLM 结构化输出同一套纪律。
+- 响应侧用 `response_model=` 声明出参模型：框架按它过滤字段（密码、内部状态不会顺手漏出去），文档也按出参画。
+
+## 3. 依赖注入：Depends
+
+FastAPI 的依赖注入是它区别于 Flask 的关键机制：把"每请求都要做的事"——拿 DB Session、读配置、校验令牌——声明成依赖，框架按请求自动执行并注入：
+
+```python
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+def get_session():
+    with SessionLocal() as session:   # 见 SQLAlchemy 篇
+        yield session                 # yield 型依赖：请求结束自动收尾
+
+@app.get("/entities")
+def list_entities(session: Session = Depends(get_session)):
+    ...
+```
+
+- 依赖可嵌套（依赖里再依赖）、可复用、可用 `dependency_overrides` 在测试里整体替换成假实现——这点对 pytest 非常友好，不用打补丁。
+- 类比 Spring 的 `@Autowired` + 请求作用域 Bean：`yield` 前是"构造 + 注入"，yield 后是 `@PreDestroy`。从 Java 过来按这个模型理解最快。
+
+## 4. pydantic 衔接
+
+FastAPI 的入参/出参模型就是 pydantic `BaseModel`，与 [pydantic 篇](开发语言/Python/pydantic.md) 是同一套：
+
+- 请求模型管**进系统的数据形状**，响应模型管**出系统的形状**，两者分开定义，别用一个模型双向共用（落库字段、内部字段迟早要分家）。
+- 引擎的分析接口可以复用章节分析的 pydantic 模型当请求体——但注意分工：FastAPI 层校验的是"调用方传的形状"，LLM 输出的校验在服务层内部，两个边界不要合并成一次校验。
+- 配置走 `pydantic-settings` 的 `BaseSettings` 并缓存成单例依赖（`@lru_cache`），别每个请求重新读环境变量。
+
+## 5. 异步端点与阻塞坑（最重要的一节）
+
+路由函数两种写法，选错就丢并发：
+
+- `async def` 端点跑在事件循环上，**里面绝不能有阻塞调用**：同步 SQLAlchemy Session、同步 `requests`、本地 Ollama 的同步 HTTP 客户端、长时间 CPU 计算（如大文本分块）——任何一个都会把整个事件循环冻住，所有请求一起卡。
+- `def`（同步）端点框架会自动丢到线程池跑，阻塞只占一个线程，不冻全局。**引擎这类以同步 SQLAlchemy + 同步 Ollama 调用为主的服务，端点默认写同步 `def` 是更稳的选择**，别为了"用了 FastAPI 就该全异步"硬上 async。
+- 真要 async：数据库换异步驱动（aiosqlite + AsyncSession）、HTTP 换 `httpx.AsyncClient`，整条链路全异步才有意义；混一半是最坏状态——async 端点里藏着同步调用，压测才暴露。
+- CPU 密集且耗时的活（整章分析、embedding 批处理）本质不该挂在请求线程里等：接口收下任务返回 202 + 任务 id，后台执行，调用方轮询或回调。这与 [asyncio 篇](开发语言/Python/asyncio.md) 的任务编排是同一件事，HTTP 层只是入口。
+
+## 6. 给 Agent / 本地工具做服务的落点
+
+- **本地优先、只绑回环**：引擎服务监听 `127.0.0.1` 即可，不暴露局域网；真要跨机调用再加令牌校验依赖，不要默认裸奔 `0.0.0.0`。
+- **接口即工具**：给 Agent 调的接口粒度按"一个完整动作"设计（提交章节分析、查实体当前状态、跑一次矛盾检测），返回结构化 JSON（pydantic 出参模型保证形状稳定），Agent 侧就能把它当 Tool Calling 的一个工具直接对接——参数 schema 从 OpenAPI 文档自动生成，不用手写第二份。
+- **长任务给进度**：分析类接口返回任务 id 后，提供状态查询端点（排队/运行/完成/失败 + 错误信息），失败原因结构化返回，别让调用方只能靠超时猜。
+- **文档即契约**：`/docs` 的交互文档由注解自动生成，改了模型就同步变；拿它当与调用方的契约基准，不再另写接口文档（与知识库里 OpenAPI 篇的思路一致）。
+
+## 7. 常见误区
+
+- **async 端点里写同步数据库/HTTP 调用**：见第 5 节，本框架第一大坑。
+- **在路由函数里写业务逻辑**：路由只做收参、调 Service、返回；业务仍归 ChapterService 这类服务层（与引擎现有分层一致），否则接口一多逻辑就散。
+- **全局可变状态存请求间数据**：模块级 dict 存"当前项目"之类状态，多 worker/多请求立刻串数据；请求级状态走依赖注入或显式参数。
+- **异常裸抛给框架默认 500**：业务异常（如章节不存在）定义异常处理器返回明确状态码与结构化信息，调用方是程序不是人，错误契约和成功契约一样重要。
+
+## 8. 关联知识
+
+- [Python](开发语言/Python/Python.md)：语言基础与总索引
+- [pydantic 数据校验](开发语言/Python/pydantic.md)：入参/出参模型与校验机制的底座
+- [asyncio](开发语言/Python/asyncio.md)：事件循环、阻塞与任务编排，理解第 5 节的前置
+- [SQLAlchemy](开发语言/Python/SQLAlchemy.md)：依赖注入里每请求 Session 的来源
+
+## 9. 一句话总结
+
+FastAPI = 注解即契约的 ASGI 框架：pydantic 管形状、Depends 管每请求的资源、同步/异步选对了它就稳，选错了它就卡。
