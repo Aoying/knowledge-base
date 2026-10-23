@@ -25,6 +25,12 @@
 - [RAG Skills](AI与大模型/RAG-Skills.md)
 - [Agent 开发 Skills](AI与大模型/Agent-开发-Skills.md)
 - [开发工作流 Skills](AI与大模型/开发工作流-Skills.md)
+- [Embedding 与向量数据库](AI与大模型/Embedding与向量数据库.md)
+- [本地部署与 Ollama](AI与大模型/本地部署与Ollama.md)
+- [Prompt 工程](AI与大模型/Prompt-工程.md)
+- [结构化输出与 JSON 约束](AI与大模型/结构化输出与JSON约束.md)
+- [Agent 记忆系统](AI与大模型/Agent-记忆系统.md)
+- [多 Agent 协作](AI与大模型/多Agent协作.md)
 
 ## 开发语言
 
@@ -32,6 +38,8 @@
 
 - [Java](开发语言/Java/Java.md)：语言基础与总索引
 - [Spring Boot](开发语言/Java/Spring-Boot.md)
+- [Spring 事务](开发语言/Java/Spring-事务.md)
+- [Spring IOC 与 AOP](开发语言/Java/Spring-IOC与AOP.md)
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
 - [Async 异步](开发语言/Java/Async-异步.md)
 - [Bean Validation](开发语言/Java/Bean-Validation.md)
@@ -42,10 +50,22 @@
 - [JVM GC 调优](开发语言/Java/JVM-GC调优.md)
 - [HashMap](开发语言/Java/集合/HashMap.md)
 - [ConcurrentHashMap](开发语言/Java/集合/ConcurrentHashMap.md)
+- [ArrayList 与扩容](开发语言/Java/集合/ArrayList与扩容.md)
+- [LinkedHashMap 与 LRU](开发语言/Java/集合/LinkedHashMap与LRU.md)
+- [TreeMap 与红黑树](开发语言/Java/集合/TreeMap与红黑树.md)
+- [Queue 与 Deque](开发语言/Java/集合/Queue与Deque.md)
+- [CopyOnWriteArrayList](开发语言/Java/集合/CopyOnWriteArrayList.md)
 - [JVM 内存模型](开发语言/Java/JVM-内存模型.md)
 - [JVM 类加载](开发语言/Java/JVM-类加载.md)
-- [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)
-- [设计模式](开发语言/Java/设计模式.md)
+- [JVM 故障排查](开发语言/Java/JVM-故障排查.md)
+- [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)（汇总）
+- [线程池](开发语言/Java/并发/线程池.md)
+- [synchronized 与锁](开发语言/Java/并发/synchronized与锁.md)
+- [volatile 与 JMM](开发语言/Java/并发/volatile与JMM.md)
+- [CAS 与原子类](开发语言/Java/并发/CAS与原子类.md)
+- [AQS](开发语言/Java/并发/AQS.md)
+- [ThreadLocal](开发语言/Java/并发/ThreadLocal.md)
+- [设计模式](开发语言/Java/设计模式.md)（汇总；26 篇模式独立文档在 开发语言/Java/设计模式/ 子目录）
 
 ### Python（开发语言/Python/，按知识点拆分）
 
@@ -70,10 +90,16 @@
 - [Redis](数据库/Redis.md)
 - [Redis 集群与哨兵](数据库/Redis-集群.md)
 - [分库分表](数据库/分库分表.md)
+- [MySQL 索引与执行计划](数据库/MySQL-索引与执行计划.md)
+- [MySQL 事务与 MVCC](数据库/MySQL-事务与MVCC.md)
+- [OceanBase](数据库/OceanBase.md)
+- [Redis 缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md)
+- [Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)
 - [Elasticsearch](数据库/Elasticsearch.md)
 - [RocketMQ](消息队列/RocketMQ.md)
 - [Kafka 消息队列](消息队列/Kafka-消息队列.md)
 - [Kafka 与 RocketMQ 对比](消息队列/Kafka与RocketMQ对比.md)
+- [消息可靠性](消息队列/消息可靠性.md)
 
 ## 工程实践
 
@@ -87,6 +113,9 @@
 - [Flowable](工程实践/Flowable.md)
 - [CI/CD](工程实践/CICD.md)
 - [监控告警](工程实践/监控告警.md)
+- [单元测试与 Mock](工程实践/单元测试与Mock.md)
+- [OpenAPI 接口文档](工程实践/OpenAPI接口文档.md)
+- [JMeter 压测](工程实践/JMeter压测.md)
 - [前端开发](工程实践/前端开发.md)
 - [前端基础 HTML-CSS](工程实践/前端基础-HTML-CSS.md)
 
@@ -114,6 +143,7 @@
 - [交行企业网银](项目沉淀/交行企业网银.md)
 - [重庆文旅大数据](项目沉淀/重庆文旅大数据.md)
 - [解抵押平台](项目沉淀/解抵押平台.md)
+- [小说创作引擎](项目沉淀/小说创作引擎.md)（个人项目）
 
 ## 效率工具
 
