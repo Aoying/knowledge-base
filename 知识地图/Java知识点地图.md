@@ -6,6 +6,8 @@
 
 - 语言基础：[[Java]]（含基础知识补强、排查三板斧、疑难杂症）
 - 框架实战：[[Spring-Boot]]、[[MyBatis-Plus]]、[[Bean-Validation]]
+- Spring 深度：[[Spring-事务]]、[[Spring-IOC与AOP]]
+- JVM 排错：[[JVM-故障排查]]（与 [[JVM-GC调优]] 配套）
 - 数据访问：[[Druid]]、[[多数据源]]
 - 语言进阶：[[Async-异步]]、[[Stream与Optional]]、[[虚拟线程]]
 - JVM：[[JVM-GC调优]]、[[JVM-内存模型]]、[[JVM-类加载]]
