@@ -31,6 +31,9 @@
 - [结构化输出与 JSON 约束](AI与大模型/结构化输出与JSON约束.md)
 - [Agent 记忆系统](AI与大模型/Agent-记忆系统.md)
 - [多 Agent 协作](AI与大模型/多Agent协作.md)
+- [模型评测方法](AI与大模型/模型评测方法.md)
+- [推理框架对比](AI与大模型/推理框架对比.md)
+- [微调入门 LoRA](AI与大模型/微调入门-LoRA.md)
 
 ## 开发语言
 
@@ -40,6 +43,8 @@
 - [Spring Boot](开发语言/Java/Spring-Boot.md)
 - [Spring 事务](开发语言/Java/Spring-事务.md)
 - [Spring IOC 与 AOP](开发语言/Java/Spring-IOC与AOP.md)
+- [Spring Cache](开发语言/Java/Spring-Cache.md)
+- [Quartz 定时任务](开发语言/Java/Quartz定时任务.md)
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
 - [Async 异步](开发语言/Java/Async-异步.md)
 - [Bean Validation](开发语言/Java/Bean-Validation.md)
@@ -58,6 +63,8 @@
 - [JVM 内存模型](开发语言/Java/JVM-内存模型.md)
 - [JVM 类加载](开发语言/Java/JVM-类加载.md)
 - [JVM 故障排查](开发语言/Java/JVM-故障排查.md)
+- [JVM 字节码与 JIT](开发语言/Java/JVM-字节码与JIT.md)
+- [Java IO 与 NIO](开发语言/Java/Java-IO与NIO.md)
 - [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)（汇总）
 - [线程池](开发语言/Java/并发/线程池.md)
 - [synchronized 与锁](开发语言/Java/并发/synchronized与锁.md)
@@ -76,6 +83,9 @@
 - [pytest](开发语言/Python/pytest.md)
 - [装饰器](开发语言/Python/装饰器.md)
 - [生成器](开发语言/Python/生成器.md)
+- [SQLAlchemy](开发语言/Python/SQLAlchemy.md)
+- [FastAPI](开发语言/Python/FastAPI.md)
+- [Python 打包与环境管理](开发语言/Python/Python-打包与环境管理.md)
 
 ### 其他语言
 
@@ -116,6 +126,8 @@
 - [单元测试与 Mock](工程实践/单元测试与Mock.md)
 - [OpenAPI 接口文档](工程实践/OpenAPI接口文档.md)
 - [JMeter 压测](工程实践/JMeter压测.md)
+- [Maven 与依赖管理](工程实践/Maven与依赖管理.md)
+- [Logback 与日志规范](工程实践/Logback与日志规范.md)
 - [前端开发](工程实践/前端开发.md)
 - [前端基础 HTML-CSS](工程实践/前端基础-HTML-CSS.md)
 
