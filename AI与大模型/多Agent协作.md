@@ -12,7 +12,6 @@
   - Agent
   - 多Agent
   - 原理
-  - 实践
 ---
 
 # 多 Agent 协作
