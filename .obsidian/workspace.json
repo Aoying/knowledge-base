@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "3e641fc7b9aef6dd",
+        "id": "62da8ad94ecc6af7",
         "type": "tabs",
         "children": [
           {
-            "id": "6082294a76654d1f",
+            "id": "1b634f568c00c4b9",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
-              "icon": "lucide-file",
-              "title": "新标签页"
+              "type": "split-diff-view",
+              "state": {
+                "aFile": ".obsidian/workspace.json",
+                "bFile": ".obsidian/workspace.json",
+                "aRef": ""
+              },
+              "icon": "diff",
+              "title": "Diff: workspace.json  (Working Tree)"
             }
           }
         ]
@@ -210,6 +214,6 @@
       "zenboard:Zenboard: Open dashboard": false
     }
   },
-  "active": "ef6dedfcd6aa6758",
+  "active": "1b634f568c00c4b9",
   "lastOpenFiles": []
 }
