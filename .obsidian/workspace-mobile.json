@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "AI与大模型/微调入门-LoRA.md",
+                "file": "开发语言/Java/JVM-类加载.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "微调入门-LoRA"
+              "title": "JVM-类加载"
             }
           }
         ]
@@ -211,8 +211,11 @@
       "file-cleaner-redux:Clean files": false
     }
   },
-  "active": "e5f54ab26afc44ad",
+  "active": "af67408a5beb63a3",
   "lastOpenFiles": [
+    "开发语言/Java/JVM-类加载.md",
+    "开发语言/Java/Java.md",
+    "AI与大模型/微调入门-LoRA.md",
     "开发语言/Java/Java-泛型与类型擦除.md",
     "开发语言/Java/Java-反射与注解.md",
     "工程实践/Git-运维与工具.md",
@@ -237,9 +240,6 @@
     "开发语言/Python/Python-打包与环境管理.md",
     "开发语言/Python/FastAPI.md",
     "开发语言/Java/Spring-Cache.md",
-    "开发语言/Java/Quartz定时任务.md",
-    "开发语言/Java/JVM-字节码与JIT.md",
-    "工程实践/Maven与依赖管理.md",
     "开发语言/Java/设计模式",
     "开发语言/Java/集合",
     "开发语言/Java/并发",
