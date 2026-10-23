@@ -70,7 +70,7 @@ raise StructuredOutputError(...)  # 超限：落盘原始输出 + 报错，人�
 
 ## 4. 实战应用
 
-小说引擎的章节分析链路就是这条管线的使用方（项目全貌见 [小说创作引擎](../项目沉淀/小说创作引擎.md)）：LLM 分析一章后输出 entities / entity_changes / relations / events / facts / rules 六类结构，直接回写 SQLite。这类「输出即入库」的场景里，业务校验尤其关键——比如 entity_changes 引用的实体必须已在 Entity 表中存在、relations 两端必须可解析，查不过就不许落库，宁可整章分析失败重跑，不让半份脏数据进去。长篇是几百章累积的，一章的脏数据会在几十章后才以矛盾形式爆出来。
+小说引擎的章节分析链路就是这条管线的使用方（项目全貌见 [小说创作引擎](项目沉淀/小说创作引擎.md)）：LLM 分析一章后输出 entities / entity_changes / relations / events / facts / rules 六类结构，直接回写 SQLite。这类「输出即入库」的场景里，业务校验尤其关键——比如 entity_changes 引用的实体必须已在 Entity 表中存在、relations 两端必须可解析，查不过就不许落库，宁可整章分析失败重跑，不让半份脏数据进去。长篇是几百章累积的，一章的脏数据会在几十章后才以矛盾形式爆出来。
 
 ## 5. 常见误区
 
