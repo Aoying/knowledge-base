@@ -11,6 +11,7 @@
 - [[pytest]]：测试实战
 - [[SQLAlchemy]]：小说引擎的 ORM 与数据层
 - [[Python-多进程与GIL]]：GIL 与线程/进程/协程选型
+- [[Python-日志与HTTP客户端]]：logging 体系与调 Ollama 的 HTTP 姿势
 - [[FastAPI]]：给 Agent 与本地工具做服务
 - [[Python-打包与环境管理]]：venv、pyproject、uv
 - 开发语言同层：[[JavaScript]]、[[Lua]]、[[正则表达式]]
