@@ -42,6 +42,8 @@
 - [JVM 类加载](开发语言/Java/JVM-类加载.md)
 - [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)
 - [设计模式](开发语言/Java/设计模式.md)
+- [Java-反射与注解](开发语言/Java/Java-反射与注解.md)
+- [Java-泛型与类型擦除](开发语言/Java/Java-泛型与类型擦除.md)
 
 原 Java.md 中的「Flowable 实战」章节已归并到 [Flowable](工程实践/Flowable.md)。
 
