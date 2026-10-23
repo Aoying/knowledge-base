@@ -11,6 +11,8 @@
 
 - Agent 进阶：[[LangGraph]]、[[MCP]]、[[Tool-Calling]]
 - RAG 进阶：[[RAG-评测与分块策略]]
+- 基础与工程：[[Embedding与向量数据库]]、[[本地部署与Ollama]]、[[Prompt-工程]]、[[结构化输出与JSON约束]]
+- Agent 深化：[[Agent-记忆系统]]、[[多Agent协作]]
 
 ## 学习路径
 
@@ -34,4 +36,4 @@
 ## 知识缺口
 
 - RAG 评测实测数据待小说引擎原型验证后回填 [[RAG-评测与分块策略]]
-- Agent 记忆与多 Agent 协作尚无独立篇（按需）
+- ~~Agent 记忆与多 Agent 协作尚无独立篇~~（2026-10-23 已补 [[Agent-记忆系统]]、[[多Agent协作]]，缺口移除）
