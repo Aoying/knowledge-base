@@ -31,6 +31,9 @@
 - [结构化输出与 JSON 约束](AI与大模型/结构化输出与JSON约束.md)
 - [Agent 记忆系统](AI与大模型/Agent-记忆系统.md)
 - [多 Agent 协作](AI与大模型/多Agent协作.md)
+- [上下文工程](AI与大模型/上下文工程.md)
+- [混合检索与 Rerank](AI与大模型/混合检索与Rerank.md)
+- [提示注入与 Agent 安全](AI与大模型/提示注入与Agent安全.md)
 - [模型评测方法](AI与大模型/模型评测方法.md)
 - [推理框架对比](AI与大模型/推理框架对比.md)
 - [微调入门 LoRA](AI与大模型/微调入门-LoRA.md)
@@ -46,6 +49,9 @@
 - [Spring Cache](开发语言/Java/Spring-Cache.md)
 - [Spring Security](开发语言/Java/Spring-Security.md)
 - [Netty](开发语言/Java/Netty.md)
+- [Java 异常体系](开发语言/Java/Java-异常体系.md)
+- [Spring Cloud 概览](开发语言/Java/Spring-Cloud概览.md)
+- [限流熔断与降级](开发语言/Java/限流熔断与降级.md)
 - [Quartz 定时任务](开发语言/Java/Quartz定时任务.md)
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
 - [Async 异步](开发语言/Java/Async-异步.md)
@@ -89,6 +95,7 @@
 - [FastAPI](开发语言/Python/FastAPI.md)
 - [Python 打包与环境管理](开发语言/Python/Python-打包与环境管理.md)
 - [Python 多进程与 GIL](开发语言/Python/Python-多进程与GIL.md)
+- [Python 日志与 HTTP 客户端](开发语言/Python/Python-日志与HTTP客户端.md)
 
 ### 其他语言
 
@@ -109,7 +116,8 @@
 - [Redis 缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md)
 - [Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)
 - [分布式事务](数据库/分布式事务.md)
-- [Elasticsearch](数据库/Elasticsearch.md)
+- [MySQL 主从复制与读写分离](数据库/MySQL-主从复制与读写分离.md)
+- [Elasticsearch](数据库/Elasticsearch.md)（汇总；子篇：[ES 倒排索引与查询](数据库/ES-倒排索引与查询.md)）
 - [RocketMQ](消息队列/RocketMQ.md)
 - [Kafka 消息队列](消息队列/Kafka-消息队列.md)
 - [Kafka 与 RocketMQ 对比](消息队列/Kafka与RocketMQ对比.md)
