@@ -1,12 +1,48 @@
 {
   "recentFiles": [
     {
-      "basename": "Java",
-      "path": "开发语言/Java/Java.md"
+      "basename": "README",
+      "path": "README.md"
+    },
+    {
+      "basename": "数据结构与算法",
+      "path": "计算机基础/数据结构与算法.md"
+    },
+    {
+      "basename": "大模型基础",
+      "path": "AI与大模型/大模型基础.md"
+    },
+    {
+      "basename": "总览",
+      "path": "知识地图/总览.md"
+    },
+    {
+      "basename": "Flowable",
+      "path": "工程实践/Flowable.md"
     },
     {
       "basename": "CICD",
       "path": "工程实践/CICD.md"
+    },
+    {
+      "basename": "DDD与架构设计",
+      "path": "工程实践/DDD与架构设计.md"
+    },
+    {
+      "basename": "前端基础-HTML-CSS",
+      "path": "工程实践/前端基础-HTML-CSS.md"
+    },
+    {
+      "basename": "Obsidian-插件使用指南",
+      "path": "效率工具/Obsidian-插件使用指南.md"
+    },
+    {
+      "basename": "Java-反射与注解",
+      "path": "开发语言/Java/Java-反射与注解.md"
+    },
+    {
+      "basename": "Java",
+      "path": "开发语言/Java/Java.md"
     },
     {
       "basename": "监控告警",
@@ -57,20 +93,8 @@
       "path": "AI与大模型/Skills-索引.md"
     },
     {
-      "basename": "总览",
-      "path": "知识地图/总览.md"
-    },
-    {
-      "basename": "大模型基础",
-      "path": "AI与大模型/大模型基础.md"
-    },
-    {
       "basename": "标签索引",
       "path": "标签索引.md"
-    },
-    {
-      "basename": "Flowable",
-      "path": "工程实践/Flowable.md"
     },
     {
       "basename": "Java知识点地图",
@@ -79,10 +103,6 @@
     {
       "basename": "Elasticsearch",
       "path": "数据库/Elasticsearch.md"
-    },
-    {
-      "basename": "README",
-      "path": "README.md"
     }
   ],
   "omittedPaths": [],

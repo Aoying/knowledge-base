@@ -1,3 +1,5 @@
 {
-  "obsidian-velocity@@safe-area-adjust": 0
+  "obsidian-velocity@@safe-area-adjust": 0,
+  "baseline-style@@color-scheme-dark": "baseline-dark",
+  "baseline-style@@background-contrast-dark": "contrast-dark"
 }
