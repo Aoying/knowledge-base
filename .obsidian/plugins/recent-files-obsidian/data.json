@@ -1,12 +1,28 @@
 {
   "recentFiles": [
     {
-      "basename": "Java",
-      "path": "开发语言/Java/Java.md"
+      "basename": "REST接口设计",
+      "path": "工程实践/REST接口设计.md"
+    },
+    {
+      "basename": "国密与加密体系",
+      "path": "工程实践/国密与加密体系.md"
+    },
+    {
+      "basename": "前端基础-HTML-CSS",
+      "path": "工程实践/前端基础-HTML-CSS.md"
     },
     {
       "basename": "CICD",
       "path": "工程实践/CICD.md"
+    },
+    {
+      "basename": "前端开发",
+      "path": "工程实践/前端开发.md"
+    },
+    {
+      "basename": "Java",
+      "path": "开发语言/Java/Java.md"
     },
     {
       "basename": "监控告警",
