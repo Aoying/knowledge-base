@@ -54,9 +54,11 @@
 - [限流熔断与降级](开发语言/Java/限流熔断与降级.md)
 - [Quartz 定时任务](开发语言/Java/Quartz定时任务.md)
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
+- [MyBatis 原生](开发语言/Java/MyBatis原生.md)
 - [Async 异步](开发语言/Java/Async-异步.md)
 - [Bean Validation](开发语言/Java/Bean-Validation.md)
 - [Stream 与 Optional](开发语言/Java/Stream与Optional.md)
+- [Java 新特性](开发语言/Java/Java-新特性.md)
 - [虚拟线程](开发语言/Java/虚拟线程.md)
 - [Druid 监控与慢 SQL](开发语言/Java/Druid.md)
 - [多数据源](开发语言/Java/多数据源.md)
@@ -143,6 +145,8 @@
 - [Maven 与依赖管理](工程实践/Maven与依赖管理.md)
 - [Logback 与日志规范](工程实践/Logback与日志规范.md)
 - [REST 接口设计](工程实践/REST接口设计.md)
+- [DDD 与架构设计](工程实践/DDD与架构设计.md)
+- [国密与加密体系](工程实践/国密与加密体系.md)
 - [前端开发](工程实践/前端开发.md)
 - [前端基础 HTML-CSS](工程实践/前端基础-HTML-CSS.md)
 
@@ -154,6 +158,7 @@
 - [操作系统 进程线程](计算机基础/操作系统-进程线程.md)
 - [计算机网络](计算机基础/计算机网络.md)
 - [编码 字符集 内存 文件系统](计算机基础/编码-字符集-内存-文件系统.md)
+- [分布式系统理论](计算机基础/分布式系统理论.md)
 
 ## 游戏 / 探索
 

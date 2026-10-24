@@ -5,8 +5,8 @@
 ## 知识点清单
 
 - 语言基础：[[Java]]（含基础知识补强、排查三板斧、疑难杂症）
-- 语言基础补强：[[Java-反射与注解]]、[[Java-泛型与类型擦除]]、[[Java-异常体系]]
-- 框架实战：[[Spring-Boot]]、[[MyBatis-Plus]]、[[Bean-Validation]]
+- 语言基础补强：[[Java-反射与注解]]、[[Java-泛型与类型擦除]]、[[Java-异常体系]]、[[Java-新特性]]
+- 框架实战：[[Spring-Boot]]、[[MyBatis-Plus]]、[[MyBatis原生]]、[[Bean-Validation]]
 - Spring 深度：[[Spring-事务]]、[[Spring-IOC与AOP]]
 - 框架补件：[[Spring-Cache]]、[[Quartz定时任务]]、[[Java-IO与NIO]]
 - 网络与安全：[[Netty]]、[[Spring-Security]]

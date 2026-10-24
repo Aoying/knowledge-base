@@ -110,3 +110,5 @@ public class SecurityConfig {
 
 - [Spring-Boot](开发语言/Java/Spring-Boot.md)：自动配置与项目基线。
 - [REST 接口设计](工程实践/REST接口设计.md)：401/403 与统一错误口径的设计侧约定。
+
+- [国密与加密体系](工程实践/国密与加密体系.md)：国密算法与银行敏感字段落库加密落地。
