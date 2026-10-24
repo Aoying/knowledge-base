@@ -39,6 +39,6 @@
 
 ## 知识缺口
 
-- Python 日志与 logging（对位 Java Logback 篇；HTTP 客户端与重试，调 Ollama 实战姿势）（2026-10-23 登记）
+- ~~Python 日志与 logging + HTTP 客户端与重试~~（2026-10-23 已补 [[Python-日志与HTTP客户端]]，缺口移除）
 
 - 暂无登记缺口（装饰器、生成器已补篇；LangGraph、MCP 已在 AI 领域建篇）
