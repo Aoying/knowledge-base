@@ -7,7 +7,7 @@
   - Java
   - 虚拟线程
   - Stream 与 Optional
-  - JVM 字节码与 JIT
+  - JVM-字节码与JIT
 标签:
   - Java
   - 原理
