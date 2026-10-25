@@ -5,6 +5,10 @@
       "path": "README.md"
     },
     {
+      "basename": "组成原理",
+      "path": "计算机基础/组成原理.md"
+    },
+    {
       "basename": "数据结构与算法",
       "path": "计算机基础/数据结构与算法.md"
     },
