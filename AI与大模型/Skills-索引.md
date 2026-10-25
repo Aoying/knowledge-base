@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-22
+更新日期: 2026-10-25
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)
 
@@ -149,3 +149,12 @@
 - **热度/更新**：7.6k+ stars（2026-10-21 核验 GitHub API），2026-10-21 仍在更新。
 - **许可证**：CC-BY-SA-4.0（内容许可，个人使用无碍）。
 - **安全注意**：安全公司官方出品，内容为指令 Markdown，风险低；审计类 skill 读代码时权限给只读。
+
+### 15. langchain-skills（langchain-ai/langchain-skills）LangChain/LangGraph/Deep Agents 官方技能
+
+- **功能**：LangChain 官方出品的 Agent skills：用 LangChain、LangGraph、Deep Agents 构建 Agent 的操作指南（通过 `npx skills` 装到 Claude Code / Cursor / Windsurf 等支持 Agent Skills 规范的工具，也可作 Claude Code 插件安装）。
+- **适用场景**：ao 的转型线（LangGraph）直接对口：写 LangGraph 工作流、Deep Agents 多智能体编排时按官方技能走，不用自己拼提示词。
+- **来源**：https://github.com/langchain-ai/langchain-skills（官方仓库）
+- **热度/更新**：1.3k+ stars（2026-10-25 核验 GitHub API），2026-10-24 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：官方仓库，内容为技能指令；仓库自述标注仍在早期开发、API 与技能内容可能变化——只收集不安装；要用时按单个 skill 通读后再装，不整库 `npx skills add --skill '*'` 盲装。
