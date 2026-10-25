@@ -11,7 +11,7 @@
 
 - Agent 进阶：[[LangGraph]]、[[MCP]]、[[Tool-Calling]]
 - RAG 进阶：[[RAG-评测与分块策略]]
-- 基础与工程：[[Embedding与向量数据库]]、[[本地部署与Ollama]]、[[Prompt-工程]]、[[结构化输出与JSON约束]]
+- 基础与工程：[[Embedding与向量数据库]]、[[本地部署与Ollama]]、[[Prompt-工程]]、[[结构化输出与JSON约束]]、[[机器学习基础]]、[[深度学习基础]]
 - Agent 深化：[[Agent-记忆系统]]、[[多Agent协作]]
 - 上下文与安全：[[上下文工程]]、[[提示注入与Agent安全]]
 - 检索进阶：[[混合检索与Rerank]]（与 [[RAG-评测与分块策略]] 配套）

@@ -15,7 +15,7 @@
 - 数据访问：[[Druid]]、[[多数据源]]
 - 语言进阶：[[Async-异步]]、[[Stream与Optional]]、[[虚拟线程]]
 - JVM：[[JVM-GC调优]]、[[JVM-内存模型]]、[[JVM-类加载]]、[[JVM-字节码与JIT]]、[[JVM-故障排查]]
-- 集合：[[HashMap]]、[[ConcurrentHashMap]]、[[ArrayList与扩容]]、[[LinkedHashMap与LRU]]、[[TreeMap与红黑树]]、[[Queue与Deque]]、[[CopyOnWriteArrayList]]（`开发语言/Java/集合/`）
+- 集合：[[集合框架总览]]、[[Set集合基础]]、[[HashMap]]、[[ConcurrentHashMap]]、[[ArrayList与扩容]]、[[LinkedHashMap与LRU]]、[[TreeMap与红黑树]]、[[Queue与Deque]]、[[CopyOnWriteArrayList]]（`开发语言/Java/集合/`）
 - 并发：[[Java-并发编程]]（汇总，位于 `开发语言/Java/并发/`）；子篇：[[线程池]]、[[synchronized与锁]]、[[volatile与JMM]]、[[CAS与原子类]]、[[AQS]]、[[ThreadLocal]]
 - 设计：[[设计模式]]（汇总；26 篇模式独立文档在 `开发语言/Java/设计模式/` 子目录）
 - 工作流：[[Flowable]]（文件在工程实践，Java 体系内使用）

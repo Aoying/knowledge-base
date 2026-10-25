@@ -37,6 +37,8 @@
 - [模型评测方法](AI与大模型/模型评测方法.md)
 - [推理框架对比](AI与大模型/推理框架对比.md)
 - [微调入门 LoRA](AI与大模型/微调入门-LoRA.md)
+- [机器学习基础](AI与大模型/机器学习基础.md)
+- [深度学习基础](AI与大模型/深度学习基础.md)
 
 ## 开发语言
 
@@ -70,6 +72,8 @@
 - [TreeMap 与红黑树](开发语言/Java/集合/TreeMap与红黑树.md)
 - [Queue 与 Deque](开发语言/Java/集合/Queue与Deque.md)
 - [CopyOnWriteArrayList](开发语言/Java/集合/CopyOnWriteArrayList.md)
+- [集合框架总览](开发语言/Java/集合/集合框架总览.md)
+- [Set 集合基础](开发语言/Java/集合/Set集合基础.md)
 - [JVM 内存模型](开发语言/Java/JVM-内存模型.md)
 - [JVM 类加载](开发语言/Java/JVM-类加载.md)
 - [JVM 故障排查](开发语言/Java/JVM-故障排查.md)
@@ -98,6 +102,8 @@
 - [Python 打包与环境管理](开发语言/Python/Python-打包与环境管理.md)
 - [Python 多进程与 GIL](开发语言/Python/Python-多进程与GIL.md)
 - [Python 日志与 HTTP 客户端](开发语言/Python/Python-日志与HTTP客户端.md)
+- [Python 面向对象基础](开发语言/Python/Python-面向对象基础.md)
+- [Python 线程基础](开发语言/Python/Python-线程基础.md)
 
 ### 其他语言
 
@@ -136,7 +142,7 @@
 - [Windows 常用命令](工程实践/Windows-常用命令.md)
 - [快捷键速查](工程实践/快捷键速查.md)
 - [Linux 与 Shell](工程实践/Linux与Shell.md)
-- [Flowable](工程实践/Flowable.md)（汇总；子篇在 工程实践/Flowable/：多实例与网关、事件与监听器、历史与部署）
+- [Flowable](工程实践/Flowable.md)（汇总；子篇在 工程实践/Flowable/：基础入门、多实例与网关、事件与监听器、历史与部署）
 - [CI/CD](工程实践/CICD.md)
 - [监控告警](工程实践/监控告警.md)
 - [单元测试与 Mock](工程实践/单元测试与Mock.md)
@@ -180,6 +186,7 @@
 ## 效率工具
 
 - [Obsidian 插件使用指南](效率工具/Obsidian-插件使用指南.md)
+- [Markdown 基础语法](效率工具/Markdown基础语法.md)、[Obsidian 本体入门](效率工具/Obsidian本体入门.md)
 - 模板：[读书笔记](效率工具/模板-读书笔记.md)、[会议纪要](效率工具/模板-会议纪要.md)、[项目管理](效率工具/模板-项目管理.md)、[技术学习](效率工具/模板-技术学习.md)、[灵感捕捉](效率工具/模板-灵感捕捉.md)
 - 看板：[任务总览](效率工具/看板-任务总览.md)、[笔记统计](效率工具/看板-笔记统计.md)、[项目总览](效率工具/看板-项目总览.md)、[读书追踪](效率工具/看板-读书追踪.md)
 
