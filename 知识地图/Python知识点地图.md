@@ -16,7 +16,7 @@
 - [[Python-线程基础]]：threading 实操与 GIL 边界
 - [[FastAPI]]：给 Agent 与本地工具做服务
 - [[Python-打包与环境管理]]：venv、pyproject、uv
-- 开发语言同层：[[JavaScript]]、[[Lua]]、[[正则表达式]]
+- 开发语言同层：[[JavaScript]]、[[Lua]]、[[正则表达式]]、[[正则表达式-常用样例]]
 
 ## 学习路径
 
