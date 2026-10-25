@@ -2,7 +2,7 @@
 知识点: 微调入门-LoRA
 层级: 进阶
 适用版本: 通用
-更新日期: 2026-10-23
+更新日期: 2026-10-25
 关联:
   - 本地部署与Ollama
   - 推理框架对比
@@ -61,11 +61,33 @@
 - **来源与合规**：只用自有或许可清晰的数据；含隐私与受版权保护的文本不进训练集（本仓库公开原则同样适用：个人数据一律不入库、不入训练集）。
 - **切分**：留出验证集（从训练样本中划一部分不参与训练），且验收最终要回到独立评测集（第 6 节），验证集与评测集别混用（泄漏问题见 [模型评测方法](AI与大模型/模型评测方法.md) 第 7 节）。
 
-## 5. 工具链（只作名词介绍）
+## 5. 工具链与最小可跑链路
 
 - **LLaMA-Factory**：覆盖数据处理、LoRA/QLoRA/全量等多种训练方式的框架，带 WebUI 与配置化流程，常被用作入门入口。
 - **Axolotl**：以 YAML 配置驱动的训练框架，配置即实验记录，适合脚本化与复现。
-- 两者版本与参数变化快，具体用法以各自官方文档为准，本篇不写命令细节。产物回流路径：适配器可与基座合并成完整权重，或保持 adapter 形式挂载；要回到本地推理生态，需导出/转换为 GGUF 后按 [推理框架对比](AI与大模型/推理框架对比.md) 的分工加载（Ollama 对 adapter 的支持方式以官方文档为准）。
+- 两者版本与参数变化快，命令与参数名以各自官方文档为准。产物回流路径：适配器可与基座合并成完整权重，或保持 adapter 形式挂载；要回到本地推理生态，需导出/转换为 GGUF 后按 [推理框架对比](AI与大模型/推理框架对比.md) 的分工加载（Ollama 对 adapter 的支持方式以官方文档为准）。
+
+- **最小可跑骨架（LLaMA-Factory，命令与参数名以官方文档为准）**：
+
+  ```yaml
+  model_name_or_path: <基座，如 Qwen2.5-7B-Instruct>
+  dataset: <数据集名，需在 dataset_info.json 注册>
+  template: <与基座一致的对话模板>
+  finetuning_type: lora
+  lora_rank: 8
+  quantization_bit: 4          # QLoRA：基座 4bit 冻结
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  gradient_checkpointing: true
+  learning_rate: 0.0002
+  num_train_epochs: 2
+  output_dir: <适配器输出目录>
+  ```
+
+  命令：`llamafactory-cli train <配置文件.yaml>`。先小数据、小 r、短序列跑通一次全流程，再放大规模（第 7 节）。
+- **数据集格式**：指令微调常用 Alpaca 式三段式 JSON：`{"instruction": "任务指令", "input": "可选输入，可为空", "output": "期望输出"}`；多轮对话用 messages 格式（role/content 列表）并配对话模板。LLaMA-Factory 侧需在 `dataset_info.json` 里注册数据集名与文件路径，否则训不到数据。
+- **QLoRA 在 12GB 下的结论（估算，待验证，与第 3 节账一致）**：7B 级 QLoRA + 短序列 + 小 batch + 梯度检查点，账面可装进 12GB，是本机唯一建议的起步档；14B 级基座约 7~8GB，留给激活与优化器的余量很紧，需 CPU offload 且慢，只建议 8B 级跑通后再试；不要在 12GB 上同时开大 batch 与长序列。
+- **导出 GGUF 闭环**：适配器与基座合并成完整权重（或按加载方支持保持 adapter 挂载）→ llama.cpp 的 `convert_hf_to_gguf.py` 转 GGUF → 按需量化（如 Q4_K_M）→ llama-server/Ollama 加载实测 → 回到第 6 节评测集做前后对比，分数没涨就回滚适配器。
 
 ## 6. 过拟合与评估
 
