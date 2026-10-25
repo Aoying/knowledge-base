@@ -106,7 +106,7 @@ canal.mq.topic = db_sync
 
 - 场景：MySQL → ES（搜索）、MySQL → Redis（缓存更新）、MySQL → 数仓，业务代码零侵入。
 - Canal 伪装成从库拉 binlog，挂了从上次位点续拉，不丢（前提是位点还在且对应 binlog 未被 purge；位点丢了或 binlog 已过期删除，续拉就断档，只能重做快照；下游消费必须做幂等）。
-- 典型链路：binlog → Canal → [RocketMQ](消息队列/RocketMQ.md) → 消费者更新 [Elasticsearch](数据库/Elasticsearch.md) / [Redis](数据库/Redis.md)。
+- 典型链路：binlog → Canal → [RocketMQ](消息队列/RocketMQ.md) → 消费者更新 [Elasticsearch](数据库/Elasticsearch.md) / [Redis](数据库/Redis/Redis.md)。
 - OceanBase 也有自己的增量同步（OMS），MySQL 那套照搬过去先看兼容性。
 - 同类工具：Debezium（Kafka Connect 生态）、Flink CDC（流处理一体）。
 

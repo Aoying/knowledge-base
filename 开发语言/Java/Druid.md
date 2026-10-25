@@ -75,4 +75,4 @@ Boot 2.7 集成用 `druid-spring-boot-starter`，监控页账号密码走 `sprin
 
 - [多数据源（dynamic-datasource）](开发语言/Java/多数据源.md)
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
-- [Spring Boot](开发语言/Java/Spring-Boot.md)
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)

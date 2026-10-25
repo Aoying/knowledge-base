@@ -113,7 +113,7 @@ public class TraceFilter extends OncePerRequestFilter {
 
 ## 5. 脱敏纪律（金融项目红线）
 
-- **绝不入日志**：密码、token/密钥、完整银行卡号、完整身份证号、手机号全号、短信验证码。框架日志也要防：MyBatis/Druid 的 SQL 日志会把参数原样打出，生产一律关闭 SQL 明文日志（与 [Spring Boot 篇](开发语言/Java/Spring-Boot.md)「SQL log 只在本地开」同一条纪律）。
+- **绝不入日志**：密码、token/密钥、完整银行卡号、完整身份证号、手机号全号、短信验证码。框架日志也要防：MyBatis/Druid 的 SQL 日志会把参数原样打出，生产一律关闭 SQL 明文日志（与 [Spring Boot 篇](开发语言/Java/Spring/Spring-Boot.md)「SQL log 只在本地开」同一条纪律）。
 - 需要打的标识字段先脱敏：手机号 `138****8000`、身份证前 3 后 4、卡号只留后 4。写统一 `SensitiveMask` 工具收口，禁止各业务点手写截取（手写必漏）。
 - 异常信息与接口回参同样过脱敏；确需留存敏感上下文的走带权限的审计日志通道，与运行日志分开存放、分开授权。日志文件本身也按敏感数据对待（访问授权、保留期、归档加密）。
 
@@ -148,7 +148,7 @@ public class TraceFilter extends OncePerRequestFilter {
 5. MyBatis/Druid 的 SQL 日志会把参数原样打出，密码、卡号、身份证号等敏感信息会直接进日志，生产必须一律关闭 SQL 明文日志（SQL log 只在本地开）。排障需求不靠全量 SQL 日志平衡：慢 SQL 走 Druid 监控，确需留存敏感上下文的走带权限的审计日志通道，与运行日志分开存放、分开授权。
 ## 9. 关联知识
 
-- [Spring Boot](开发语言/Java/Spring-Boot.md)：默认日志体系、Actuator loggers 端点、SQL 日志的开关纪律。
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：默认日志体系、Actuator loggers 端点、SQL 日志的开关纪律。
 - [监控告警](工程实践/监控告警.md)：日志在可观测三支柱中的位置与告警分级原则。
 - [@Async 异步](开发语言/Java/Async-异步.md)：异步场景的上下文（含 MDC）传递问题。
 - [Docker](工程实践/Docker.md)：容器化部署下日志的输出与采集路线。

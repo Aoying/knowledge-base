@@ -125,7 +125,7 @@ public class LogTimeProcessor extends AbstractProcessor {
 - **注解的本质**：`@LogTime("x")` 编译后变成实现该注解接口的动态代理实例；`getAnnotation()` 拿到的是代理对象，`value()` 就是调代理方法——这解释了"注解成员为什么只能是那几种类型"。
 
 ## 实战应用
-### 1. Spring IOC：反射实例化 + 注入（见 [Spring-IOC与AOP](开发语言/Java/Spring-IOC与AOP.md)）
+### 1. Spring IOC：反射实例化 + 注入（见 [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)）
 ```java
 // 伪代码：容器根据 BeanDefinition 创建 Bean
 Class<?> clazz = Class.forName("com.example.UserService");
@@ -239,9 +239,9 @@ public class LogTimeRunner {
 - **JDK 16+**：强封装成为默认，反射访问 JDK 内部 API 必须显式 `--add-opens`。
 
 ## 关联知识
-- [Spring-IOC与AOP](开发语言/Java/Spring-IOC与AOP.md)：IOC 容器与 AOP 代理是反射+注解最重的两个使用者。
+- [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)：IOC 容器与 AOP 代理是反射+注解最重的两个使用者。
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)：`@TableName`、`@TableField`、`BaseMapper<T>` 的注解解析与泛型反推。
 - [Bean-Validation](开发语言/Java/Bean-Validation.md)：约束注解的校验链路与自定义约束。
-- [JVM-类加载](开发语言/Java/JVM-类加载.md)：`Class.forName` 触发的加载、链接、初始化过程。
+- [JVM-类加载](开发语言/Java/JVM/JVM-类加载.md)：`Class.forName` 触发的加载、链接、初始化过程。
 - [Java](开发语言/Java/Java.md)：语言基础总览。
 - [Java-泛型与类型擦除](开发语言/Java/Java-泛型与类型擦除.md)：桥接方法、类型擦除对反射遍历的干扰与过滤。

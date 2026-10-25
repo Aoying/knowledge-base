@@ -101,7 +101,7 @@ public int add(int a, int b) { return a + b; }
 
 ## 7. 疑难杂症
 
-- **CodeCache 满，JIT 停摆**：编译产物放在 CodeCache（非堆独立区域），打满后 JIT 停止编译并打印 `CodeCache is full`，应用不崩但退回解释执行、性能塌方。处理：调大 `-XX:ReservedCodeCacheSize`，并查编译量为何异常（动态代理 / 脚本引擎大量生成类是常见源头），与 [JVM 故障排查](开发语言/Java/JVM-故障排查.md) 一起看。
+- **CodeCache 满，JIT 停摆**：编译产物放在 CodeCache（非堆独立区域），打满后 JIT 停止编译并打印 `CodeCache is full`，应用不崩但退回解释执行、性能塌方。处理：调大 `-XX:ReservedCodeCacheSize`，并查编译量为何异常（动态代理 / 脚本引擎大量生成类是常见源头），与 [JVM 故障排查](开发语言/Java/JVM/JVM-故障排查.md) 一起看。
 - **跑一会儿变慢**：优先怀疑去优化抖动，或容器 CPU limit 让编译线程排不上队；先开 `PrintCompilation` 看编译/失效事件是否异常密集。
 
 ## 8. 常见误区
@@ -136,7 +136,7 @@ public int add(int a, int b) { return a + b; }
 
 ## 10. 关联知识
 
-- [JVM 类加载](开发语言/Java/JVM-类加载.md)：字节码从哪来、验证阶段校验什么，与 class 结构对应。
-- [JVM 内存模型](开发语言/Java/JVM-内存模型.md)：运行时数据区与 CodeCache 的位置。
-- [JVM GC 调优](开发语言/Java/JVM-GC调优.md)：逃逸分析与标量替换如何减轻 GC 压力。
-- [JVM 故障排查](开发语言/Java/JVM-故障排查.md)：CodeCache 满、性能塌方的定位流程。
+- [JVM 类加载](开发语言/Java/JVM/JVM-类加载.md)：字节码从哪来、验证阶段校验什么，与 class 结构对应。
+- [JVM 内存模型](开发语言/Java/JVM/JVM-内存模型.md)：运行时数据区与 CodeCache 的位置。
+- [JVM GC 调优](开发语言/Java/JVM/JVM-GC调优.md)：逃逸分析与标量替换如何减轻 GC 压力。
+- [JVM 故障排查](开发语言/Java/JVM/JVM-故障排查.md)：CodeCache 满、性能塌方的定位流程。

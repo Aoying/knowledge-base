@@ -116,7 +116,7 @@ public class GlobalExceptionHandler {
 
 ## 6. 疑难杂症
 
-- **事务该回滚却提交了**：Spring 声明式事务默认只对 `RuntimeException` 和 `Error` 回滚。受检异常没配 `rollbackFor`、或异常被 catch 吞掉，事务会正常提交，出现「报错了但数据写进去了」。解法：`@Transactional(rollbackFor = Exception.class)`，且不要在事务方法里吞异常。机制见 [Spring 事务](开发语言/Java/Spring-事务.md)。
+- **事务该回滚却提交了**：Spring 声明式事务默认只对 `RuntimeException` 和 `Error` 回滚。受检异常没配 `rollbackFor`、或异常被 catch 吞掉，事务会正常提交，出现「报错了但数据写进去了」。解法：`@Transactional(rollbackFor = Exception.class)`，且不要在事务方法里吞异常。机制见 [Spring 事务](开发语言/Java/Spring/Spring-事务.md)。
 - **日志里只有一行异常信息没有堆栈**：写了 `log.error("失败: {}", e.getMessage())`。改成把异常对象作最后一个参数：`log.error("失败", e)`。
 - **包装了三层还是看不到根源**：中间层转换异常时没传 cause。全局搜自定义异常的构造点逐个检查。
 - **finally 里 return**：会吞掉 try/catch 里的异常和返回值，编译器只警告不报错，规范上直接禁止。
@@ -138,4 +138,4 @@ public class GlobalExceptionHandler {
 ## 8. 关联知识
 
 - [REST 接口设计](工程实践/REST接口设计.md)：统一信封、业务码分段、状态码纪律——异常落到接口上的口径。
-- [Spring 事务](开发语言/Java/Spring-事务.md)：事务回滚规则与异常类型的关系。
+- [Spring 事务](开发语言/Java/Spring/Spring-事务.md)：事务回滚规则与异常类型的关系。

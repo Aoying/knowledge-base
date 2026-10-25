@@ -161,6 +161,6 @@ new OpenAPI().components(new Components().addSecuritySchemes("bearerAuth",
 4. 生产与对外环境应关掉页面或加访问控制，用 springdoc.swagger-ui.enabled 与 springdoc.api-docs.enabled 按 profile 配置，内网生产至少限制到运维网段。风险是接口文档等于把系统地图公开，裸奔等于把接口、字段、枚举含义全部暴露；示例值一律用虚构值，不能带真实客户数据。
 ## 8. 关联知识
 
-- 前置：[Spring Boot](开发语言/Java/Spring-Boot.md)、[Bean-Validation](开发语言/Java/Bean-Validation.md)
+- 前置：[Spring Boot](开发语言/Java/Spring/Spring-Boot.md)、[Bean-Validation](开发语言/Java/Bean-Validation.md)
 - 相关：[单元测试与Mock](工程实践/单元测试与Mock.md)（`@WebMvcTest` 验证校验与文档契约）
 - 延伸：OpenAPI 契约优先（先写 YAML 再生成代码）、接口版本治理

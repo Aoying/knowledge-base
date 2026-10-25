@@ -84,7 +84,7 @@ public class LoanApplication {   // 聚合根；amount 是值对象
 
 ### 架构演进
 
-单体（包按业务分）→ 模块化单体（上下文=模块，只走接口/事件）→ 微服务（只拆独立扩缩的上下文）。拆分边界复用限界上下文，这也是 [Spring-Cloud概览](开发语言/Java/Spring-Cloud概览.md)「先算拆分的账」的前提：边界没划清就拆，得到分布式单体。
+单体（包按业务分）→ 模块化单体（上下文=模块，只走接口/事件）→ 微服务（只拆独立扩缩的上下文）。拆分边界复用限界上下文，这也是 [Spring-Cloud概览](开发语言/Java/Spring/Spring-Cloud概览.md)「先算拆分的账」的前提：边界没划清就拆，得到分布式单体。
 
 ## 4. 原理剖析
 
@@ -123,7 +123,7 @@ public class LoanApplication {   // 聚合根；amount 是值对象
 ### 系统设计自查清单
 
 - **容量与分表**：日单量、峰值 QPS、单表年增量与分表线（[分库分表](数据库/分库分表.md)）。
-- **缓存/MQ/限流落点**：读多写少才上缓存（[Redis-缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md)）；能异步才进 MQ，想清不丢不重与幂等；入口与外部出口都有限流闸（[限流熔断与降级](开发语言/Java/限流熔断与降级.md)）。
+- **缓存/MQ/限流落点**：读多写少才上缓存（[Redis-缓存问题与分布式锁](数据库/Redis/Redis-缓存问题与分布式锁.md)）；能异步才进 MQ，想清不丢不重与幂等；入口与外部出口都有限流闸（[限流熔断与降级](开发语言/Java/限流熔断与降级.md)）。
 - **事务与可测**：本地事务只含一个聚合，跨上下文用事件最终一致；规则要能不启 Spring 单测（[单元测试与Mock](工程实践/单元测试与Mock.md)）。
 
 ## 6. 疑难杂症
@@ -167,7 +167,7 @@ public class LoanApplication {   // 聚合根；amount 是值对象
 ## 11. 关联知识
 
 - [设计模式](开发语言/Java/设计模式.md)：战术构件的模式基础。
-- [Spring-Boot](开发语言/Java/Spring-Boot.md)：分层落地框架。
+- [Spring-Boot](开发语言/Java/Spring/Spring-Boot.md)：分层落地框架。
 - [Flowable](工程实践/Flowable.md)：审批编排边界。
 - [分布式事务](数据库/分布式事务.md)：聚合间最终一致选型。
-- [Spring-Cloud概览](开发语言/Java/Spring-Cloud概览.md)：拆微服务全景。
+- [Spring-Cloud概览](开发语言/Java/Spring/Spring-Cloud概览.md)：拆微服务全景。

@@ -54,7 +54,7 @@ SCAN 0 MATCH "user:*" COUNT 1000  # 生产禁用 KEYS *
 
 ## 持久化（速记）
 
-RDB 定时快照（恢复快、丢快照后的数据）；AOF 记录写命令，`appendfsync everysec` 为折中；生产一般两者都开。深挖见专题篇：[Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)。
+RDB 定时快照（恢复快、丢快照后的数据）；AOF 记录写命令，`appendfsync everysec` 为折中；生产一般两者都开。深挖见专题篇：[Redis 持久化与淘汰策略](数据库/Redis/Redis-持久化与淘汰策略.md)。
 
 ## 缓存三大问题（速记）
 
@@ -62,7 +62,7 @@ RDB 定时快照（恢复快、丢快照后的数据）；AOF 记录写命令，
 - **击穿**（单热点 key 过期瞬间回源）：互斥锁只放一个回源，或逻辑过期 + 异步刷新。
 - **雪崩**（大量 key 同时过期/宕机）：过期时间加随机抖动 + 高可用 + 本地缓存兜底。
 
-区分口径、逻辑过期与一致性方案见专题篇：[Redis 缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md)。
+区分口径、逻辑过期与一致性方案见专题篇：[Redis 缓存问题与分布式锁](数据库/Redis/Redis-缓存问题与分布式锁.md)。
 
 ## 分布式锁（速记）
 
@@ -70,7 +70,7 @@ RDB 定时快照（恢复快、丢快照后的数据）；AOF 记录写命令，
 
 ## 内存淘汰策略（速记）
 
-缓存场景一般 `allkeys-lru` + 设 `maxmemory` 上限；默认 `noeviction` 写满报错。8 种策略的分组与选型见专题篇：[Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)。
+缓存场景一般 `allkeys-lru` + 设 `maxmemory` 上限；默认 `noeviction` 写满报错。8 种策略的分组与选型见专题篇：[Redis 持久化与淘汰策略](数据库/Redis/Redis-持久化与淘汰策略.md)。
 
 ## 常见坑
 
@@ -121,7 +121,7 @@ XPENDING orders g1                         # 查未确认的（掉线消费者�
 
 ## Cluster 槽位与扩缩容（导读）
 
-16384 槽按 CRC16(key) % 16384 分配，多 key 同槽靠 `{tag}`；扩缩容走加节点 → `reshard` 迁槽 → `rebalance`。完整机制见专题篇：[Redis 集群与哨兵](数据库/Redis-集群.md)。
+16384 槽按 CRC16(key) % 16384 分配，多 key 同槽靠 `{tag}`；扩缩容走加节点 → `reshard` 迁槽 → `rebalance`。完整机制见专题篇：[Redis 集群与哨兵](数据库/Redis/Redis-集群.md)。
 
 ## Redisson 常用件（限流、信号量）
 
@@ -150,7 +150,7 @@ MEMORY DOCTOR                   # 一句话诊断
 ```
 
 - `mem_fragmentation_ratio` < 1 说明内存碎片严重（used 比 RSS 小），重启或等碎片整理。
-- 碎片处理与大 key / 热 key 的发现和治理，见专题篇：[Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)。
+- 碎片处理与大 key / 热 key 的发现和治理，见专题篇：[Redis 持久化与淘汰策略](数据库/Redis/Redis-持久化与淘汰策略.md)。
 
 ## 基础知识补强
 

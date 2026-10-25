@@ -139,6 +139,6 @@ Arthas 路径更短：`thread -n 3` 一步给出最忙线程及栈；再 `trace`
 
 ## 7. 关联知识
 
-- 前置：[JVM 内存模型](开发语言/Java/JVM-内存模型.md)、[JVM GC 调优](开发语言/Java/JVM-GC调优.md)
+- 前置：[JVM 内存模型](开发语言/Java/JVM/JVM-内存模型.md)、[JVM GC 调优](开发语言/Java/JVM/JVM-GC调优.md)
 - 相关：[监控告警](工程实践/监控告警.md)（GC 与饱和度指标、告警阈值）
 - 延伸：MAT 深入分析、火焰图（async-profiler）、JFR 持续记录

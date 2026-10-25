@@ -151,6 +151,6 @@ public class SpringJobFactory extends AdaptableJobFactory {
 
 ## 10. 关联知识
 
-- [Spring Boot](开发语言/Java/Spring-Boot.md)：自动装配与 starter 机制，quartz starter 的配置入口。
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：自动装配与 starter 机制，quartz starter 的配置入口。
 - [线程池](开发语言/Java/并发/线程池.md)：Quartz 工作线程池与业务线程池的隔离。
 - [Flowable](工程实践/Flowable.md)：流程内定时事件的自有调度，与 Quartz 的分工边界。

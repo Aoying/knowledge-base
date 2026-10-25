@@ -108,7 +108,7 @@ long sent = in.transferTo(0, in.size(), socketChannel); // 单次有上限，大
 ## 6. 疑难杂症
 
 - **Selector 空轮询**：老版本 JDK 在 Linux 上有 epoll 已知缺陷，`select()` 无事件也立即返回，CPU 被打满。应对：统计短时间空轮询次数，超阈值就重建 Selector 并把 Channel 迁移过去（Netty 内部就是这么兜底的）。
-- **堆外内存泄漏**：`ByteBuffer.allocateDirect` 申请的内存靠 Cleaner 在对象被 GC 后回收，对象活得久内存就还不回去，表现为堆正常但进程 RSS 涨、`OutOfMemoryError: Direct buffer memory`。排查与参数见 [JVM 故障排查](开发语言/Java/JVM-故障排查.md)：`-XX:MaxDirectMemorySize`、NMT 跟踪。
+- **堆外内存泄漏**：`ByteBuffer.allocateDirect` 申请的内存靠 Cleaner 在对象被 GC 后回收，对象活得久内存就还不回去，表现为堆正常但进程 RSS 涨、`OutOfMemoryError: Direct buffer memory`。排查与参数见 [JVM 故障排查](开发语言/Java/JVM/JVM-故障排查.md)：`-XX:MaxDirectMemorySize`、NMT 跟踪。
 - **文件关了句柄没关**：Channel/Stream 必须 try-with-resources；Linux 下 `lsof -p <pid>` 看句柄数，「Too many open files」多半是没关流或连接池泄漏，不是系统上限不够。
 
 ## 7. 常见误区
@@ -138,5 +138,5 @@ long sent = in.transferTo(0, in.size(), socketChannel); // 单次有上限，大
 
 - [计算机网络](计算机基础/计算机网络.md)：TCP 字节流语义是粘包、多路复用（epoll）的前置知识。
 - [虚拟线程](开发语言/Java/虚拟线程.md)：改变阻塞 IO 的成本模型，影响 NIO 选型。
-- [JVM 故障排查](开发语言/Java/JVM-故障排查.md)：堆外内存与句柄泄漏的排查工具链。
+- [JVM 故障排查](开发语言/Java/JVM/JVM-故障排查.md)：堆外内存与句柄泄漏的排查工具链。
 - Netty 是本篇的工程落地：实际项目写网络层直接学 Netty 的 EventLoop、ByteBuf 与编解码器，本篇是其原理底座。

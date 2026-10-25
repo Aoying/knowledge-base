@@ -19,7 +19,7 @@
 
 Spring Cache 是**声明式缓存抽象**：用注解把「查缓存 → 回源 → 写缓存」的模板从业务代码里抽走，业务方法只管查数据库。存储可换：接口是 `CacheManager` / `Cache`，实现可以是本地 `ConcurrentHashMap`、Caffeine、Redis、EhCache，切换不动业务代码。
 
-边界先说清：它只管**单次读写的缓存套路**，不管一致性深水区（双写、订阅 binlog）和穿透击穿雪崩的系统对策——那些在 [Redis 缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md) 里，本篇负责注解侧的正确用法。典型落点：字典码值、机构与产品参数、地区树等读多写少、容忍分钟级延迟的数据；强一致数据（余额、额度）不要套这层抽象。
+边界先说清：它只管**单次读写的缓存套路**，不管一致性深水区（双写、订阅 binlog）和穿透击穿雪崩的系统对策——那些在 [Redis 缓存问题与分布式锁](数据库/Redis/Redis-缓存问题与分布式锁.md) 里，本篇负责注解侧的正确用法。典型落点：字典码值、机构与产品参数、地区树等读多写少、容忍分钟级延迟的数据；强一致数据（余额、额度）不要套这层抽象。
 
 ## 2. 注解全家桶
 
@@ -98,7 +98,7 @@ public class CacheConfig {
 
 - 读路径是标准的 Cache Aside：`@Cacheable` 查不到才查库回写。写路径的纪律：**先更新数据库，再删缓存**（`@CacheEvict` 放在写方法上），不要用 `@CachePut` 去「同步更新缓存」当一致性手段——高并发下两个写请求交错时 Put 的顺序可能与 DB 提交顺序相反，缓存里反而留下旧值。`@CachePut` 只适合单写、低并发的配置型数据。
 - **与事务的顺序坑**：`@CacheEvict` 默认在方法返回后执行，但如果方法在事务里，缓存删除发生的时点可能早于事务提交——删完到提交之间有读请求进来，又把旧值回写进缓存。两种解法：把 evict 动作注册到事务提交后（`TransactionSynchronizationManager` 的 `afterCommit` 里执行），或给缓存切面与事务切面排 order 并接受最终一致。做不到这两点就老实接受「短暂不一致 + TTL 兜底」，并在选型时就排除强一致数据。
-- **自调用失效**：同类内 `this.getItem()` 不走 AOP 代理，`@Cacheable` 静默不生效——和 `@Transactional` 自调用是同一个病根，解法同样是注入自身代理或拆类，见 [Spring 事务](开发语言/Java/Spring-事务.md)。
+- **自调用失效**：同类内 `this.getItem()` 不走 AOP 代理，`@Cacheable` 静默不生效——和 `@Transactional` 自调用是同一个病根，解法同样是注入自身代理或拆类，见 [Spring 事务](开发语言/Java/Spring/Spring-事务.md)。
 
 ## 5. 疑难：与穿透/击穿的衔接
 
@@ -137,7 +137,7 @@ public class CacheConfig {
 
 ## 9. 关联知识
 
-- [Spring Boot](开发语言/Java/Spring-Boot.md)：自动配置与 starter，缓存与 Redis 的装配入口。
-- [Redis](数据库/Redis.md)：底层存储本身的数据结构与使用。
-- [Redis 缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md)：穿透/击穿/雪崩与一致性的系统级对策，与本篇的注解落法对应。
-- [Spring 事务](开发语言/Java/Spring-事务.md)：代理自调用与切面顺序的同源问题。
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：自动配置与 starter，缓存与 Redis 的装配入口。
+- [Redis](数据库/Redis/Redis.md)：底层存储本身的数据结构与使用。
+- [Redis 缓存问题与分布式锁](数据库/Redis/Redis-缓存问题与分布式锁.md)：穿透/击穿/雪崩与一致性的系统级对策，与本篇的注解落法对应。
+- [Spring 事务](开发语言/Java/Spring/Spring-事务.md)：代理自调用与切面顺序的同源问题。

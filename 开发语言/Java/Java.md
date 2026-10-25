@@ -22,7 +22,7 @@
 
 本篇为 Java 语言基础与总索引，以下知识点已拆为独立文档：
 
-- [Spring Boot](开发语言/Java/Spring-Boot.md)
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
 - [Async 异步](开发语言/Java/Async-异步.md)
 - [Bean Validation](开发语言/Java/Bean-Validation.md)
@@ -30,7 +30,7 @@
 - [虚拟线程](开发语言/Java/虚拟线程.md)
 - [Druid 监控与慢 SQL 定位](开发语言/Java/Druid.md)
 - [多数据源](开发语言/Java/多数据源.md)
-- [JVM GC 调优](开发语言/Java/JVM-GC调优.md)
+- [JVM GC 调优](开发语言/Java/JVM/JVM-GC调优.md)
 - [HashMap](开发语言/Java/集合/HashMap.md)
 - [ConcurrentHashMap](开发语言/Java/集合/ConcurrentHashMap.md)
 - [ArrayList与扩容](开发语言/Java/集合/ArrayList与扩容.md)
@@ -38,8 +38,8 @@
 - [TreeMap与红黑树](开发语言/Java/集合/TreeMap与红黑树.md)
 - [Queue与Deque](开发语言/Java/集合/Queue与Deque.md)
 - [CopyOnWriteArrayList](开发语言/Java/集合/CopyOnWriteArrayList.md)
-- [JVM 内存模型](开发语言/Java/JVM-内存模型.md)
-- [JVM 类加载](开发语言/Java/JVM-类加载.md)
+- [JVM 内存模型](开发语言/Java/JVM/JVM-内存模型.md)
+- [JVM 类加载](开发语言/Java/JVM/JVM-类加载.md)
 - [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)
 - [设计模式](开发语言/Java/设计模式.md)
 - [Java-反射与注解](开发语言/Java/Java-反射与注解.md)

@@ -116,6 +116,6 @@ mvn dependency:tree -Dverbose              # 连被调解掉的版本也显示�
 ## 9. 关联知识
 
 - 相关：[CI/CD](工程实践/CICD.md)（流水线中的构建阶段与依赖缓存）、[Docker](工程实践/Docker.md)（多阶段构建与层缓存）
-- [Spring-Boot](开发语言/Java/Spring-Boot.md)：Boot 的 parent 与 BOM 如何接管版本管理
+- [Spring-Boot](开发语言/Java/Spring/Spring-Boot.md)：Boot 的 parent 与 BOM 如何接管版本管理
 - [单元测试与Mock](工程实践/单元测试与Mock.md)：test scope 与 surefire/failsafe 分工的落点
 - 延伸：Gradle 的版本调解（最高版本胜出）与版本目录是另一套思路，对照第 3 节理解差异

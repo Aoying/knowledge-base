@@ -106,4 +106,4 @@ public class ValidateHandler {
 
 ## 关联知识
 
-- [Spring Boot](开发语言/Java/Spring-Boot.md)
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)

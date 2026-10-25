@@ -66,7 +66,7 @@ public class CostLogAspect {
 | 前提 | 目标必须有接口 | 类和方法不能 final |
 | Spring 选择 | 有接口时默认（Boot 2.x 起默认改 CGLIB） | Boot 2.7 默认 `proxyTargetClass=true` 即 CGLIB |
 
-关键结论：注入时用接口类型接收 Bean 时要注意实际代理类型；把代理强转成实现类会抛错；自调用绕过代理的问题两种代理都存在（见 [Spring 事务](开发语言/Java/Spring-事务.md)）。
+关键结论：注入时用接口类型接收 Bean 时要注意实际代理类型；把代理强转成实现类会抛错；自调用绕过代理的问题两种代理都存在（见 [Spring 事务](开发语言/Java/Spring/Spring-事务.md)）。
 
 ### 切面落点（项目里真正值得抽的横切逻辑）
 
@@ -141,6 +141,6 @@ A 依赖 B、B 依赖 A 时，Spring 用三级缓存解决**单例 + 字段/Sett
 
 ## 9. 关联知识
 
-- 前置：[Spring Boot](开发语言/Java/Spring-Boot.md)、[设计模式](开发语言/Java/设计模式.md)（代理模式）
-- 相关：[Spring 事务](开发语言/Java/Spring-事务.md)（最重要的 AOP 落点）
+- 前置：[Spring Boot](开发语言/Java/Spring/Spring-Boot.md)、[设计模式](开发语言/Java/设计模式.md)（代理模式）
+- 相关：[Spring 事务](开发语言/Java/Spring/Spring-事务.md)（最重要的 AOP 落点）
 - 延伸：AspectJ 编译期织入、Spring 事件机制解耦环依赖

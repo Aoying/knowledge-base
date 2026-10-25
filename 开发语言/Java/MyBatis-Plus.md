@@ -86,7 +86,7 @@ orderService.page(page, Wrappers.<Order>lambdaQuery().eq(Order::getStatus, statu
 
 ## 关联知识
 
-- [Spring Boot](开发语言/Java/Spring-Boot.md)
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)
 - [多数据源（dynamic-datasource）](开发语言/Java/多数据源.md)
 - [Druid 监控与慢 SQL 定位](开发语言/Java/Druid.md)
 

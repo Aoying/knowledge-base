@@ -107,6 +107,6 @@ MEMORY USAGE key                 # 单个 key 的实际占用
 
 ## 6. 关联知识
 
-- 命令与数据结构基础：[Redis](数据库/Redis.md)
-- 缓存三大问题与锁：[Redis 缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md)
-- 集群下的持久化与复制：[Redis 集群与哨兵](数据库/Redis-集群.md)
+- 命令与数据结构基础：[Redis](数据库/Redis/Redis.md)
+- 缓存三大问题与锁：[Redis 缓存问题与分布式锁](数据库/Redis/Redis-缓存问题与分布式锁.md)
+- 集群下的持久化与复制：[Redis 集群与哨兵](数据库/Redis/Redis-集群.md)

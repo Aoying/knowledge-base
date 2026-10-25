@@ -126,6 +126,6 @@ RedLock 是 Redis 作者提出的跨实例锁：向 5 个独立 Redis 主节点�
 
 ## 7. 关联知识
 
-- 锁四件套与基础命令：[Redis](数据库/Redis.md)
-- 集群下锁 key 与 hash tag：[Redis 集群与哨兵](数据库/Redis-集群.md)
-- 缓存失效策略与内存上限的配合：[Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)
+- 锁四件套与基础命令：[Redis](数据库/Redis/Redis.md)
+- 集群下锁 key 与 hash tag：[Redis 集群与哨兵](数据库/Redis/Redis-集群.md)
+- 缓存失效策略与内存上限的配合：[Redis 持久化与淘汰策略](数据库/Redis/Redis-持久化与淘汰策略.md)

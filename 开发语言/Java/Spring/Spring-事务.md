@@ -89,7 +89,7 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 
 声明式事务 = AOP 代理 + 事务拦截器：
 
-1. Spring 为标注 `@Transactional` 的 Bean 生成代理（机制见 [Spring IOC 与 AOP](开发语言/Java/Spring-IOC与AOP.md)）。
+1. Spring 为标注 `@Transactional` 的 Bean 生成代理（机制见 [Spring IOC 与 AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)）。
 2. 外部调用先进入 `TransactionInterceptor`，按注解配置通过 `PlatformTransactionManager` 开启事务。
 3. `DataSourceTransactionManager` 取连接、关自动提交，并把连接绑定到当前线程的 `ThreadLocal`（`TransactionSynchronizationManager`）；MyBatis 的 `SqlSessionTemplate` 每步都从线程绑定取同一连接，所以能同事务。
 4. 正常返回 → 提交；抛异常且命中回滚规则 → 回滚；最后解绑归还连接。
@@ -153,6 +153,6 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 
 ## 10. 关联知识
 
-- 前置：[Spring Boot](开发语言/Java/Spring-Boot.md)（注解与数据源配置）
-- 相关：[Spring IOC 与 AOP](开发语言/Java/Spring-IOC与AOP.md)（代理机制）、[多数据源](开发语言/Java/多数据源.md)、[Flowable](工程实践/Flowable.md)（流程引擎事务整合）
+- 前置：[Spring Boot](开发语言/Java/Spring/Spring-Boot.md)（注解与数据源配置）
+- 相关：[Spring IOC 与 AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)（代理机制）、[多数据源](开发语言/Java/多数据源.md)、[Flowable](工程实践/Flowable.md)（流程引擎事务整合）
 - 延伸：分布式事务（Seata）、事务性消息与最终一致

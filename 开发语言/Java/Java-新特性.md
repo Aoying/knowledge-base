@@ -121,7 +121,7 @@ String msg = switch (state) {
 这些特性大多是**编译期语法 + 少量标准库/字节码约定**，不是运行时魔法：
 
 - var、文本块、switch 表达式编译后基本等价于旧写法，无运行时代价。
-- record 是 `final` 类，字段 `private final`、没有 setter，`equals/hashCode` 由 `invokedynamic` 按组件生成。字节码细节见 [JVM 字节码与 JIT](开发语言/Java/JVM-字节码与JIT.md)。
+- record 是 `final` 类，字段 `private final`、没有 setter，`equals/hashCode` 由 `invokedynamic` 按组件生成。字节码细节见 [JVM 字节码与 JIT](开发语言/Java/JVM/JVM-字节码与JIT.md)。
 - 模式匹配编译为类型检查 + 转换，switch 靠 typeSwitch 分发；穷尽性在编译期检查，所以 sealed 新增子类后旧 switch 直接编译失败——这是它建模状态机的价值。
 
 ## 5. 实战应用
@@ -156,7 +156,7 @@ Stream 侧的配合用法（`toList()` 不可变结果等 JDK 16 起的小改进
 
 ## 8. 性能优化
 
-语言特性本身几乎不带来性能变化，别指望换语法提速。21 的性能收益主要在两处：一是虚拟线程提升 IO 密集服务的并发承载（见 [虚拟线程](开发语言/Java/虚拟线程.md)）；二是 GC 进步——G1 自 JDK 9 起是默认 GC，21 主要是持续调优；分代 ZGC 在 21 以 JEP 439 落地（` -XX:+UseZGC -XX:+ZGenerational` 显式开启，不是默认），低延迟场景可选。GC 选型与调优见 [JVM-GC 调优](开发语言/Java/JVM-GC调优.md)，本篇不展开。
+语言特性本身几乎不带来性能变化，别指望换语法提速。21 的性能收益主要在两处：一是虚拟线程提升 IO 密集服务的并发承载（见 [虚拟线程](开发语言/Java/虚拟线程.md)）；二是 GC 进步——G1 自 JDK 9 起是默认 GC，21 主要是持续调优；分代 ZGC 在 21 以 JEP 439 落地（` -XX:+UseZGC -XX:+ZGenerational` 显式开启，不是默认），低延迟场景可选。GC 选型与调优见 [JVM-GC 调优](开发语言/Java/JVM/JVM-GC调优.md)，本篇不展开。
 
 ## 9. 版本差异
 
@@ -190,5 +190,5 @@ Stream 侧的配合用法（`toList()` 不可变结果等 JDK 16 起的小改进
 - [Java](开发语言/Java/Java.md)
 - [虚拟线程](开发语言/Java/虚拟线程.md)
 - [Stream 与 Optional](开发语言/Java/Stream与Optional.md)
-- [JVM 字节码与 JIT](开发语言/Java/JVM-字节码与JIT.md)
-- [JVM-GC 调优](开发语言/Java/JVM-GC调优.md)
+- [JVM 字节码与 JIT](开发语言/Java/JVM/JVM-字节码与JIT.md)
+- [JVM-GC 调优](开发语言/Java/JVM/JVM-GC调优.md)

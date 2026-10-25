@@ -144,6 +144,6 @@ class ApplyServiceTest {
 5. 排查顺序：先查用例独立性（共享可变状态、真实数据库残留、时间与随机数没冻结，应用三原则是自建数据、自清理、时间与随机用可注入的 Clock 与参数）；再查执行顺序依赖（JUnit 支持随机顺序跑一次复现）；再查时区与 Locale 差异；最后在 CI 同款镜像里定位。CICD 篇的治理口径是 flaky 测试先 quarantine 并立单追踪，别直接重试掩盖。
 ## 8. 关联知识
 
-- 前置：[Spring Boot](开发语言/Java/Spring-Boot.md)
+- 前置：[Spring Boot](开发语言/Java/Spring/Spring-Boot.md)
 - 相关：[CI/CD](工程实践/CICD.md)（流水线里跑测试与覆盖率门禁）、[Bean-Validation](开发语言/Java/Bean-Validation.md)（校验规则的测试落点）
 - 延伸：Testcontainers、契约测试、变异测试（PIT）
