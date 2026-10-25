@@ -2,7 +2,7 @@
 知识点: Linux与Shell
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-22
+更新日期: 2026-10-25
 关联:
   - 工程实践知识点地图
   - 计算机基础知识点地图
@@ -37,6 +37,42 @@ awk '$9==500 {print $7}' access.log | sort | uniq -c | sort -rn | head
 sed -i 's/127.0.0.1/10.0.0.5/g' config.properties
 find /data -name "*.log" -mtime +7 -delete   # 删 7 天前日志
 ```
+
+## 复杂日志分析案例
+
+Nginx access 日志默认 combined 格式没有耗时字段，先确认 log_format 里加了 `$request_time`（放末尾），否则排不出慢请求：
+
+```bash
+# 状态码分布
+awk '{print $9}' access.log | sort | uniq -c | sort -rn
+# 慢请求 TopN（$NF 是末尾的 request_time，$7 是请求路径）
+awk '{print $NF, $7}' access.log | sort -rn | head -20
+# 按小时聚合（$4 是 [19/Oct/2026:14:23:01，截出日:时）
+awk '{print substr($4,2,14)}' access.log | sort | uniq -c
+```
+
+- 字段位置随 log_format 变，命令里的 `$9`、`$NF` 先拿一条日志数一遍再跑，别照抄。
+- 5xx 扎堆先看是某一个接口还是全站：`$7` 分组后再看，别只看总数。
+
+Java 应用日志是多行堆栈，`grep` 会把一次异常拆成多条。先把续行拼回一条记录再统计：
+
+```bash
+# 行首是日期的行开新记录，其余行拼到上一条；再抽异常类型计数
+awk '/^[0-9]{4}-[0-9]{2}-[0-9]{2}/{if (buf) print buf; buf=$0; next} {buf=buf " | " $0} END{print buf}' app.log \
+  | grep -o '[A-Za-z0-9_.]*Exception' | sort | uniq -c | sort -rn
+```
+
+- 行首日期正则要按自家日志格式改（logback 默认是 `yyyy-MM-dd HH:mm:ss`，上面按这个写的）。
+- 只看异常类型会漏根因：定位到具体某条后，再用时间戳把前后上下文捞出来。
+
+JSON 日志（一行一条，别用多行那套）：
+
+```bash
+jq -r '.level' app.json | sort | uniq -c | sort -rn   # 级别分布
+jq -r 'select(.duration_ms > 500) | [.timestamp, .msg, .duration_ms] | @tsv' app.json
+```
+
+- `jq` 报错先看是不是某行 JSON 被截断：`jq empty app.json` 能定位到坏行。
 
 ## 管道与重定向
 
@@ -146,6 +182,33 @@ lsof -i :8080    # 哪个进程占了 8080
 - Java 排查顺序：`top` 找 PID → `top -Hp <pid>` 看线程 → `jstack <pid>` 抓栈 → 死锁/忙循环一目了然。
 - `free -h` 里 available 才是真实可用内存，别看 free 那一列。
 
+## 排查实战
+
+### Java 进程 CPU 飙高：从进程到代码行
+
+```bash
+top -Hp "$PID"            # PID 换成实际进程号，锁定吃 CPU 的线程号（十进制）
+printf '%x\n' 12345         # 转 16 进制：3039
+jstack "$PID" | grep -A 30 'nid=0x3039'   # 该线程在干什么
+```
+
+- 栈停在业务循环里：死循环或正则回溯，看循环条件和量词嵌套。
+- 栈多是 GC 线程：`jstat -gcutil <pid> 1000 5` 看 FGC 是不是在涨，堆不够先调大再查代码。
+- 栈大量 `BLOCKED`：锁竞争，顺着锁对象找持锁线程。
+- `jstack` 要用进程属主用户跑，JDK 的 bin 不在 PATH 里先补路径。
+
+### 磁盘打满：四步定位
+
+```bash
+df -h                    # 确认哪个挂载点满了
+df -i                    # inode 用完也会写不进文件（小文件太多时）
+du -sh /* 2>/dev/null | sort -rh | head   # 从根往下钻，别一上来就 du 全盘
+lsof | grep deleted     # 已删但还被进程占着的文件
+```
+
+- `du` 算出来远小于 `df` 显示的已用空间，就是“已删未释放”的信号：删文件不回空间。
+- 根治办法是重启占着文件的进程；应急可截断 fd（只对普通文件）：`: > /proc/<pid>/fd/<fd号>`，生产上重启更稳。
+
 ## 防火墙
 
 ```bash
@@ -155,6 +218,36 @@ ufw allow 8080/tcp && ufw enable
 ```
 
 - 云服务器注意：安全组 + 系统防火墙是两层，都要放行，排查连不上时两边都看。
+
+## 安全实践
+
+```bash
+# /etc/ssh/sshd_config：密钥登录 + 禁用密码登录
+PubkeyAuthentication yes
+PasswordAuthentication no
+PermitRootLogin prohibit-password
+systemctl reload sshd
+```
+
+- **先开新会话验证密钥能登录，再关密码登录**，顺序反了就把自己锁在门外。
+- sshd 加固：`AllowUsers` 白名单只放运维账号；改默认端口只能挡扫描，别当安全措施；登录失败看 `/var/log/auth.log`（Debian 系）或 `/var/log/secure`（RHEL 系）。
+
+sudo 最小权限：别给应用账号 `ALL NOPASSWD`，只放它必须跑的那条命令：
+
+```text
+# /etc/sudoers.d/app，用 visudo 改，语法错了 sudo 直接罢工
+app ALL=(ALL) NOPASSWD: /bin/systemctl restart myapp
+```
+
+防火墙默认拒绝，再按需放行：
+
+```bash
+ufw default deny incoming
+ufw allow 22/tcp && ufw allow 8080/tcp
+ufw enable   # 先放行 SSH 再 enable，不然当前连接就断了
+```
+
+- fail2ban 一句话：自动封禁暴力破解的 IP，`fail2ban-client status sshd` 看封禁状态。
 
 ## 常用组合拳
 

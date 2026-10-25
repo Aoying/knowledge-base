@@ -146,6 +146,9 @@
 - [Flowable](工程实践/Flowable.md)（汇总；子篇在 工程实践/Flowable/：基础入门、多实例与网关、事件与监听器、历史与部署）
 - [CI/CD](工程实践/CICD.md)
 - [监控告警](工程实践/监控告警.md)
+- [Shell 脚本编程](工程实践/Shell脚本编程.md)
+- [生产级 Shell 脚本](工程实践/生产级Shell脚本.md)
+- [运维实战脚本](工程实践/运维实战脚本.md)
 - [单元测试与 Mock](工程实践/单元测试与Mock.md)
 - [OpenAPI 接口文档](工程实践/OpenAPI接口文档.md)
 - [JMeter 压测](工程实践/JMeter压测.md)
