@@ -141,6 +141,14 @@ public class SpringJobFactory extends AdaptableJobFactory {
 - Job 里注入 Spring Bean 为 null 的原因与解法？
 - `@DisallowConcurrentExecution` 解决什么问题？和分布式锁防重有何区别（前者只在同一 JobDetail 维度、依赖调度器，后者跨系统）？
 
+### 参考答案
+
+1. 因为二者职责不同、是一对多关系：JobDetail 是任务定义，绑哪个 Job、身份（name + group）、参数；Trigger 是触发规则，何时跑、重复策略、错过怎么办，只绑一个 JobDetail。分开后同一个 JobDetail 可被多个 Trigger 以不同时间规则引用，也便于按 name + group 寻址做动态增删改。
+2. 靠 JDBC JobStore + 集群抢锁保证：多节点连同一个库、开启 org.quartz.jobStore.isClustered=true，节点触发前要抢 QRTZ_LOCKS 里的行锁，抢到的才执行，同一 Trigger 同一时刻只有一个节点执行。这不是分片负载均衡，想并行要自己按数据范围拆多个 JobDetail；集群节点时钟还必须用 NTP 同步，否则会重复或错过触发。
+3. misfire 是任务该跑时没跑上（停机、线程池被长任务占满、暂停太久），超过 misfireThreshold（默认 60 秒）才算数。FIRE_ONCE_NOW 立刻补跑一次、之后按原计划，适合报表、对账这类漏了要补、但只补一次的任务；DO_NOTHING 不补、等下个周期，适合催办提醒、状态同步这类补跑反而重复打扰的任务；IGNORE_MISFIRE_POLICY 错过几次补几次，慎用，停机一周可能瞬间补跑上百次打爆下游。注意 Cron 触发器的默认 smart policy 等价于 FIRE_ONCE_NOW，不要蒙着用。
+4. 因为 Quartz 默认用反射自己 new Job 实例，不经过 Spring 容器，所以 Job 里的 @Autowired 全是 null。解法是自定义 JobFactory 让创建走 Spring，如继承 AdaptableJobFactory、重写 createJobInstance 后用 AutowireCapableBeanFactory.autowireBean 注入，再挂到 SchedulerFactoryBean 上；Boot 2.7 也可用 QuartzProperties + SchedulerFactoryBeanCustomizer 实现，本质相同。
+5. 它解决同一 JobDetail 的并发自压问题：标在 Job 类上后，上一次没跑完、下一次触发排队等待而不是并发再起一个，对账、批处理必备，否则慢任务会自己压死自己。区别在于作用域：它只在同一 JobDetail 维度、依赖调度器生效；分布式锁防重是跨系统的，不依赖同一调度器、能覆盖多系统重复执行的场景。
+
 ## 10. 关联知识
 
 - [Spring Boot](开发语言/Java/Spring-Boot.md)：自动装配与 starter 机制，quartz starter 的配置入口。

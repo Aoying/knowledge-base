@@ -143,6 +143,14 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 4. Flowable 与业务表同事务提交是怎么做到的？异步执行器为什么不在这个事务里？
 5. 一个事务方法里调了耗时 3 秒的外部接口，会带来什么连锁反应？
 
+### 参考答案
+
+1. REQUIRED：有则加入、无则新建，默认；REQUIRES_NEW：挂起当前事务、永远新建独立事务；NESTED：同一事务内开保存点，内层回滚只到保存点；SUPPORTS：有则加入、无则非事务；NOT_SUPPORTED：挂起当前事务、非事务执行；MANDATORY：必须已有事务否则抛异常；NEVER：必须无事务、有则抛异常。本质区别：REQUIRES_NEW 是独立连接、独立提交，内层提交后外层再回滚也不会连带回滚，且内外同时占两个连接；NESTED 与外层共用一个连接、一个事务，只有最外层提交才真正提交，内层失败只回滚到保存点，且驱动须支持 savepoint。
+2. 常见失效场景及原因：同类自调用绕过代理；方法非 public，代理默认拦截不到；类或方法 final，CGLIB 无法生成子类代理；异常被 catch 吞掉，拦截器以为成功而提交；抛 checked 异常未配 rollbackFor，默认只回滚 RuntimeException 与 Error；对象是自己 new 的、不是 Spring Bean，没有代理；@Async 或新线程里的方法，事务上下文不在该线程；多数据源未指定 transactionManager，用错了管理器；表引擎如 MyISAM 本身不支持事务。
+3. 因为 DataSourceTransactionManager 把连接关掉自动提交后绑定到当前线程的 ThreadLocal（TransactionSynchronizationManager），MyBatis 的 SqlSessionTemplate 每步都从线程绑定取同一连接，才能同事务。异步方法换了线程，原线程的绑定跟不过去，所以没有事务；异步段要自己开新事务，并明确它与主事务相互独立。
+4. Flowable 在 Spring 环境下用 SpringTransactionInterceptor 把流程命令绑到当前 Spring 事务，前提是 ProcessEngineConfiguration 注入与业务同一个 PlatformTransactionManager。这样业务方法 @Transactional 范围内，流程 ACT_* 表写入与业务表写入同事务提交、同事务回滚。但事务只覆盖一次命令执行，到等待状态即提交；异步执行器在独立线程、独立事务中跑，不在该事务里，异步失败不会回滚已提交的业务数据，靠失败重试与业务补偿处理。
+5. 会把事务拖长：长事务一直占着数据库连接和行锁，高并发下先爆的是连接池，后续请求排队等待连接，延迟放大、甚至互相等连接卡死；同时长事务还会给 OceanBase 的 undo 带来压力。因此事务方法里禁止远程调用、发 MQ 等慢操作，应把耗时操作移出事务，或缩小事务范围、给批量任务设 timeout 上限。
+
 ## 10. 关联知识
 
 - 前置：[Spring Boot](开发语言/Java/Spring-Boot.md)（注解与数据源配置）

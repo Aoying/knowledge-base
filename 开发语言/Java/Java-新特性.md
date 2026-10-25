@@ -177,6 +177,14 @@ Stream 侧的配合用法（`toList()` 不可变结果等 JDK 16 起的小改进
 - String Templates 为什么不能在生产用？预览特性的二进制代价是什么？
 - 项目在 Boot 2.7，用上 sealed 需要动框架吗？用上虚拟线程呢？
 
+### 参考答案
+
+1. record 是不可变数据载体：final 类、字段 private final、没有 setter，编译器生成构造器、访问器与 equals/hashCode/toString，组件访问器是 `name()` 而不是 `getName()`。JPA/MyBatis 实体需要可变字段和框架反射填充，与不可变 record 冲突，所以不能做实体；紧凑构造器只能做校验，不能写 `this.x = ...` 赋值，字段赋值由编译器自动完成。
+2. 相比枚举，sealed 类型每个状态可以是携带不同数据的 record，表达力更强；相比普通开放继承，sealed 用 `permits` 封闭继承范围，子类必须是 final、sealed 或 non-sealed 之一。穷尽检查靠编译期检查实现：对 sealed 类型做 switch 模式匹配时漏一个状态就编译报错，sealed 新增子类后旧 switch 也会直接编译失败，这正是它建模审批、单据等封闭状态集的价值。
+3. `when` 守卫是分支匹配条件的一部分：守卫不满足时该分支不算匹配，会继续尝试下一个分支；而嵌套 if 是已经进入分支后的内部判断，条件不满足仍停留在该分支内。分支顺序因此重要：更具体、带守卫的分支要放在前面，如「驳回且原因空白」要放在普通「驳回」之前，否则通用分支会先匹配、把带守卫的分支吞掉。
+4. String Templates 在 JDK 21 里只是预览特性（JEP 430，未正式），需要 `--enable-preview` 才能用，API 可能变化、二进制不兼容。预览特性与 class 文件版本绑定，用 `--enable-preview` 编出的字节码换版本直接拒绝加载，所以不能写进生产代码。
+5. 用 sealed 不需要动框架：它只是 JDK 17 的语言特性，只需把 JDK 升到 17，Spring Boot 2.7 支持在 JDK 17 上运行（其基线仍是 JDK 8），record、sealed、文本块都能用，风险点是老字节码库、旧 JDBC 驱动在 17 强封装下的反射报错。用虚拟线程则必须升 Spring Boot 3.x（`spring.threads.virtual.enabled` 是 Boot 3.2+ 的能力，且要求 JDK 21），最大坑是 Jakarta 命名空间迁移：`javax.servlet.*`、`javax.persistence.*`、`javax.validation.*` 等要整体改成 `jakarta.*`，而 JDK 自带的 `javax.sql`、`javax.crypto` 等不改，别全局替换误伤；这是一次大版本升级，不能和升 JDK 混为一谈。
+
 ## 11. 关联知识
 
 - [Java](开发语言/Java/Java.md)

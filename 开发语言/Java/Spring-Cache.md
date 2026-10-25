@@ -127,6 +127,14 @@ public class CacheConfig {
 - `sync = true` 的防击穿范围到哪一层为止？
 - Redis 实现下哪三个默认配置必须改？为什么？
 
+### 参考答案
+
+1. @Cacheable 在调用前查缓存：命中直接返回、不进方法，未命中才执行方法并把结果回写。@CachePut 在调用后写缓存：方法必执行，结果覆盖缓存，用于更新方法，且返回值即写入缓存的内容，必须与查询返回结构一致。简言之，前者是「有则不查」，后者是「必查必写」。
+2. 因为高并发下两个写请求交错时，@CachePut 写缓存的顺序可能与数据库提交顺序相反，缓存里反而留下旧值。用 @CacheEvict 先更新数据库、再删缓存，下次读时按 Cache Aside 回源重建，顺序错乱的影响只剩短暂不一致，配合 TTL 兜底更稳妥。@CachePut 只适合单写、低并发的配置型数据。
+3. 因为 Spring Cache 靠 AOP 代理生效，同类内 this.getItem() 自调用不走代理，@Cacheable 会静默不生效、且不报错。这与 @Transactional 自调用是同一个病根，解法同样是注入自身代理或把方法拆到另一个类；排查时还要先确认已加 @EnableCaching、方法非私有、类已被 Spring 管理。
+4. 只到同一 JVM 内：sync = true 保证同一 JVM 内同 key 只有一个线程回源，其他线程等待。跨实例无效，多实例下热点 key 过期瞬间仍会并发打库，集群防击穿要靠分布式锁或逻辑过期，见 Redis 篇。
+5. 三处：序列化、TTL、空值策略。默认 JDK 序列化在 Redis 里是二进制不可读、类全名变更后反序列化直接失败，应换成 GenericJackson2JsonRedisSerializer 存 JSON 并带类型信息；无 TTL 等于缓存永不过期、改了永远读旧值，且各缓存要分级错峰、避免一起过期形成雪崩；空值策略要按缓存分别定，disableCachingNullValues 与 unless = "#result == null" 会放弃防穿透，而缓存空值则要配短 TTL（如 1 分钟）来防穿透。
+
 ## 9. 关联知识
 
 - [Spring Boot](开发语言/Java/Spring-Boot.md)：自动配置与 starter，缓存与 Redis 的装配入口。

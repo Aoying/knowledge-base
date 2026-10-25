@@ -102,6 +102,12 @@ ttlPool.execute(() -> System.out.println(TRACE.get()));   // 池线程里也能�
 - 为什么 InheritableThreadLocal 配合线程池失效？TTL 怎么补的？
 - 你项目里 ThreadLocal 的清理收口在哪一层？异常路径覆盖了吗？
 
+### 参考答案
+
+1. key 用弱引用，是为了让 ThreadLocal 实例本身没人引用时可以被 GC，不至于永远占着 map 的槽位。但 value 是强引用：key 被回收变 null 后，这条 Entry 取不到也删不掉，value 挂着对象无法回收；线程池线程常驻不死，这条泄漏链就一直存在。set/get 的启发式清理只能顺手扫掉一部分过期 Entry，不能指望它兜底。
+2. InheritableThreadLocal 只在新建线程那一刻把父线程的值浅拷贝一份；线程池的线程早建好了、长期复用，提交任务时父线程的值根本传不进池线程，所以失效。TTL 的补法：用 TransmittableThreadLocal 存值，再用 TtlExecutors 包装线程池——提交时捕获当前线程的全部 TTL 值，执行前回放到工作线程、执行后恢复。但 TTL 只解决“传得进去”，不解决残留串扰，仍要 remove。
+3. 按正文推荐的收口：网关过滤器/拦截器/切面统一做——入口 set，请求结束在 finally 里 remove，不靠业务代码自觉；自己提交的并发任务，自己在 finally 里清理。异常路径必须覆盖：只在正常路径 remove 等于没清，remove 必须进 finally。（本题问的是本项目实际做法，正文只给了推荐收口，答案按正文写法作答，需自行对照项目现状。）
+
 ## 9. 关联知识
 
 - 汇总与全景：[Java-并发编程](开发语言/Java/并发/Java-并发编程.md)

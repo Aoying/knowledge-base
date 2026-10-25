@@ -102,6 +102,12 @@ public class AppConfig {
 - volatile 与 synchronized 在可见性实现上的差别是什么？
 - 为什么不可变对象不需要同步也能安全发布？
 
+### 参考答案
+
+1. 常用的五条：程序顺序（同线程内书写在前 happens-before 在后）、锁规则（解锁 happens-before 随后对同一把锁的加锁）、volatile 规则（volatile 写 happens-before 随后对同一变量的读）、线程启动（start() 之前的操作 happens-before 新线程内的操作）、线程终止（线程内操作 happens-before 其他线程 join() 返回后），再加传递性串联。DCL 需要 volatile 的原因：new 分三步（分配内存、构造初始化、引用指向内存），无 volatile 时后两步可重排，另一线程判空时可能拿到引用非 null 但未初始化完的半成品；volatile 写屏障禁止这种重排。（标准 JMM 共八条，正文表格列了六条，另两条是中断规则与终结器规则。）
+2. volatile 只解决可见性与有序性（内存屏障），不互斥、不保证原子性；synchronized 通过监视器进入/退出同时解决互斥、可见性、有序性，解锁 happens-before 后续对同一把锁的加锁。所以 volatile 不是“轻量级锁”，临界区该加锁还得加锁。
+3. 不可变对象状态全 final，且构造器里 this 不逸出：正确构造的对象，其 final 字段对其他线程可见时保证已初始化完成。发布后任意线程读到的都是完整一致的快照，不需要额外同步；这也是设计并发数据结构时优先“不可变 + AtomicReference 整体替换”，而不是给可变对象层层加锁的原因。
+
 ## 8. 关联知识
 
 - 汇总与全景：[Java-并发编程](开发语言/Java/并发/Java-并发编程.md)

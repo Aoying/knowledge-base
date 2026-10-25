@@ -101,6 +101,12 @@ class Mutex extends AbstractQueuedSynchronizer {
 - ReentrantLock 的公平与非公平差别在代码上落在哪一步？
 - Semaphore 与 CountDownLatch 的 state 语义各是什么？
 
+### 参考答案
+
+1. state 是同步状态整数，含义由子类定义：独占模式下 0 表示空闲、>0 表示重入次数，共享模式下表示剩余许可数或剩余计数；队列是 CLH 变体的 FIFO 等待队列，负责排队、阻塞（park）和唤醒（unpark）。一句话：state 管“能不能过”，队列管“过不了时怎么等”。
+2. 差别只在入队前一步：非公平锁 tryAcquire 先直接 CAS 抢一把，抢不到再入队，后来者可以插队，这就是“非公平”的来源；公平锁入队前先检查队列里是否有人排队，有人就自觉排队，不直接抢。入队之后的排队、阻塞、唤醒流程两者相同。
+3. Semaphore 的 state 是剩余许可数：acquire 拿许可，没有许可就排队，release 还许可，是限流的标准件。CountDownLatch 的 state 是需要等待的事件数：countDown 减一，减到 0 放行所有等待者，且一次性、不可重置；要循环多轮任务会合用 CyclicBarrier。
+
 ## 9. 关联知识
 
 - 汇总与全景：[Java-并发编程](开发语言/Java/并发/Java-并发编程.md)

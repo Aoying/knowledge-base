@@ -242,6 +242,17 @@ map.put("count", v == null ? 1 : v + 1); // 两线程读到同一旧值，计数
 8. 它与 Hashtable、synchronizedMap 的迭代器行为有什么区别？
 - 参考要点：见第 1、2、4、6 节，能画出扩容协助流程即过关。
 
+### 参考答案
+
+1. 禁 null 是为消除歧义：并发下 get(k) 返回 null 无法区分“key 不存在”还是“key 存在但 value 就是 null”。containsKey 也救不了：containsKey 与 get 之间别的线程可能插入或删除该 key，两次调用之间没有原子性，歧义仍在；所以干脆禁掉 null，放入直接抛 NullPointerException。
+2. 默认 16 段：Segment 数组默认长度 16，每段一把 ReentrantLock，并发度 = 段数，理想情况下最多 16 个线程同时写不同段。改大的代价：段数在构造时定死，扩容只扩单段、不扩段数；段数越大内存开销越大（每段一个锁 + 一个 HashEntry 数组），且并发度仍被构造时的段数封顶。
+3. 桶头锁生命周期极短，JVM 对 synchronized 的优化已足够；更重要的是省内存——桶数随容量增长，每个桶配一个 ReentrantLock 对象开销太大，而 synchronized 的锁状态记在对象头 Mark Word 里。JDK 8 锁粒度从“一段”细到“一桶”，冲突概率大幅降低。
+4. 桶为空：CAS 无锁插入（casTabAt）。桶不为空：synchronized 锁住桶头节点，遍历链表/红黑树插入或更新；若桶是 ForwardingNode（正在扩容），先协助扩容再重试；空表时先初始化。
+5. ForwardingNode 是已迁移桶的标记（hash = MOVED = -1）。读写线程命中它时不等待，直接调用 helpTransfer 协助搬剩余桶，搬完再到新表操作；transfer 按步长分工，默认每线程至少负责 16 个桶。
+6. size() 不准：计数是 baseCount + CounterCell[] 分散累加，sum() 时各分片不在同一时刻统计，读取瞬间还可能有更新在途，所以是估算值。精确计数的代价：要全表加锁或让写停下来等计数静止，等于放弃并发，违背 CHM 的设计目标；mappingCount() 同样是近似值。
+7. 映射函数执行时持有桶锁，函数里再 put 同一个 map：同一 key 递归回写会等同一把锁，直接卡死或抛 IllegalStateException: Recursive update；不同 key 也可能拖住同桶其他 key。解法：映射函数只做纯计算，依赖数据提前在锁外算好再传入。
+8. Hashtable 的 Enumeration/迭代器是弱一致性；synchronizedMap 的迭代器是快速失败，迭代需手动同步全表；CHM 的迭代器是弱一致性：不抛 ConcurrentModificationException，迭代中允许其他线程增删，看到的是某一时刻的快照式视图，可能漏掉新插入的，也可能看到刚被删的。
+
 ## 11. 关联知识
 
 - HashMap：单线程结构原型，数组 + 链表 + 红黑树、扰动函数、扩容机制先看它。

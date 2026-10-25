@@ -106,6 +106,14 @@ public class SecurityConfig {
 - JWT 为什么难撤销？短令牌 + 刷新令牌是怎么折中的？
 - 5.7 为什么废弃 WebSecurityConfigurerAdapter？
 
+### 参考答案
+
+1. 在 Servlet 过滤器链层拦截，位于 DispatcherServlet 之前，经 DelegatingFilterProxy 桥接到 Spring 管理的安全链。骨干过滤器：SecurityContextPersistenceFilter 在请求开始加载、结束存回 SecurityContext；UsernamePasswordAuthenticationFilter 处理表单登录提交；ExceptionTranslationFilter 把认证/授权异常翻译成 401 或跳转登录页；链尾的 AuthorizationFilter 做 URL 授权判定。
+2. 认证成功的信息存在 SecurityContextHolder 的 SecurityContext 里，其内部是 ThreadLocal，随请求线程传递。异步线程是新线程，默认没有这份 ThreadLocal 上下文，所以取不到当前用户，需在提交任务前显式捕获传递，或把所需用户信息作为参数传下去。
+3. 前缀标识密文所用的编码器，如 {bcrypt}、{noop}，DelegatingPasswordEncoder 靠前缀分发到对应编码器比对。这样新旧算法的密文可以共存，迁移时登录先按老算法校验、成功后按新格式重写密文逐步洗库，而不必把编码器改回兼容明文。无前缀的老密文对不上委托编码器，就会报 no PasswordEncoder mapped for id "null"。
+4. JWT 自包含、服务端不存会话，验签即认证，签发后在有效期内无法直接作废；要拉黑名单就等于把状态又加了回来，失去了无状态的意义。折中是短有效期访问令牌 + 刷新令牌：访问令牌过期快、泄露窗口小，刷新令牌可控、可撤销，配套复杂度是必须接受的代价。
+5. 5.7 起官方主推组件式写法：暴露 SecurityFilterChain Bean，不再继承 WebSecurityConfigurerAdapter。继承式配置难以灵活组合多条链（不同 URL 用不同口径），组件式可按 URL 定义多条链、与 authorizeHttpRequests/AuthorizationManager 体系配合，配置更清晰、可组合。
+
 ## 10. 关联知识
 
 - [Spring-Boot](开发语言/Java/Spring-Boot.md)：自动配置与项目基线。

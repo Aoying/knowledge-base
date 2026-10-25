@@ -121,6 +121,14 @@ class LruCache<K, V> extends LinkedHashMap<K, V> {
 - 手写一个容量 3 的 LRU，依次 put 1、2、3、get 1、put 4，手推最终内容与顺序。
 - 它和 [TreeMap](开发语言/Java/集合/TreeMap与红黑树.md) 都能「有序」，排序依据有什么本质区别？
 
+### 参考答案
+
+1. 顺序实现：节点 LinkedHashMap.Entry 继承 HashMap.Node，多 before、after 两个引用，全表节点串成一条双向链表（head 最旧端、tail 最新端）；哈希表部分完全复用 HashMap。两种模式由 accessOrder 决定：false（默认）插入顺序，重复 put 已有 key 不改变位置；true 访问顺序，最近被 get/put 的挪到链尾，链头就是最久未访问的。
+2. removeEldestEntry 在插入新节点后被调用（afterNodeInsertion 回调），且一次插入只调用一次，所以一次 put 最多淘汰一个；返回 true 就删链头。LRU 写法：accessOrder = true + 重写该方法为 size() > capacity。
+3. 访问顺序模式下 get 会把节点移到链尾，属于结构性修改，modCount 递增；正在进行的迭代器校验失败，抛 ConcurrentModificationException。插入顺序模式下 get 不移位，遍历时 get 安全。修复：遍历期间不要 get，需要边遍历边查时先复制一份 key 列表。
+4. 手推：容量 3，put 1、2、3 → 顺序 [1, 2, 3]；get 1 → 1 挪到链尾 → [2, 3, 1]；put 4 → 超容，淘汰链头 2 → 最终内容 [3, 1, 4]，链头 3 最久未访问、链尾 4 最新。
+5. 本质区别：TreeMap 按 key 的值排序（自然顺序 Comparable 或构造时 Comparator），顺序与插入/访问无关；LinkedHashMap 按插入顺序或访问顺序排列，与 key 本身的大小无关。只要顺序不要范围查询用 LinkedHashMap；需要按值排序、范围查询用 TreeMap。
+
 ## 11. 关联知识
 
 - [HashMap](开发语言/Java/集合/HashMap.md)：父类，桶结构、扩容、树化都看它。

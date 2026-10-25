@@ -125,6 +125,18 @@ Arthas 路径更短：`thread -n 3` 一步给出最忙线程及栈；再 `trace`
 4. GC 日志里 Full GC 只涨不落说明什么？下一步做什么？
 5. 为什么生产环境要预先开启 GC 日志和 HeapDumpOnOutOfMemoryError？
 
+### 参考答案
+
+1. 先 `top` 找到吃 CPU 的 Java 进程 PID；再 `top -Hp <pid>` 找到最忙线程的十进制 TID；`printf '%x\n' <tid>` 转十六进制，得到线程栈里的 nid；`jstack <pid> | grep -A 30 'nid=0x<hex>'` 看这条线程在跑什么代码。连续抓 3 次 jstack（间隔几秒）定性：栈总停在同一业务方法就是死循环或热点计算；总在 GC 线程说明问题在 GC 而不在业务；大量线程 BLOCKED 在同一把锁则是锁竞争，转查持锁线程。Arthas 快捷路径：`thread -n 3` 一步给出最忙线程及栈。
+
+2. 看趋势而非单次快照：金标准是多次 Full GC 后老年代下限持续抬升。结合 `jstat -gcutil` 看 O（老年代使用率）在 Full GC 后是否一次比一次高，只涨不落即怀疑泄漏；若 GC 后能回落、只是堆不够大或瞬时峰值高，则更偏向内存不足而非泄漏。确认泄漏后用堆快照走 MAT 分析引用链。
+
+3. 成因不同：`Metaspace` OOM 是类元数据区满，源头是类加载失控，如动态代理/字节码生成过多、类加载器泄漏；堆 OOM 是对象装不下，源头是对象持有或分配问题。查法不同：Metaspace 查类加载情况（如 `-verbose:class`、类加载器统计、热部署卸载链）；堆 OOM 用 heap dump 进 MAT，看 Histogram 第一名、Dominator Tree 的 Retained Heap 与 Leak Suspects，沿 GC Roots 确认谁在持有、本该何时释放。
+
+4. 说明有对象持续晋升且回收不掉，怀疑泄漏：GC 后老年代占用只涨不落。下一步不是调大堆（那只是把爆炸时间推后），而是走内存溢出定位流程：取自动或手动的 heap dump，用 MAT 看大对象与引用链，确认持有者与应释放时机；同时结合 GC 日志看 Full GC 触发原因，区分是晋升失败、元空间还是显式 `System.gc()`。
+
+5. 因为排查总原则是先留现场、再下结论、最后才重启：堆栈、堆快照、GC 日志一旦进程没了就再也拿不到。预先开启 GC 日志，出事才有频率、回收效果、单次停顿与 Full GC 触发原因可查；预先开启 `HeapDumpOnOutOfMemoryError`，OOM 时自动留下堆快照，否则事后无法复盘，同类故障必然复发且每次都从零查。
+
 ## 7. 关联知识
 
 - 前置：[JVM 内存模型](开发语言/Java/JVM-内存模型.md)、[JVM GC 调优](开发语言/Java/JVM-GC调优.md)

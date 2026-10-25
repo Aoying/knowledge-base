@@ -238,6 +238,20 @@ java.lang.ClassCastException: com.example.User cannot be cast to com.example.Use
 - `cannot be cast to X` 同名异常的根因与定位命令是什么？
 - 自测答案标准：能默写 `loadClass` 伪代码 + 手写 `findClass` 骨架即过关。
 
+### 参考答案
+
+1. 七阶段：加载 → 连接（验证、准备、解析）→ 初始化 → 使用 → 卸载；其中连接分验证、准备、解析三步，可交叉，解析可延后。准备阶段只赋零值，是因为静态变量的真实赋值被合并进 `<clinit>`，要到初始化阶段才按源码顺序执行；例外是 `static final` 编译期常量，在准备阶段直接赋真实值。
+
+2. 主动引用（正文 2.2 列出 7 种，问题所说的 6 种指前 6 项核心情形，第 7 项为 JDK 7+ 补充）：new 创建对象；读写非 final 静态字段；调用静态方法；反射 `Class.forName`（默认 initialize=true）；初始化子类时先初始化父类；含 main 方法的类在 JVM 启动时初始化；JDK 7+ 的 MethodHandle 解析时涉及的类。被动引用 3 例：通过子类引用父类字段，只初始化父类、不初始化子类；数组声明只加载、不初始化；编译期常量（final + 编译期可定值）直接进常量池，不触发初始化。
+
+3. 三步：先 `findLoadedClass` 查缓存，已加载直接返回；未加载则委派父加载器（父为 null 时找 Bootstrap）；父加载不到，自己执行 `findClass` 加载。应重写 `findClass` 而非 `loadClass`，因为 `loadClass` 承载的就是这套双亲委派逻辑，重写它容易破坏委派、防篡改与去重；只重写 `findClass` 提供“自己如何取字节码”，即可保留双亲委派。
+
+4. TCCL 解决“父加载器看不见子加载器范围的类”的反向加载问题。JDBC 中 `DriverManager` 由 Bootstrap 加载，`java.sql.Driver` 接口也在核心层，但驱动实现（如 `com.mysql.cj.jdbc.Driver`）在应用 classpath，父加载器看不见；不用 TCCL 就加载不到实现。解法是 `Thread.currentThread().getContextClassLoader()` 取应用加载器反向加载，`ServiceLoader` 本质即用 TCCL 加载 `META-INF/services` 下的实现。
+
+5. 根因：类名相同但加载器不同，JVM 按“加载器 + 全限定名”判定唯一性，视为两个不同类型，强转必抛 `ClassCastException`。定位：分别打印两边 `obj.getClass().getClassLoader()` 与 `User.class.getClassLoader()` 对比；也可用 Arthas 的 `classloader -l`、`sc -d <类名>` 查看。常见场景是热部署残留、Tomcat 与应用各放一份 jar、插件重复加载；解法是共享类只放父加载器可见位置，子加载器不重复放同一 jar。
+
+6. 过关标准即两部分。loadClass 伪代码关键步骤：`findLoadedClass(name)` 查缓存，命中直接返回；未命中则委派父加载器（父为 null 时找 Bootstrap）；父加载不到才调自己的 `findClass(name)`。findClass 骨架要点：只重写 `findClass`、不重写 `loadClass`；把类名中的 `.` 换成 `/` 并拼上 `.class` 定位文件；读出字节数组后调 `defineClass(name, bytes, 0, bytes.length)` 生成 Class 对象；读不到或 IO 异常时包装为 `ClassNotFoundException` 抛出；字节来源可换成解密、网络或数据库，骨架逻辑不变。
+
 ## 11. 关联知识
 - JVM-内存模型：方法区 / Metaspace 是类元数据存放处，卸载与之直接相关。
 - JVM-GC调优：类卸载由 GC 回收加载器触发，Metaspace OOM 需结合 GC 日志看。

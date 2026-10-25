@@ -128,6 +128,14 @@ list.remove(Integer.valueOf(1)); // 这才是删值 1
 - ArrayList 与 LinkedList 怎么选？「链表插入 O(1)」为什么在业务代码里基本兑现不了？
 - 自测：复现 foreach 删除的 `ConcurrentModificationException`，再用 `removeIf` 修复。
 
+### 参考答案
+
+1. 扩容 1.5 倍：newCapacity = oldCapacity + (oldCapacity >> 1)，一次 addAll 装不下则直接用所需最小容量，最大长度 Integer.MAX_VALUE - 8。不用 2 倍：多次扩容后释放的旧空间有机会被后续复用，内存浪费更低；HashMap 用 2 倍是为位运算定位，诉求不同。默认容量 10 是懒加载：无参构造用共享空数组，第一次 add 时才扩到 10。
+2. fail-fast 是尽早暴露 bug 的检测手段，不是同步机制：结构性修改（add/remove/clear）递增 modCount，迭代器创建时记下 expectedModCount，next()/remove() 前校验，不一致抛 ConcurrentModificationException。它只是单迭代器视角的检查，并发下不能依赖它保证线程安全。
+3. subList 是视图不是拷贝：读写直接落到原列表对应区间；原列表在视图之外结构性修改后，再用它就抛 ConcurrentModificationException（共享 modCount 校验）。长期持有 subList 会拖住整个底层数组：subList 持有原列表引用，对大列表取一小段长期保存，原数组无法回收；需独立保留时拷贝：new ArrayList<>(list.subList(0, 10))。
+4. 默认选 ArrayList：随机访问 O(1)、尾部增删均摊 O(1)、缓存友好；中间插删频繁且已定位节点时才考虑链表。业务代码里“链表插入 O(1)”兑现不了：前提是手里已有节点引用，业务代码都是先按下标/值查找再改，查找已是 O(n)；且节点内存开销大、缓存不友好，遍历也慢。队列/栈场景用 ArrayDeque 更快。
+5. 自测思路：foreach 里直接 list.remove() 复现 ConcurrentModificationException；改用 removeIf（或迭代器 it.remove()、收集待删元素后 removeAll）修复。验证要点：修复后不再抛异常，且删除后剩余元素与预期一致；同时确认这是迭代器校验失败，不是并发问题。
+
 ## 11. 关联知识
 
 - [HashMap](开发语言/Java/集合/HashMap.md)：同为非线程安全基础容器，初始容量预估思路相通。

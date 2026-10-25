@@ -153,6 +153,12 @@ new OpenAPI().components(new Components().addSecuritySchemes("bearerAuth",
 3. 文档分组有哪两种维度？混用会出什么问题？
 4. 生产环境接口文档应该怎么处理？风险是什么？
 
+### 参考答案
+
+1. springfox 已多年不维护，且与新版本 Spring 的路径匹配策略冲突，是经典启动报错来源；springdoc 是当前主流。Boot 2.7 该选 springdoc 1.7.x 版本线，Boot 3 要换 springdoc 2.x 加 Jakarta，两条线别混装。
+2. springdoc 会自动把 DTO 上的校验注解翻译成 Schema 约束，如 @NotNull/@NotBlank 对应 required、@Size 对应 maxLength、@Min/@Max 对应 minimum/maximum、@Pattern 对应 pattern。不能只写 @Schema 不写校验：校验注解是运行时事实，文档只是它的投影；只在 @Schema 里写必填而不加校验，文档好看但接口照样放行非法数据，顺序不能反。
+3. 两种维度：按路径（pathsToMatch）或按包（packagesToScan）。团队内必须统一一种，二选一；混用会导致接口重复出现或漏组。
+4. 生产与对外环境应关掉页面或加访问控制，用 springdoc.swagger-ui.enabled 与 springdoc.api-docs.enabled 按 profile 配置，内网生产至少限制到运维网段。风险是接口文档等于把系统地图公开，裸奔等于把接口、字段、枚举含义全部暴露；示例值一律用虚构值，不能带真实客户数据。
 ## 8. 关联知识
 
 - 前置：[Spring Boot](开发语言/Java/Spring-Boot.md)、[Bean-Validation](开发语言/Java/Bean-Validation.md)

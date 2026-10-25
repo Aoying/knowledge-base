@@ -139,6 +139,13 @@ public class TraceFilter extends OncePerRequestFilter {
 - 日志重复输出的成因与修法？
 - 生产环境 SQL 日志为什么必须关？与排障需求怎么平衡（慢 SQL 走 Druid 监控而非全量日志）？
 
+### 参考答案
+
+1. logback.xml 由原生 Logback 直接加载，不认 Boot 的扩展；logback-spring.xml 支持 Boot 扩展的 springProperty、springProfile，且加载时机在环境准备好之后。所以 Boot 项目用后者，才能按 profile 切配置、用配置项给日志参数。
+2. AsyncAppender 有反直觉默认：队列剩余空间小于 20% 时丢弃 TRACE/DEBUG/INFO，只保留 WARN/ERROR；discardingThreshold 设为 0 则一条不丢。另外进程被 kill -9 时队列里未落盘的日志会丢，停机要走正常关闭刷队列。审计类、账务类日志不能容忍丢弃，应显式设 0，或单独走同步 Appender。
+3. MDC 底层是 ThreadLocal 的键值表，pattern 里用 %X{traceId} 就能每行自动带上。线程池里会丢 traceId，因为 MDC 在父线程，子线程拿不到；而且不清还会串到同线程的下个请求（线程池复用的经典污染）。补法：入口过滤器生成 traceId 放入 MDC、请求结束 MDC.clear()；给线程池配 TaskDecorator，提交时复制 MDC、执行前装上、执行后清理。
+4. 成因是某个 logger 既配了自己的 Appender，又继承 root 的 Appender，且 additivity 默认 true，导致输出两次。修法：给该 logger 设 additivity="false"。如果改了配置不生效，再查 logging.config 是否指到了别的文件，以及 classpath 根目录是否还有 logback.xml 抢先被原生加载。
+5. MyBatis/Druid 的 SQL 日志会把参数原样打出，密码、卡号、身份证号等敏感信息会直接进日志，生产必须一律关闭 SQL 明文日志（SQL log 只在本地开）。排障需求不靠全量 SQL 日志平衡：慢 SQL 走 Druid 监控，确需留存敏感上下文的走带权限的审计日志通道，与运行日志分开存放、分开授权。
 ## 9. 关联知识
 
 - [Spring Boot](开发语言/Java/Spring-Boot.md)：默认日志体系、Actuator loggers 端点、SQL 日志的开关纪律。

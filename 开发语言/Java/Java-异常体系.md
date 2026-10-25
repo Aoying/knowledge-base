@@ -128,6 +128,13 @@ public class GlobalExceptionHandler {
 - try-with-resources 比手写 finally 好在哪？什么是压制异常？
 - Spring 事务为什么对受检异常不回滚？怎么改？
 
+### 参考答案
+
+1. 两者都是 `Throwable` 的分支：Error 是 JVM/系统级致命问题，如内存溢出、栈溢出、类加载失败，业务代码不捕获、不恢复，捕获了也处理不了；Exception 是程序可处理的异常。会主动捕获的是调用方有能力恢复的受检异常和业务异常（一般在统一异常处理层收口）；不会主动捕获的是 Error，以及空指针、参数非法这类编码错误——后者应修代码，而不是加 catch 掩盖。
+2. 受检异常的设计意图是「调用方有能力且有义务恢复」的失败，如文件不存在、网络超时，因此编译器强制二选一：try-catch 处理，或在签名上 throws 声明。Spring/JdbcTemplate 把 `SQLException` 转成非受检的 `DataAccessException`，是因为绝大多数受检异常调用方能做的只有记日志 + 往上抛，强制声明只会污染签名；自己设计业务异常同样默认继承 `RuntimeException`，除非确实存在调用方必须当场恢复的场景。
+3. try-with-resources 要求资源实现 `AutoCloseable`，按声明逆序自动关闭，不用手写 finally 关流；手写版本一旦 `close()` 本身抛异常，就会盖掉 try 块里的原始异常，排查时看到的是假现场。关闭时抛出的异常不会丢失，会挂在主异常的 `getSuppressed()` 里，堆栈中显示为 `Suppressed:` 段，即压制异常。
+4. Spring 声明式事务默认只对 `RuntimeException` 和 `Error` 回滚，受检异常不在默认回滚范围内；若受检异常没配 `rollbackFor`，或异常在事务方法里被 catch 吞掉，事务就会正常提交，出现「报错了但数据写进去了」。改法是 `@Transactional(rollbackFor = Exception.class)`，且不要在事务方法里吞异常。
+
 ## 8. 关联知识
 
 - [REST 接口设计](工程实践/REST接口设计.md)：统一信封、业务码分段、状态码纪律——异常落到接口上的口径。

@@ -106,6 +106,13 @@ mvn dependency:tree -Dverbose              # 连被调解掉的版本也显示�
 4. install 与 deploy 的区别？SNAPSHOT 为什么同事更新了你却拉不到？
 5. 聚合与继承有什么区别？
 
+### 参考答案
+
+1. 传递依赖调解规则是最近定义优先：离根越近的版本胜出，如 A→B→C(1.0) 与 A→C(2.0) 冲突时，深度更浅的 2.0 赢。深度相同时先声明优先，先声明的路径胜出，声明顺序不是随便写的。注意这与 Gradle 的最高版本胜出不同，跨生态时容易记混。
+2. dependencyManagement 只声明版本、不实际引入；各模块在 dependencies 里只写坐标不写版本，版本以它为准，父 pom 靠它统一全工程版本。BOM 是只含 dependencyManagement 的 pom，用 scope=import 导入，如 spring-boot-dependencies，导入后它管理的那批库全不用写版本。注意 dependencies 里显式写死的版本会盖过 dependencyManagement。
+3. 排查步骤：先用 mvn dependency:tree 看目标库有几个版本、从哪条路径进来，必要时加 -Dincludes 只看某个库、-Dverbose 看被调解掉的版本；再在引入点用 exclusions 剪掉错误路径，或在 dependencyManagement 里钉死版本；重跑 dependency:tree 确认只剩一个版本；最后跑测试验证。团队项目可加 maven-enforcer-plugin 的依赖收敛规则，让冲突在构建期报错而非运行时。
+4. install 只把产物装进自己的本地仓库，deploy 才推私服，所以只 install 同事永远拉不到。SNAPSHOT 是可变版本，Maven 默认按更新策略定期检查更新，同事更新了你却拉不到时，先确认对方是不是 SNAPSHOT，再用 -U 强制刷新；还要查对方是否只 install 没 deploy，以及本地仓库有无下载失败的 *.lastUpdated 残留。
+5. 聚合与继承是两件事：聚合是父 pom 用 modules 组织一次构建，反应堆按模块间依赖自动排序，解决构建顺序；继承是子 pom 用 parent 继承 dependencyManagement 与插件配置，解决配置复用。两者概念独立，常同时出现；部分构建用 -pl 选模块、-am 连带上游、-amd 连带下游，发布前仍要在根目录全量跑一遍。
 ## 9. 关联知识
 
 - 相关：[CI/CD](工程实践/CICD.md)（流水线中的构建阶段与依赖缓存）、[Docker](工程实践/Docker.md)（多阶段构建与层缓存）

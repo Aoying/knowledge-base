@@ -129,6 +129,14 @@ class EchoHandler extends SimpleChannelInboundHandler<ByteBuf> {
 - ByteBuf 引用计数漏放会怎样？怎么检测？
 - 心跳应该由哪一端发、哪一端判定？阈值怎么配合？
 
+### 参考答案
+
+1. 靠「一条 Channel 只绑定一个 EventLoop 线程」保证：该连接的所有 IO 事件和 handler 回调都在这一个线程里串行执行，同一连接的数据处理天然无并发，因此 handler 内不用为单连接数据加锁。代价是 handler 里绝不能阻塞，否则挂在该 EventLoop 上的所有连接一起卡死。
+2. 因为 Pipeline 是双向链表，且入站与出站的处理顺序天然相反：入站是解码、业务处理，要从 head 往 tail 依次进行；出站是编码、写出，要按相反顺序从 tail 往 head 回推。顺序由 addLast 的先后决定，排查编解码没生效时要先确认用的是 ctx.writeAndFlush（从当前节往 head）还是 channel.writeAndFlush（从 tail 全程）。
+3. maxFrameLength 是帧长上限，超限直接抛异常、防止内存被打爆；lengthFieldOffset 是长度域在帧中的起始偏移；lengthFieldLength 是长度域本身占几个字节；lengthAdjustment 是长度域的值是否包含头部剩余字节的修正量；initialBytesToStrip 是解码后砍掉几个头部字节。配错的表现是错位解码出乱码报文，要对着协议文档逐字节核对。
+4. 漏放会造成内存只涨不降：池化的堆外 ByteBuf 没被回收复用，久了会把内存耗尽。检测方法是开启泄漏检测，如测试环境用 -Dio.netty.leakDetection.level=PARANOID 定位漏放的分配栈，生产用 SIMPLE 抽样即可，全量 PARANOID 开销大。另外注意 SimpleChannelInboundHandler 会自动 release 入站消息，转发给异步线程时要先 retain、用完再 release。
+5. 一般由客户端发、服务端判定：客户端用写空闲在空闲时主动发心跳包保活，服务端用读空闲在超过 N 秒没收到任何数据（含心跳）时判定对端已死、直接关连接。阈值要错开、留出网络抖动余量，如客户端 10 秒发一次、服务端 30 秒无数据才关，一发一判设成同值会大面积误杀；心跳包要与业务包在协议上可区分。
+
 ## 11. 关联知识
 
 - [Java IO 与 NIO](开发语言/Java/Java-IO与NIO.md)：本篇的原理底座，Buffer/Selector/零拷贝都在那里。

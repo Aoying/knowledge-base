@@ -115,6 +115,14 @@ q.poll();                    // "x"，移除
 - PriorityQueue 的底层是什么？为什么遍历无序？
 - 自测：用 ArrayBlockingQueue 写生产者-消费者，容量设 2，观察 put/take 的阻塞点。
 
+### 参考答案
+
+1. 三组方法区别只在失败语义：入队 add 满抛异常、offer 满返回 false；出队 remove 空抛 NoSuchElementException、poll 空返回 null；看队头 element 空抛异常、peek 空返回 null。阻塞队列另有 put/take（阻塞等待）与带超时的 offer/poll。
+2. ArrayDeque 不允许 null：poll/peek 用 null 表示空队列，存 null 会产生“空还是元素就是 null”的歧义，与 ConcurrentHashMap 禁 null 同一个理由。推荐替代 Stack：Stack 继承 Vector、全方法 synchronized 且是遗留类，Deque 更干净；替代 LinkedList：循环数组连续内存、无节点对象，出入队只动 head/tail 下标，均摊 O(1)，更快。
+3. 锁与容量：ArrayBlockingQueue 是数组 + 一把 ReentrantLock + notEmpty/notFull 两个 Condition，有界（构造时定），可选公平锁；LinkedBlockingQueue 是链表 + put/take 两把锁分离，默认容量 Integer.MAX_VALUE、近乎无界，吞吐高但不设界等于没背压。FixedThreadPool 的 OOM 风险：它用无界 LinkedBlockingQueue，任务无限堆积、线程数永远涨不过核心数、拒绝策略永远不触发，风险藏在队列里，最终 OOM。
+4. PriorityQueue 底层是二叉堆（数组存储），默认最小堆，队头永远是最小元素；offer/poll O(log n)（上浮/下沉），peek O(1)。遍历无序：只有队头有序，堆数组本身不按全序排列；只有依次 poll 才是从小到大的顺序；不允许 null，非线程安全，并发版是 PriorityBlockingQueue。
+5. 自测思路：ArrayBlockingQueue 容量 2，生产者连续 put 3 个、消费者 take。验证要点：前 2 个 put 成功，第 3 个 put 在队列满时阻塞，直到消费者 take 腾出位置才继续；队列空时 take 阻塞，直到生产者 put 才返回；用带超时 offer/poll 还能观察超时返回特殊值。
+
 ## 11. 关联知识
 
 - [ArrayList与扩容](开发语言/Java/集合/ArrayList与扩容.md)：数组结构与扩容思路，ArrayDeque 的循环数组是它的变体。

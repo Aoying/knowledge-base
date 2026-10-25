@@ -131,6 +131,14 @@ A 依赖 B、B 依赖 A 时，Spring 用三级缓存解决**单例 + 字段/Sett
 4. 构造器循环依赖为什么解决不了？你会怎么改设计？
 5. 事务失效与切面不生效的共同根源是什么？
 
+### 参考答案
+
+1. 顺序是：实例化→依赖注入→Aware 回调→BeanPostProcessor 前置（含 @PostConstruct 处理）→初始化（afterPropertiesSet/init-method）→BeanPostProcessor 后置→使用与销毁。AOP 代理在第 6 步后置处理中产生，由 AbstractAutoProxyCreator 匹配切面后返回代理替换原 Bean。因此初始化回调里自调本类方法时代理尚未生成，切面逻辑不会生效。
+2. 一级 singletonObjects 放成品 Bean；二级 earlySingletonObjects 放已实例化、未完成注入的半成品早期引用；三级 singletonFactories 放半成品工厂。不能由二级直接放代理，是因为只有真正发生循环引用、需要提前暴露时才应生成代理；工厂按需生成，既保证循环方拿到的是代理而非原始对象，又避免无循环的 Bean 都被提前代理。
+3. JDK 动态代理生成实现目标接口的代理类，要求目标有接口；CGLIB 生成目标类的子类，要求类和方法不能为 final。Spring Boot 2.7 默认 proxyTargetClass=true，即默认用 CGLIB，不论目标是否有接口。
+4. 构造器注入要求依赖在构造前已完全就绪，而循环的双方都等对方先构造完成，没有可暴露的半成品，所以无解，启动直接报错。这正是设计有环的信号，应拆环：把共用逻辑抽到第三个 Bean，或改事件解耦；不要换成字段注入或 @Lazy 把环藏起来。
+5. 共同根源是绕过了 AOP 代理：事务本身就是建在 AOP 代理上的声明式能力。自调用（this.）、容器外 new 的对象、private/final 方法都不会经过代理拦截器，因此事务拦截器和切面都不会执行，表现为事务失效或切面不生效。
+
 ## 9. 关联知识
 
 - 前置：[Spring Boot](开发语言/Java/Spring-Boot.md)、[设计模式](开发语言/Java/设计模式.md)（代理模式）

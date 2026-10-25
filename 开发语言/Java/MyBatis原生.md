@@ -161,6 +161,14 @@ try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.BATCH, fals
 - association 用嵌套查询写一对多会有什么问题？怎么改成嵌套结果？
 - BATCH Executor 为什么执行了 insert 却查不到数据？
 
+### 参考答案
+
+1. `#{}` 是预编译占位符，走 `PreparedStatement` 设值，天然防注入，默认永远用它；`${}` 是字符串直接拼接，不经过预编译。`${}` 只允许用于表名、列名、排序字段这类不能用占位符的位置，且值必须经枚举/白名单校验；把用户输入直接 `${}` 拼接就是教科书级 SQL 注入，如排序字段应由后端用枚举白名单映射，前端只传枚举 key。
+2. PageHelper 本质是一个 MyBatis 插件：MyBatis 只允许拦截 Executor、StatementHandler、ParameterHandler、ResultSetHandler 四个对象，插件用 `@Intercepts` + `@Signature` 声明拦截点，框架对这四个对象建动态代理、多个插件按注册顺序层层包装成责任链。PageHelper 拦截 Executor 的 query，读取 `PageHelper.startPage()` 放进 ThreadLocal 的分页参数，改写 SQL 拼 limit 并先跑一条 count 查询。由此可推：startPage 后紧跟的第一条查询才被分页，中间隔了别的查询就分错；异常路径下 ThreadLocal 没清掉会污染同线程下一次查询；它与 Plus 分页拦截器二选一，混用会拼两套 limit。
+3. 一级缓存作用域是 SqlSession，默认开启，只对同一会话内的重复查询有效；二级缓存作用域是 namespace，跨 SqlSession 共享。二级缓存不建议开，因为关联表被别的 namespace 更新时，本 namespace 的缓存不会失效，这是官方明确的局限，会查出脏数据；实务结论是二级缓存默认不开，缓存交给 Redis。
+4. association 用嵌套查询写一对多会产生 N+1 查询：先查主表 1 条，再为每个主对象各发一条关联查询，一对多列表页一次请求可能打出上百条 SQL；序列化、日志打印等「访问」还会触发懒加载，雪上加霜。应改成嵌套结果：一条 JOIN 一次查出主从数据，在 resultMap 里用 `<collection>` 做一对多映射，且主表必须用 `<id>` 标注，主键相同的行才会被合并成一个主对象下的集合。
+5. 因为 BATCH Executor 只攒不发：它把语句攒起来，到 `commit` 或 `flushStatements` 时才真正发送，期间还拿不到自增主键。执行了 insert 却查不到数据，多半是会话没提交；写完要 `session.commit()`，大批量按正文惯例每 1000 条 flush + 提交一段，别一口气攒百万条，也别忘了批量连接参数 `rewriteBatchedStatements=true`，否则驱动会逐条发送、攒批等于白攒。
+
 ## 11. 关联知识
 
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)：增强层，与本篇是分工关系
