@@ -4,7 +4,7 @@
 适用版本: Python 3.11+
 更新日期: 2026-10-23
 关联:
-  - asyncio 并发模型
+  - asyncio
   - Python
 标签:
   - Python
