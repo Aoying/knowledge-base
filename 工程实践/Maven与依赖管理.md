@@ -4,7 +4,7 @@
 适用版本: Maven 3.x（通用）
 更新日期: 2026-10-23
 关联:
-  - CI/CD
+  - CICD
   - Docker
   - Spring-Boot
   - 单元测试与Mock
