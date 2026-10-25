@@ -132,7 +132,7 @@ session.execute(text("SELECT * FROM entity WHERE name = :name"), {"name": name})
 - [Python](开发语言/Python/Python.md)：语言基础与总索引
 - [pydantic 数据校验](开发语言/Python/pydantic.md)：落库前校验形状，SQLAlchemy 管落库
 - [dataclass 与 typing](开发语言/Python/dataclass与typing.md)：服务层出口转 dataclass 传递
-- [MySQL-数据库](数据库/MySQL-数据库.md)：SQL 与事务基础，换引擎不换原理
+- [MySQL-数据库](数据库/MySQL/MySQL-数据库.md)：SQL 与事务基础，换引擎不换原理
 
 ## 10. 一句话总结
 

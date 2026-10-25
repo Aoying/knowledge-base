@@ -114,18 +114,18 @@
 
 ## 数据库与消息队列
 
-- [MySQL 数据库](数据库/MySQL-数据库.md)
-- [MySQL binlog](数据库/MySQL-binlog.md)
+- [MySQL 数据库](数据库/MySQL/MySQL-数据库.md)
+- [MySQL binlog](数据库/MySQL/MySQL-binlog.md)
 - [Redis](数据库/Redis.md)
 - [Redis 集群与哨兵](数据库/Redis-集群.md)
 - [分库分表](数据库/分库分表.md)
-- [MySQL 索引与执行计划](数据库/MySQL-索引与执行计划.md)
-- [MySQL 事务与 MVCC](数据库/MySQL-事务与MVCC.md)
+- [MySQL 索引与执行计划](数据库/MySQL/MySQL-索引与执行计划.md)
+- [MySQL 事务与 MVCC](数据库/MySQL/MySQL-事务与MVCC.md)
 - [OceanBase](数据库/OceanBase.md)
 - [Redis 缓存问题与分布式锁](数据库/Redis-缓存问题与分布式锁.md)
 - [Redis 持久化与淘汰策略](数据库/Redis-持久化与淘汰策略.md)
 - [分布式事务](数据库/分布式事务.md)
-- [MySQL 主从复制与读写分离](数据库/MySQL-主从复制与读写分离.md)
+- [MySQL 主从复制与读写分离](数据库/MySQL/MySQL-主从复制与读写分离.md)
 - [Elasticsearch](数据库/Elasticsearch.md)（汇总；子篇：[ES 倒排索引与查询](数据库/ES-倒排索引与查询.md)）
 - [RocketMQ](消息队列/RocketMQ.md)
 - [Kafka 消息队列](消息队列/Kafka-消息队列.md)
@@ -142,13 +142,13 @@
 - [Vim](工程实践/Vim.md)
 - [Windows 常用命令](工程实践/Windows-常用命令.md)
 - [快捷键速查](工程实践/快捷键速查.md)
-- [Linux 与 Shell](工程实践/Linux与Shell.md)
+- [Linux 与 Shell](工程实践/Shell/Linux与Shell.md)
 - [Flowable](工程实践/Flowable.md)（汇总；子篇在 工程实践/Flowable/：基础入门、多实例与网关、事件与监听器、历史与部署）
 - [CI/CD](工程实践/CICD.md)
 - [监控告警](工程实践/监控告警.md)
-- [Shell 脚本编程](工程实践/Shell脚本编程.md)
-- [生产级 Shell 脚本](工程实践/生产级Shell脚本.md)
-- [运维实战脚本](工程实践/运维实战脚本.md)
+- [Shell 脚本编程](工程实践/Shell/Shell脚本编程.md)
+- [生产级 Shell 脚本](工程实践/Shell/生产级Shell脚本.md)
+- [运维实战脚本](工程实践/Shell/运维实战脚本.md)
 - [单元测试与 Mock](工程实践/单元测试与Mock.md)
 - [OpenAPI 接口文档](工程实践/OpenAPI接口文档.md)
 - [JMeter 压测](工程实践/JMeter压测.md)
@@ -170,12 +170,23 @@
 - [编码 字符集 内存 文件系统](计算机基础/编码-字符集-内存-文件系统.md)
 - [分布式系统理论](计算机基础/分布式系统理论.md)
 - [统计推断与应用](计算机基础/统计推断与应用.md)
+- [方差分析](计算机基础/方差分析.md)
+- [卡方检验](计算机基础/卡方检验.md)
+- [非参数检验](计算机基础/非参数检验.md)
+- [贝叶斯推断进阶](计算机基础/贝叶斯推断进阶.md)
+- [时间序列入门](计算机基础/时间序列入门.md)
 - [统计学与概率论](计算机基础/统计学与概率论.md)
 
 ## 游戏 / 探索
 
 - [Godot](游戏/Godot.md)
 - [探索方向建议](探索/探索方向建议.md)
+
+## 易经
+
+- [易经入门](易经/易经入门.md)
+- [八卦与六十四卦](易经/八卦与六十四卦.md)
+- [系辞与易理思想](易经/系辞与易理思想.md)
 
 ## 项目沉淀（按简历项目整理）
 

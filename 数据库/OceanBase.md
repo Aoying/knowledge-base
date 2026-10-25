@@ -97,6 +97,6 @@ CREATE TABLE t_flow (
 
 ## 8. 关联知识
 
-- 兼容经验与项目注意点速览：[MySQL 数据库](数据库/MySQL-数据库.md)
+- 兼容经验与项目注意点速览：[MySQL 数据库](数据库/MySQL/MySQL-数据库.md)
 - 分区表与应用层分片的取舍：[分库分表](数据库/分库分表.md)
-- 事务隔离与锁的通用原理：[MySQL 事务与 MVCC](数据库/MySQL-事务与MVCC.md)
+- 事务隔离与锁的通用原理：[MySQL 事务与 MVCC](数据库/MySQL/MySQL-事务与MVCC.md)

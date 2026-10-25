@@ -12,7 +12,7 @@
 
 # Shell 脚本编程
 
-> P0：Shell 编程基础。基础命令、权限、SSH、systemd、cron 见 [工程实践/Linux与Shell.md](工程实践/Linux与Shell.md)，本篇只写脚本编程本身。
+> P0：Shell 编程基础。基础命令、权限、SSH、systemd、cron 见 [工程实践/Shell/Linux与Shell.md](工程实践/Shell/Linux与Shell.md)，本篇只写脚本编程本身。
 
 ## 1. 写脚本的规矩
 

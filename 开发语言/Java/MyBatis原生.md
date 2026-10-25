@@ -143,7 +143,7 @@ try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.BATCH, fals
 
 ## 8. 性能优化
 
-- SQL 慢先看执行计划与索引，口径见 [MySQL 数据库](数据库/MySQL-数据库.md)；MyBatis 层能做的只有：不查多余列（忌 `SELECT *` 带出大字段）、嵌套结果一次 JOIN 代替 N+1、批量写走批处理。
+- SQL 慢先看执行计划与索引，口径见 [MySQL 数据库](数据库/MySQL/MySQL-数据库.md)；MyBatis 层能做的只有：不查多余列（忌 `SELECT *` 带出大字段）、嵌套结果一次 JOIN 代替 N+1、批量写走批处理。
 - `logImpl` 打 SQL 日志只放开发/预发：生产全量打会把日志盘打爆，参数里还可能有敏感信息。
 - 一级缓存只对同一会话重复查询有效，跨请求缓存走 Redis，别指望它。
 
@@ -174,4 +174,4 @@ try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.BATCH, fals
 - [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)：增强层，与本篇是分工关系
 - [Druid](开发语言/Java/Druid.md)：连接池、慢 SQL 定位与批处理连接参数
 - [多数据源](开发语言/Java/多数据源.md)：Mapper 与 SqlSessionFactory 的绑定
-- [MySQL 数据库](数据库/MySQL-数据库.md)：SQL 与索引基本功
+- [MySQL 数据库](数据库/MySQL/MySQL-数据库.md)：SQL 与索引基本功

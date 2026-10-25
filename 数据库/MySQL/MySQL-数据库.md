@@ -26,13 +26,13 @@
 - **覆盖索引**：查询列全在索引里就不回表；索引下推（ICP）能在索引层先过滤再回表。
 - **EXPLAIN 速看**：type 由好到差 `const` > `ref` > `range` > `index` > `ALL`，见 `ALL` 先警觉；key 为 NULL 是没用上；Extra 的 `Using index` 是好事，`Using filesort` / `Using temporary` 尽量消掉。
 
-原理、索引设计口诀、EXPLAIN 完整读法与慢 SQL 闭环见专题篇：[MySQL 索引与执行计划](数据库/MySQL-索引与执行计划.md)。
+原理、索引设计口诀、EXPLAIN 完整读法与慢 SQL 闭环见专题篇：[MySQL 索引与执行计划](数据库/MySQL/MySQL-索引与执行计划.md)。
 
 ## 慢查询排查速记
 
 1. 先开慢查询日志圈定 Top SQL，再用 `EXPLAIN` 看计划——完整流程见上行专题篇。
 2. **深分页**（总篇独有要点）：`LIMIT 1000000,20` 越翻越慢，改游标分页（`WHERE id>上次id LIMIT 20`）。
-3. 索引没问题还慢，再查大事务、锁等待（`SHOW ENGINE INNODB STATUS`）和连接数；事务与锁深挖见专题篇：[MySQL 事务与 MVCC](数据库/MySQL-事务与MVCC.md)。
+3. 索引没问题还慢，再查大事务、锁等待（`SHOW ENGINE INNODB STATUS`）和连接数；事务与锁深挖见专题篇：[MySQL 事务与 MVCC](数据库/MySQL/MySQL-事务与MVCC.md)。
 
 ## 常见坑
 
@@ -96,7 +96,7 @@
 
 ## binlog（已拆分）
 
-binlog 的格式与参数、事件链、mysqlbinlog 解码、主从复制、CDC、PITR 恢复与闪回、Java 订阅示例已拆为独立知识点：[MySQL binlog](数据库/MySQL-binlog.md)。
+binlog 的格式与参数、事件链、mysqlbinlog 解码、主从复制、CDC、PITR 恢复与闪回、Java 订阅示例已拆为独立知识点：[MySQL binlog](数据库/MySQL/MySQL-binlog.md)。
 
 ## 执行计划进阶：join 算法
 

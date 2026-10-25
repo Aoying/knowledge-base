@@ -108,6 +108,6 @@ SHOW ENGINE INNODB STATUS;   -- 看 LATEST DETECTED DEADLOCK 段：两个事务�
 
 ## 7. 关联知识
 
-- 锁等待与慢查询的交叉排查：[MySQL 数据库](数据库/MySQL-数据库.md)
-- 行锁锁的是索引，所以索引设计决定锁粒度：[MySQL 索引与执行计划](数据库/MySQL-索引与执行计划.md)
-- binlog 与两阶段提交：[MySQL binlog](数据库/MySQL-binlog.md)
+- 锁等待与慢查询的交叉排查：[MySQL 数据库](数据库/MySQL/MySQL-数据库.md)
+- 行锁锁的是索引，所以索引设计决定锁粒度：[MySQL 索引与执行计划](数据库/MySQL/MySQL-索引与执行计划.md)
+- binlog 与两阶段提交：[MySQL binlog](数据库/MySQL/MySQL-binlog.md)

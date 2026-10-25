@@ -110,6 +110,6 @@ SHOW WARNINGS;                            -- 看优化器改写后的 SQL
 
 ## 7. 关联知识
 
-- 基础速查与失效场景：[MySQL 数据库](数据库/MySQL-数据库.md)
-- 事务可见性如何影响索引扫描读到的版本：[MySQL 事务与 MVCC](数据库/MySQL-事务与MVCC.md)
+- 基础速查与失效场景：[MySQL 数据库](数据库/MySQL/MySQL-数据库.md)
+- 事务可见性如何影响索引扫描读到的版本：[MySQL 事务与 MVCC](数据库/MySQL/MySQL-事务与MVCC.md)
 - 分片后跨片查询为什么贵：[分库分表](数据库/分库分表.md)

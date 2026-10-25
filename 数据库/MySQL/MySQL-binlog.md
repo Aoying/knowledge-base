@@ -94,7 +94,7 @@ mysqlbinlog --read-from-remote-server -h 10.0.0.8 -u repl -p mysql-bin.000042 > 
 
 ### 实际开发应用
 
-**1. 主从复制**：binlog 是复制的数据源。从库 IO 线程拉 binlog → relay log → SQL 线程重放；8.0 支持多线程回放（按库/按逻辑时钟并行），延迟成因与对策见 [MySQL-主从复制与读写分离](数据库/MySQL-主从复制与读写分离.md) 第 4 节；binlog 侧的延迟判断见下方「主从延迟 binlog 侧」一节。开 GTID 后主从切换自动定位，不再手工算 file+position。
+**1. 主从复制**：binlog 是复制的数据源。从库 IO 线程拉 binlog → relay log → SQL 线程重放；8.0 支持多线程回放（按库/按逻辑时钟并行），延迟成因与对策见 [MySQL-主从复制与读写分离](数据库/MySQL/MySQL-主从复制与读写分离.md) 第 4 节；binlog 侧的延迟判断见下方「主从延迟 binlog 侧」一节。开 GTID 后主从切换自动定位，不再手工算 file+position。
 
 **2. CDC 增量同步（业务零侵入）**：订阅 binlog 把变更同步到 ES / Redis / 数仓 / 下游系统。
 
@@ -229,7 +229,7 @@ client.connect(); // 阻塞式连接；断线后 connector 按最后位点自动
 - 判断 relay 堆积：从库 `SHOW REPLICA STATUS` 看 `Relay_Log_File` / `Relay_Log_Pos` 与 `Master_Log_File` / `Exec_Master_Log_Pos` 的差；`Seconds_Behind_Source` 只是粗略口径（无流量时恒为 0），准确延迟看 GTID 差或心跳表打点。
 - relay 相关参数：`relay_log_space_limit`（relay 总量上限，超了 IO 线程暂停拉取，防从库磁盘打满）；`relay_log_purge=ON`（自动清理已回放 relay）；`relay_log_recovery=ON`（崩溃后从主库重新拉 relay，防 relay 损坏导致回放错位）。
 - 并行回放：`replica_parallel_workers`（8.0 按 WriteSet 并行，行不冲突即可并行回放）；workers 数按 CPU 与写冲突率调，不是越大越好，冲突高的 workload 开多 workers 也并行不起来。
-- 延迟根因先看回放段：成因与对策见 [MySQL-主从复制与读写分离](数据库/MySQL-主从复制与读写分离.md) 第 4 节。
+- 延迟根因先看回放段：成因与对策见 [MySQL-主从复制与读写分离](数据库/MySQL/MySQL-主从复制与读写分离.md) 第 4 节。
 
 ### MySQL 8.0 / 8.4 版本注记
 
