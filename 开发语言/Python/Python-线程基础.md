@@ -5,8 +5,8 @@
 更新日期: 2026-10-25
 关联:
   - Python
-  - Python 多进程与 GIL
-  - asyncio 并发模型
+  - Python-多进程与GIL
+  - asyncio
 标签:
   - Python
   - 并发
