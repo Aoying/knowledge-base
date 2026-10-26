@@ -23,7 +23,7 @@
 本篇为 Java 语言基础与总索引，以下知识点已拆为独立文档：
 
 - [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)
-- [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
+- [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)
 - [Async 异步](开发语言/Java/Async-异步.md)
 - [Bean Validation](开发语言/Java/Bean-Validation.md)
 - [Stream 与 Optional](开发语言/Java/Stream与Optional.md)

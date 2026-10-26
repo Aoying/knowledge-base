@@ -90,4 +90,4 @@ orderService.page(page, Wrappers.<Order>lambdaQuery().eq(Order::getStatus, statu
 - [多数据源（dynamic-datasource）](开发语言/Java/多数据源.md)
 - [Druid 监控与慢 SQL 定位](开发语言/Java/Druid.md)
 
-- [MyBatis 原生](开发语言/Java/MyBatis原生.md)：Plus 覆盖不到的复杂映射、动态 SQL 与插件机制。
+- [MyBatis 原生](开发语言/Java/MyBatis/MyBatis原生.md)：Plus 覆盖不到的复杂映射、动态 SQL 与插件机制。

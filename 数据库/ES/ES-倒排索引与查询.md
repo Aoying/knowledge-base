@@ -15,7 +15,7 @@
 
 # ES-倒排索引与查询
 
-> 本篇讲 ES 搜索的内核：文档进索引时如何被分析成倒排表、查询 DSL 如何命中这张表、结果为什么按那个顺序排。集群、分片、写入调优与运维见汇总篇 [Elasticsearch](数据库/Elasticsearch.md)。
+> 本篇讲 ES 搜索的内核：文档进索引时如何被分析成倒排表、查询 DSL 如何命中这张表、结果为什么按那个顺序排。集群、分片、写入调优与运维见汇总篇 [Elasticsearch](数据库/ES/Elasticsearch.md)。
 
 ## 倒排索引结构
 
@@ -88,7 +88,7 @@ GET /books/_search
 } } }
 ```
 
-- **aggs**（聚合，相当于 GROUP BY）只在此提一句：实战写法（PV/UV、date_histogram）见汇总篇 [Elasticsearch](数据库/Elasticsearch.md)。
+- **aggs**（聚合，相当于 GROUP BY）只在此提一句：实战写法（PV/UV、date_histogram）见汇总篇 [Elasticsearch](数据库/ES/Elasticsearch.md)。
 - wildcard/regexp 通配查询不走倒排加速，数据量大时近似全扫；能用分词或前缀字段解决的别用。
 
 ## 相关性打分 BM25：三个直觉

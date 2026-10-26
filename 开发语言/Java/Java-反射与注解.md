@@ -156,7 +156,7 @@ public Object intercept(Object target, Method method, Object[] args) throws Exce
 }
 ```
 
-### 3. MyBatis-Plus：@TableName / @TableField 的解析（见 [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)）
+### 3. MyBatis-Plus：@TableName / @TableField 的解析（见 [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)）
 MP 启动时扫描实体类，一次性把注解解析成元数据缓存：
 
 ```java
@@ -240,7 +240,7 @@ public class LogTimeRunner {
 
 ## 关联知识
 - [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)：IOC 容器与 AOP 代理是反射+注解最重的两个使用者。
-- [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)：`@TableName`、`@TableField`、`BaseMapper<T>` 的注解解析与泛型反推。
+- [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)：`@TableName`、`@TableField`、`BaseMapper<T>` 的注解解析与泛型反推。
 - [Bean-Validation](开发语言/Java/Bean-Validation.md)：约束注解的校验链路与自定义约束。
 - [JVM-类加载](开发语言/Java/JVM/JVM-类加载.md)：`Class.forName` 触发的加载、链接、初始化过程。
 - [Java](开发语言/Java/Java.md)：语言基础总览。

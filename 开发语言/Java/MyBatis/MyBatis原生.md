@@ -21,7 +21,7 @@
 
 MyBatis 是半自动 ORM：SQL 写在 XML 或注解里，框架只负责参数绑定、结果映射和执行调度（`SqlSession` → `Executor` → `StatementHandler` → JDBC），不生成 SQL，复杂 SQL 的可控性是它的全部价值。
 
-与 [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md) 的分工：**Plus 是增强，不是替代**。`BaseMapper`、Wrapper 都建在原生能力之上，动态 SQL、resultMap、插件机制绕不开。落地口径：单表 CRUD 和简单条件走 Plus；多表关联、报表统计写 XML 原生 SQL，不要用 Wrapper 硬拼长链。
+与 [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md) 的分工：**Plus 是增强，不是替代**。`BaseMapper`、Wrapper 都建在原生能力之上，动态 SQL、resultMap、插件机制绕不开。落地口径：单表 CRUD 和简单条件走 Plus；多表关联、报表统计写 XML 原生 SQL，不要用 Wrapper 硬拼长链。
 
 ## 2. 基础知识
 
@@ -171,7 +171,7 @@ try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.BATCH, fals
 
 ## 11. 关联知识
 
-- [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)：增强层，与本篇是分工关系
+- [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)：增强层，与本篇是分工关系
 - [Druid](开发语言/Java/Druid.md)：连接池、慢 SQL 定位与批处理连接参数
 - [多数据源](开发语言/Java/多数据源.md)：Mapper 与 SqlSessionFactory 的绑定
 - [MySQL 数据库](数据库/MySQL/MySQL-数据库.md)：SQL 与索引基本功

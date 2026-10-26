@@ -71,13 +71,13 @@ SYSTEM 你是章节分析助手，只输出约定的 JSON，不输出解释文�
 
 - 约 14B 级 Q4/Q5 量化可望全量进显存或仅少量 offload，适合常驻高频任务（信息抽取、JSON、RAG 问答）。
 - 约 30B 级只能部分 offload，适合按需调用的低频重活（复杂推理、最终裁决），接受它慢。
-- 双层分工「常驻 + 按需」正是 [Agent](AI与大模型/Agent.md) 篇的二层架构在本机的落地形态；两模型同时驻留时，总账 = 两份权重 + 两份 KV，别只算单个。
+- 双层分工「常驻 + 按需」正是 [Agent](AI与大模型/Agent/Agent.md) 篇的二层架构在本机的落地形态；两模型同时驻留时，总账 = 两份权重 + 两份 KV，别只算单个。
 
 ### OpenAI 兼容 API 的接入约定
 
 代码侧统一走 `/v1` 兼容口，只换 base_url 与 model 名，业务代码不感知本地/云端差异。注意两个坑：
 
-- 兼容层对高级参数（如某些采样参数、tool calling 的细节行为）的支持程度与原生 `/api/chat` 不完全一致；工具调用链路建议用原生接口实测一次再定，见 [Tool-Calling](AI与大模型/Tool-Calling.md)。
+- 兼容层对高级参数（如某些采样参数、tool calling 的细节行为）的支持程度与原生 `/api/chat` 不完全一致；工具调用链路建议用原生接口实测一次再定，见 [Tool-Calling](AI与大模型/Agent/Tool-Calling.md)。
 - embedding 走 `/api/embed`，与生成接口是两条路，别拿 chat 模型名去调 embed。
 
 ## 4. 疑难杂症
@@ -94,7 +94,7 @@ SYSTEM 你是章节分析助手，只输出约定的 JSON，不输出解释文�
 
 ## 6. 关联知识
 
-- [Agent](AI与大模型/Agent.md)：「14B 常驻 + 大模型按需」的二层架构出处
-- [Tool-Calling](AI与大模型/Tool-Calling.md)：本地模型工具调用的通道验证要点
-- [Embedding与向量数据库](AI与大模型/Embedding与向量数据库.md)：embedding 模型同样在本机跑，显存账合并计算
+- [Agent](AI与大模型/Agent/Agent.md)：「14B 常驻 + 大模型按需」的二层架构出处
+- [Tool-Calling](AI与大模型/Agent/Tool-Calling.md)：本地模型工具调用的通道验证要点
+- [Embedding与向量数据库](AI与大模型/RAG/Embedding与向量数据库.md)：embedding 模型同样在本机跑，显存账合并计算
 - [小说创作引擎](项目沉淀/小说创作引擎.md)：本篇部署方案的实际使用方

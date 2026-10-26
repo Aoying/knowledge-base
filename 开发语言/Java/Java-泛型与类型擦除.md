@@ -253,7 +253,7 @@ Integer i = ints.get(0);             // ClassCastException 抛在这里！
 
 ## 关联知识
 - [Java](开发语言/Java/Java.md)：语言基础总览。
-- [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)：`BaseMapper<T>` 的泛型实体反推。
+- [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)：`BaseMapper<T>` 的泛型实体反推。
 - [ArrayList与扩容](开发语言/Java/集合/ArrayList与扩容.md)：泛型在集合中的典型应用与扩容机制。
 - [ConcurrentHashMap](开发语言/Java/集合/ConcurrentHashMap.md)：双类型参数 `K, V` 的并发容器。
 - [Stream与Optional](开发语言/Java/Stream与Optional.md)：Stream API 是泛型方法与通配符的重度使用者（如 `map(Function<? super T, ? extends R>)`）。

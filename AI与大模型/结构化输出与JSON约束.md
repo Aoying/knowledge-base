@@ -23,7 +23,7 @@
 - **JSON Mode**：接口级开关（如 OpenAI 兼容接口的 `response_format: {"type": "json_object"}`、Ollama 的 `format: "json"`）。作用是保证输出**语法**是合法 JSON，仅此而已——字段缺没缺、类型对不对，它不管。
 - **Schema 约束输出**：把 JSON Schema 直接给到接口（Ollama 原生接口支持在 `format` 里传 schema），解码时按 schema 限制可选 token，能保证字段与类型结构合规。这是目前本地链路里最强的一层约束，支持程度因接口而异，接入前实测。
 - **程序侧校验**：拿到输出后用 schema / pydantic 再验一遍。解码层保证的是「形状」，业务规则（如「引用的实体必须存在」）只能在这一层查。
-- 与 [Tool-Calling](AI与大模型/Tool-Calling.md) 的关系：tool_calls 的参数就是一次结构化输出，约束思想完全相通；能用工具调用承载的结构化任务，优先用工具调用，白拿一层框架校验。
+- 与 [Tool-Calling](AI与大模型/Agent/Tool-Calling.md) 的关系：tool_calls 的参数就是一次结构化输出，约束思想完全相通；能用工具调用承载的结构化任务，优先用工具调用，白拿一层框架校验。
 
 ## 2. 基础知识：一条可靠的解析管线
 
@@ -82,5 +82,5 @@ raise StructuredOutputError(...)  # 超限：落盘原始输出 + 报错，人�
 ## 6. 关联知识
 
 - [Prompt-工程](AI与大模型/Prompt-工程.md)：约束的提示层——格式要求、兜底条款、few-shot 锚定
-- [Tool-Calling](AI与大模型/Tool-Calling.md)：工具参数是结构化输出的特例，校验与重试逻辑可互参
-- [LangGraph](AI与大模型/LangGraph.md)：把「校验失败重试」做成图里的条件边
+- [Tool-Calling](AI与大模型/Agent/Tool-Calling.md)：工具参数是结构化输出的特例，校验与重试逻辑可互参
+- [LangGraph](AI与大模型/Agent/LangGraph.md)：把「校验失败重试」做成图里的条件边

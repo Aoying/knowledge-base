@@ -220,7 +220,7 @@ Agent 的成本与效果，立项前先算三本账：
 
 ## 已拆分专题（独立知识点）
 
-- [LangGraph](AI与大模型/LangGraph.md)：状态图与 Agent 工作流编排
-- [MCP](AI与大模型/MCP.md)：Model Context Protocol 与工具生态接入
-- [Tool Calling](AI与大模型/Tool-Calling.md)：工具调用原理与本地 Ollama 实践
-- [RAG 评测与分块策略](AI与大模型/RAG-评测与分块策略.md)：分块策略与评测方法（实测结论待原型验证后回填）
+- [LangGraph](AI与大模型/Agent/LangGraph.md)：状态图与 Agent 工作流编排
+- [MCP](AI与大模型/Agent/MCP.md)：Model Context Protocol 与工具生态接入
+- [Tool Calling](AI与大模型/Agent/Tool-Calling.md)：工具调用原理与本地 Ollama 实践
+- [RAG 评测与分块策略](AI与大模型/RAG/RAG-评测与分块策略.md)：分块策略与评测方法（实测结论待原型验证后回填）

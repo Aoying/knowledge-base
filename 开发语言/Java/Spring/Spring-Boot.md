@@ -103,6 +103,6 @@ mybatis-plus:
 
 - [Druid 监控与慢 SQL 定位](开发语言/Java/Druid.md)
 - [多数据源（dynamic-datasource）](开发语言/Java/多数据源.md)
-- [MyBatis-Plus](开发语言/Java/MyBatis-Plus.md)
+- [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)
 - [@Async 异步](开发语言/Java/Async-异步.md)
 - [虚拟线程](开发语言/Java/虚拟线程.md)

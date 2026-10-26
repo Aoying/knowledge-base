@@ -110,7 +110,7 @@ class Settings(BaseSettings):
 
 - [dataclass 与 typing](开发语言/Python/dataclass与typing.md)：内部分工的一侧，边界校验通过后转 dataclass 传递
 - [asyncio](开发语言/Python/asyncio.md)：批量抽取管道里，校验失败→回喂重抽是每章任务的标准收尾
-- [Tool-Calling](AI与大模型/Tool-Calling.md)：工具参数 schema 与本篇的 JSON Schema 生成是同一套机制
+- [Tool-Calling](AI与大模型/Agent/Tool-Calling.md)：工具参数 schema 与本篇的 JSON Schema 生成是同一套机制
 
 ## 9. 一句话总结
 

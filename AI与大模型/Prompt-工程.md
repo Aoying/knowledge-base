@@ -80,5 +80,5 @@ Prompt 调试和代码调试同构，别靠感觉：
 ## 6. 关联知识
 
 - [结构化输出与JSON约束](AI与大模型/结构化输出与JSON约束.md)：格式要求如何落到可校验的机器约束
-- [Tool-Calling](AI与大模型/Tool-Calling.md)：工具描述本质上也是一种写给模型的契约
-- [Agent](AI与大模型/Agent.md)：Agent 的系统提示是多轮版的 Prompt 工程
+- [Tool-Calling](AI与大模型/Agent/Tool-Calling.md)：工具描述本质上也是一种写给模型的契约
+- [Agent](AI与大模型/Agent/Agent.md)：Agent 的系统提示是多轮版的 Prompt 工程
