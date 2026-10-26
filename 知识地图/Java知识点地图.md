@@ -17,6 +17,7 @@
 - JVM：[[JVM-GC调优]]、[[JVM-内存模型]]、[[JVM-类加载]]、[[JVM-字节码与JIT]]、[[JVM-故障排查]]
 - 子目录：JVM 5 篇在 `开发语言/Java/JVM/`，Spring 6 篇在 `开发语言/Java/Spring/`（Spring-Boot、Spring-IOC与AOP、Spring-事务、Spring-Cache、Spring-Security、Spring-Cloud概览）
 - 子目录：MyBatis 2 篇在 `开发语言/Java/MyBatis/`（MyBatis-Plus、MyBatis原生）
+- 新增：[[幂等设计与接口防重]]、[[分布式锁实现与选型]]（Java 后端深篇）
 - 集合：[[集合框架总览]]、[[Set集合基础]]、[[HashMap]]、[[ConcurrentHashMap]]、[[ArrayList与扩容]]、[[LinkedHashMap与LRU]]、[[TreeMap与红黑树]]、[[Queue与Deque]]、[[CopyOnWriteArrayList]]（`开发语言/Java/集合/`）
 - 并发：[[Java-并发编程]]（汇总，位于 `开发语言/Java/并发/`）；子篇：[[线程池]]、[[synchronized与锁]]、[[volatile与JMM]]、[[CAS与原子类]]、[[AQS]]、[[ThreadLocal]]
 - 设计：[[设计模式]]（汇总；26 篇模式独立文档在 `开发语言/Java/设计模式/` 子目录）
