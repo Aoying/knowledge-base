@@ -1,4 +1,5 @@
 # Python 知识点地图
+Up: [[总览]]
 
 > Python 位于 `开发语言/Python/`，按知识点拆分：`Python.md` 为语言基础与总索引。
 
