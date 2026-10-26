@@ -1,8 +1,108 @@
 {
   "recentFiles": [
     {
+      "basename": "看板-任务总览",
+      "path": "效率工具/看板与模板/看板-任务总览.md"
+    },
+    {
+      "basename": "模板-灵感捕捉",
+      "path": "效率工具/看板与模板/模板-灵感捕捉.md"
+    },
+    {
+      "basename": "模板-项目管理",
+      "path": "效率工具/看板与模板/模板-项目管理.md"
+    },
+    {
+      "basename": "模板-技术学习",
+      "path": "效率工具/看板与模板/模板-技术学习.md"
+    },
+    {
+      "basename": "模板-会议纪要",
+      "path": "效率工具/看板与模板/模板-会议纪要.md"
+    },
+    {
+      "basename": "模板-读书笔记",
+      "path": "效率工具/看板与模板/模板-读书笔记.md"
+    },
+    {
+      "basename": "看板-项目总览",
+      "path": "效率工具/看板与模板/看板-项目总览.md"
+    },
+    {
+      "basename": "看板-读书追踪",
+      "path": "效率工具/看板与模板/看板-读书追踪.md"
+    },
+    {
+      "basename": "看板-笔记统计",
+      "path": "效率工具/看板与模板/看板-笔记统计.md"
+    },
+    {
+      "basename": "六十四卦上经详解",
+      "path": "易经/六十四卦上经详解.md"
+    },
+    {
       "basename": "README",
       "path": "README.md"
+    },
+    {
+      "basename": "总览",
+      "path": "知识地图/总览.md"
+    },
+    {
+      "basename": "Flowable",
+      "path": "工程实践/Flowable.md"
+    },
+    {
+      "basename": "Java-新特性",
+      "path": "开发语言/Java/Java-新特性.md"
+    },
+    {
+      "basename": "Netty",
+      "path": "开发语言/Java/Netty.md"
+    },
+    {
+      "basename": "前缀和与差分",
+      "path": "计算机基础/前缀和与差分.md"
+    },
+    {
+      "basename": "疑难杂症索引",
+      "path": "知识地图/疑难杂症索引.md"
+    },
+    {
+      "basename": "快捷键速查",
+      "path": "工程实践/快捷键速查.md"
+    },
+    {
+      "basename": "正则表达式-常用样例",
+      "path": "开发语言/正则表达式-常用样例.md"
+    },
+    {
+      "basename": "标签索引",
+      "path": "标签索引.md"
+    },
+    {
+      "basename": "系辞与易理思想",
+      "path": "易经/系辞与易理思想.md"
+    },
+    {
+      "basename": "易经入门",
+      "path": "易经/易经入门.md"
+    },
+    {
+      "basename": "探索方向建议",
+      "path": "探索/探索方向建议.md"
+    },
+    {
+      "basename": "运维实战脚本",
+      "path": "工程实践/Shell/运维实战脚本.md"
+    },
+    {
+      "basename": "Markdown基础语法",
+      "path": "效率工具/Markdown基础语法.md"
+    },
+    {
+      "basename": "Lua",
+      "path": "开发语言/Lua.md"
     },
     {
       "basename": "组成原理",
@@ -17,24 +117,8 @@
       "path": "AI与大模型/大模型基础.md"
     },
     {
-      "basename": "总览",
-      "path": "知识地图/总览.md"
-    },
-    {
-      "basename": "Flowable",
-      "path": "工程实践/Flowable.md"
-    },
-    {
-      "basename": "CICD",
-      "path": "工程实践/CICD.md"
-    },
-    {
       "basename": "DDD与架构设计",
       "path": "工程实践/DDD与架构设计.md"
-    },
-    {
-      "basename": "前端基础-HTML-CSS",
-      "path": "工程实践/前端基础-HTML-CSS.md"
     },
     {
       "basename": "Obsidian-插件使用指南",
@@ -49,14 +133,6 @@
       "path": "开发语言/Java/Java.md"
     },
     {
-      "basename": "监控告警",
-      "path": "工程实践/监控告警.md"
-    },
-    {
-      "basename": "JVM-类加载",
-      "path": "开发语言/Java/JVM-类加载.md"
-    },
-    {
       "basename": "Git-运维与工具",
       "path": "工程实践/Git-运维与工具.md"
     },
@@ -65,24 +141,12 @@
       "path": "开发语言/Java/集合/ArrayList与扩容.md"
     },
     {
-      "basename": "Linux与Shell",
-      "path": "工程实践/Linux与Shell.md"
-    },
-    {
       "basename": "Windows-常用命令",
       "path": "工程实践/Windows-常用命令.md"
     },
     {
-      "basename": "Docker",
-      "path": "工程实践/Docker.md"
-    },
-    {
       "basename": "交行企业网银",
       "path": "项目沉淀/交行企业网银.md"
-    },
-    {
-      "basename": "Lua",
-      "path": "开发语言/Lua.md"
     },
     {
       "basename": "pydantic",
@@ -97,16 +161,8 @@
       "path": "AI与大模型/Skills-索引.md"
     },
     {
-      "basename": "标签索引",
-      "path": "标签索引.md"
-    },
-    {
       "basename": "Java知识点地图",
       "path": "知识地图/Java知识点地图.md"
-    },
-    {
-      "basename": "Elasticsearch",
-      "path": "数据库/Elasticsearch.md"
     }
   ],
   "omittedPaths": [],
