@@ -1,6 +1,6 @@
 # Obsidian 插件使用指南
 
-> 根据本仓库 `.obsidian/community-plugins.json` 生成（2026-10-24，共 24 个插件）。
+> 根据本仓库 `.obsidian/community-plugins.json` 生成（2026-10-26 核验：该 JSON 列出 23 个已启用插件；指南共 25 节，另含 copilot 与 minimal-settings 两节，两者已安装但未列入该 JSON）。
 > 插件有增减时由夜间维护任务同步更新本指南。
 
 ## 目录
