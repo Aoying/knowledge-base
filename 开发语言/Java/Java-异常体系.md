@@ -65,7 +65,7 @@ try (Connection conn = dataSource.getConnection();
 
 **保留 cause 链**。转换异常时必须把原异常作为 cause 传进去（`throw new BizException(code, msg, e)`），只取 `e.getMessage()` 拼新异常等于亲手剪断堆栈，排障时根源那一层永远看不到。日志同理：用 `log.error("...", e)` 输出完整堆栈，不要只打 message。
 
-**不要用异常控制正常流程**。异常有构建堆栈的成本，更重要的是语义：可预期的分支（查不到数据、状态不允许）用状态校验和返回值表达，不要靠抛/捕获异常来走。审批流里「单据已被处理」用状态机条件更新处理（见 [REST 接口设计](工程实践/接口/REST接口设计.md) 的幂等设计），不是抛异常让上层 catch 着玩。
+**不要用异常控制正常流程**。异常有构建堆栈的成本，更重要的是语义：可预期的分支（查不到数据、状态不允许）用状态校验和返回值表达，不要靠抛/捕获异常来走。审批流里「单据已被处理」用状态机条件更新处理（见 [REST 接口设计](工程实践/接口设计与文档.md) 的幂等设计），不是抛异常让上层 catch 着玩。
 
 **业务异常设计**。一个够用的业务异常只需要三样：业务码（与统一信封的业务码同源）、给人看的消息、cause：
 
@@ -78,12 +78,12 @@ public class BizException extends RuntimeException {
 }
 ```
 
-- 业务码分段与 [REST 接口设计](工程实践/接口/REST接口设计.md) 的约定保持一致，不要每个接口自创一套；不要为每种业务失败建一个异常类，一个 `BizException` + 业务码足够。
+- 业务码分段与 [REST 接口设计](工程实践/接口设计与文档.md) 的约定保持一致，不要每个接口自创一套；不要为每种业务失败建一个异常类，一个 `BizException` + 业务码足够。
 - 给用户看的消息和给日志看的信息分开：message 写可展示文案，别把 SQL、内部类名塞进 message 透传到前端。
 
 ## 5. 全局异常处理：@RestControllerAdvice
 
-接口层的异常出口只留一个：`@RestControllerAdvice` 统一收口成信封 `{code, msg, data, traceId}`（结构与分工见 [REST 接口设计](工程实践/接口/REST接口设计.md)）。Controller 不写 try-catch 拼错误响应，Service 只管抛。
+接口层的异常出口只留一个：`@RestControllerAdvice` 统一收口成信封 `{code, msg, data, traceId}`（结构与分工见 [REST 接口设计](工程实践/接口设计与文档.md)）。Controller 不写 try-catch 拼错误响应，Service 只管抛。
 
 ```java
 @RestControllerAdvice
@@ -137,5 +137,5 @@ public class GlobalExceptionHandler {
 
 ## 8. 关联知识
 
-- [REST 接口设计](工程实践/接口/REST接口设计.md)：统一信封、业务码分段、状态码纪律——异常落到接口上的口径。
+- [REST 接口设计](工程实践/接口设计与文档.md)：统一信封、业务码分段、状态码纪律——异常落到接口上的口径。
 - [Spring 事务](开发语言/Java/Spring/Spring-事务.md)：事务回滚规则与异常类型的关系。
