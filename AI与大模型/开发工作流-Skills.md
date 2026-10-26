@@ -41,7 +41,7 @@
 ## 3. agent-skills（vercel-labs/agent-skills）Vercel 官方前端工程 skills
 
 - **功能**：Vercel 官方维护的 skill 合集，含 `react-best-practices`（React/Next.js 最佳实践）、`web-design-guidelines`（Web 设计规范审计）等。帮 Agent 写出符合生产标准的 React 代码、审查现有 UI 是否合规。
-- **适用场景**：小说引擎管理面板 / 知识库可视化页面这类前端任务——配合 `frontend-design`（Anthropic 官方审美 skill）一起用，一个管工程规范、一个管设计品味。见 [工程实践/前端开发.md](工程实践/前端开发.md)。
+- **适用场景**：小说引擎管理面板 / 知识库可视化页面这类前端任务——配合 `frontend-design`（Anthropic 官方审美 skill）一起用，一个管工程规范、一个管设计品味。见 [工程实践/前端/前端开发.md](工程实践/前端/前端开发.md)。
 - **来源**：https://github.com/vercel-labs/agent-skills
 - **热度/更新**：32k+ stars（2026-10-09 统计），Vercel 官方背书，维护活跃。
 - **许可证**：以仓库内 LICENSE 为准（使用前核对）。

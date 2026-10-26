@@ -20,7 +20,7 @@
 - 门面与实现分开：代码只依赖 **SLF4J** API，运行期实现用 **Logback**（Spring Boot 2.7 默认）；类路径里多个绑定或桥接混乱是日志类故障的头号来源，见第 6 节。
 - 四件套：`Logger`（按类名分层、继承级别）、`Appender`（输出到哪）、`Encoder/Layout`（格式）、`Filter`（过滤）。
 - 配置文件优先用 `logback-spring.xml` 而非 `logback.xml`：前者支持 Boot 扩展的 `<springProperty>`、`<springProfile>`，且加载时机在环境准备好之后。
-- 日志是可观测性三支柱之一：指标发现问题、链路缩小范围、**日志定位根因**——规范的全部目的就是让这一步快，见 [监控告警](工程实践/监控告警.md)。
+- 日志是可观测性三支柱之一：指标发现问题、链路缩小范围、**日志定位根因**——规范的全部目的就是让这一步快，见 [监控告警](工程实践/运维/监控告警.md)。
 
 ## 2. 参考配置：滚动 + 异步
 
@@ -123,7 +123,7 @@ public class TraceFilter extends OncePerRequestFilter {
 - **改了 logback-spring.xml 不生效**：查是否用 `logging.config` 指到了别的文件；查 classpath 根目录是否还有 `logback.xml` 抢先被原生 Logback 加载。
 - **类路径绑定冲突**：出现 `multiple bindings` 或 logback 类的 `ClassCastException`，多半是 log4j-slf4j-impl 与 logback-classic 共存。用 `mvn dependency:tree | grep -i -E "log4j|slf4j|logback"` 拉清单，Boot 项目统一由 starter-logging 收口，其他门面只留桥接到 slf4j 的包。
 - **生产临时要开 DEBUG**：用 Actuator 的 `loggers` 端点运行时改级别、事后复位，前提是端点做了访问控制（见 Spring Boot 篇）。
-- **容器里日志去哪**：打到 stdout 由平台统一采集，或落文件由采集 agent 搬走，二选一并全环境统一，混用会有一部分日志查不到。见 [Docker](工程实践/Docker.md)。
+- **容器里日志去哪**：打到 stdout 由平台统一采集，或落文件由采集 agent 搬走，二选一并全环境统一，混用会有一部分日志查不到。见 [Docker](工程实践/运维/Docker.md)。
 
 ## 7. 常见误区
 
@@ -149,6 +149,6 @@ public class TraceFilter extends OncePerRequestFilter {
 ## 9. 关联知识
 
 - [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：默认日志体系、Actuator loggers 端点、SQL 日志的开关纪律。
-- [监控告警](工程实践/监控告警.md)：日志在可观测三支柱中的位置与告警分级原则。
+- [监控告警](工程实践/运维/监控告警.md)：日志在可观测三支柱中的位置与告警分级原则。
 - [@Async 异步](开发语言/Java/Async-异步.md)：异步场景的上下文（含 MDC）传递问题。
-- [Docker](工程实践/Docker.md)：容器化部署下日志的输出与采集路线。
+- [Docker](工程实践/运维/Docker.md)：容器化部署下日志的输出与采集路线。

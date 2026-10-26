@@ -93,7 +93,7 @@ class ApplyServiceTest {
 - 数据层：项目用 MyBatis-Plus，没有 JPA 的 `@DataJpaTest` 等价物；测 Mapper SQL 用 `@SpringBootTest` + 测试库（见下），或 Testcontainers 起真实数据库容器。
 - `@SpringBootTest`：装全容器，最接近真实但最慢，只留给少量关键链路（提交一笔申请全流程），不要每个类都用。
 
-数据库测试的口径：神农用 OceanBase（MySQL 模式），H2 内存库语法与方言差异会制造「测试过、线上挂」的假绿；关键 SQL 的测试优先 Testcontainers 或独立测试库，与 [CI/CD](工程实践/CICD.md) 流水线一起跑。
+数据库测试的口径：神农用 OceanBase（MySQL 模式），H2 内存库语法与方言差异会制造「测试过、线上挂」的假绿；关键 SQL 的测试优先 Testcontainers 或独立测试库，与 [CI/CD](工程实践/运维/CICD.md) 流水线一起跑。
 
 ### 与校验、事务的配合
 
@@ -145,5 +145,5 @@ class ApplyServiceTest {
 ## 8. 关联知识
 
 - 前置：[Spring Boot](开发语言/Java/Spring/Spring-Boot.md)
-- 相关：[CI/CD](工程实践/CICD.md)（流水线里跑测试与覆盖率门禁）、[Bean-Validation](开发语言/Java/Bean-Validation.md)（校验规则的测试落点）
+- 相关：[CI/CD](工程实践/运维/CICD.md)（流水线里跑测试与覆盖率门禁）、[Bean-Validation](开发语言/Java/Bean-Validation.md)（校验规则的测试落点）
 - 延伸：Testcontainers、契约测试、变异测试（PIT）
