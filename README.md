@@ -22,6 +22,8 @@
 - [MCP](AI与大模型/Agent/MCP.md)
 - [Tool Calling](AI与大模型/Agent/Tool-Calling.md)
 - [RAG 评测与分块策略](AI与大模型/RAG/RAG-评测与分块策略.md)
+- [LLM 生产化与推理优化](AI与大模型/LLM生产化与推理优化.md)
+- [向量检索深水](AI与大模型/RAG/向量检索深水.md)
 - [大模型基础](AI与大模型/大模型基础.md)
 - [Skills 索引](AI与大模型/Skills-索引.md)
 - [RAG Skills](AI与大模型/RAG-Skills.md)
@@ -129,6 +131,7 @@
 - [Redis 缓存问题与分布式锁](数据库/Redis/Redis-缓存问题与分布式锁.md)
 - [Redis 持久化与淘汰策略](数据库/Redis/Redis-持久化与淘汰策略.md)
 - [分布式事务](数据库/分布式事务.md)
+- [数据库迁移与 Schema 演进](数据库/数据库迁移与Schema演进.md)
 - [MySQL 主从复制与读写分离](数据库/MySQL/MySQL-主从复制与读写分离.md)
 - [Elasticsearch](数据库/ES/Elasticsearch.md)（汇总；子篇：[ES 倒排索引与查询](数据库/ES/ES-倒排索引与查询.md)）
 - [RocketMQ](消息队列/RocketMQ.md)
@@ -161,6 +164,8 @@
 - [REST 接口设计](工程实践/接口/REST接口设计.md)
 - [DDD 与架构设计](工程实践/DDD与架构设计.md)
 - [国密与加密体系](工程实践/国密与加密体系.md)
+- [事件驱动架构与 CQRS 事件溯源](工程实践/事件驱动架构与CQRS事件溯源.md)
+- [安全架构](工程实践/安全架构.md)
 - [前端开发](工程实践/前端/前端开发.md)
 - [前端基础 HTML-CSS](工程实践/前端/前端基础-HTML-CSS.md)
 
