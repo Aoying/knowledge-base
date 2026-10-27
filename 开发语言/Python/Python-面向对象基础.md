@@ -5,7 +5,7 @@
 更新日期: 2026-10-25
 关联:
   - Python
-  - dataclass 与 typing
+  - dataclass与typing
   - 装饰器
 标签:
   - Python
