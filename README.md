@@ -43,6 +43,7 @@
 - [微调入门 LoRA](AI与大模型/微调入门-LoRA.md)
 - [机器学习基础](AI与大模型/机器学习基础.md)
 - [深度学习基础](AI与大模型/深度学习基础.md)
+- [强化学习基础概念](AI与大模型/强化学习基础概念.md)
 
 ## 开发语言
 
@@ -54,6 +55,7 @@
 - [Spring IOC 与 AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)
 - [Spring Cache](开发语言/Java/Spring/Spring-Cache.md)
 - [Spring Security](开发语言/Java/Spring/Spring-Security.md)
+- [Spring MVC 基础](开发语言/Java/Spring/Spring-MVC基础.md)
 - [Netty](开发语言/Java/Netty.md)
 - [Java 异常体系](开发语言/Java/Java-异常体系.md)
 - [Java 反射与注解](开发语言/Java/Java-反射与注解.md)
@@ -69,9 +71,11 @@
 - [Bean Validation](开发语言/Java/Bean-Validation.md)
 - [Stream 与 Optional](开发语言/Java/Stream与Optional.md)
 - [Java 新特性](开发语言/Java/Java-新特性.md)
+- [Lambda 与函数式编程](开发语言/Java/Lambda与函数式编程.md)
 - [虚拟线程](开发语言/Java/虚拟线程.md)
 - [Druid 监控与慢 SQL](开发语言/Java/Druid.md)
 - [多数据源](开发语言/Java/多数据源.md)
+- [JDBC 基础](开发语言/Java/JDBC基础.md)
 - [JVM GC 调优](开发语言/Java/JVM/JVM-GC调优.md)
 - [HashMap](开发语言/Java/集合/HashMap.md)
 - [ConcurrentHashMap](开发语言/Java/集合/ConcurrentHashMap.md)
@@ -113,6 +117,7 @@
 - [Python 性能优化](开发语言/Python/Python性能优化.md)
 - [Python 面向对象基础](开发语言/Python/Python-面向对象基础.md)
 - [Python 线程基础](开发语言/Python/Python-线程基础.md)
+- [Python NumPy 与 Pandas 基础](开发语言/Python/Python-NumPy与Pandas基础.md)
 
 ### 其他语言
 
@@ -141,6 +146,8 @@
 - [数据库迁移与 Schema 演进](数据库/数据库迁移与Schema演进.md)
 - [MySQL 主从复制与读写分离](数据库/MySQL/MySQL-主从复制与读写分离.md)
 - [Elasticsearch](数据库/ES/Elasticsearch.md)（汇总；子篇：[ES 倒排索引与查询](数据库/ES/ES-倒排索引与查询.md)）
+- [SQL 基础与窗口函数](数据库/MySQL/SQL基础与窗口函数.md)
+- [数据库设计与范式](数据库/数据库设计与范式.md)
 - [RocketMQ](消息队列/RocketMQ.md)
 - [Kafka 消息队列](消息队列/Kafka-消息队列.md)
 - [Kafka 与 RocketMQ 对比](消息队列/Kafka与RocketMQ对比.md)
@@ -231,6 +238,7 @@
 - [八卦与六十四卦](易经/八卦与六十四卦.md)
 - [系辞与易理思想](易经/系辞与易理思想.md)
 - [六十四卦上经详解](易经/六十四卦上经详解.md)
+- [六十四卦下经详解](易经/六十四卦下经详解.md)
 
 ## 项目沉淀（按简历项目整理）
 

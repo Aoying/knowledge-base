@@ -19,6 +19,7 @@ Up: [[总览]]
 - 子目录：Agent 6 篇在 `AI与大模型/Agent/`（Agent、Agent-记忆系统、多Agent协作、LangGraph、MCP、Tool-Calling），RAG 5 篇在 `AI与大模型/RAG/`（Embedding与向量数据库、RAG-评测与分块策略、混合检索与Rerank、上下文工程、向量检索深水）
 - [[LLM生产化与推理优化]]（模型路由、语义缓存、降级与可观测）
 - 评测与推理：[[模型评测方法]]、[[推理框架对比]]、[[微调入门-LoRA]]
+- 训练与对齐：[[强化学习基础概念]]（RL 要素、RLHF/DPO/GRPO 区分）
 
 ## 学习路径
 

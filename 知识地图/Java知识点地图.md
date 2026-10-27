@@ -6,17 +6,17 @@ Up: [[总览]]
 ## 知识点清单
 
 - 语言基础：[[Java]]（含基础知识补强、排查三板斧、疑难杂症）
-- 语言基础补强：[[Java-反射与注解]]、[[Java-泛型与类型擦除]]、[[Java-异常体系]]、[[Java-新特性]]
-- 框架实战：[[Spring-Boot]]、[[MyBatis-Plus]]、[[MyBatis原生]]、[[Bean-Validation]]
+- 语言基础补强：[[Java-反射与注解]]、[[Java-泛型与类型擦除]]、[[Java-异常体系]]、[[Java-新特性]]、[[Lambda与函数式编程]]
+- 框架实战：[[Spring-Boot]]、[[MyBatis-Plus]]、[[MyBatis原生]]、[[Bean-Validation]]、[[Spring-MVC基础]]
 - Spring 深度：[[Spring-事务]]、[[Spring-IOC与AOP]]
 - 框架补件：[[Spring-Cache]]、[[Quartz定时任务]]、[[Java-IO与NIO]]
 - 网络与安全：[[Netty]]、[[Spring-Security]]
 - 微服务：[[Spring-Cloud概览]]、[[限流熔断与降级]]（与 [[分布式事务]] 配套）
 - JVM 排错：[[JVM-故障排查]]（与 [[JVM-GC调优]] 配套）
-- 数据访问：[[Druid]]、[[多数据源]]
+- 数据访问：[[Druid]]、[[多数据源]]、[[JDBC基础]]
 - 语言进阶：[[Async-异步]]、[[Stream与Optional]]、[[虚拟线程]]
 - JVM：[[JVM-GC调优]]、[[JVM-内存模型]]、[[JVM-类加载]]、[[JVM-字节码与JIT]]、[[JVM-故障排查]]
-- 子目录：JVM 5 篇在 `开发语言/Java/JVM/`，Spring 6 篇在 `开发语言/Java/Spring/`（Spring-Boot、Spring-IOC与AOP、Spring-事务、Spring-Cache、Spring-Security、Spring-Cloud概览）
+- 子目录：JVM 5 篇在 `开发语言/Java/JVM/`，Spring 7 篇在 `开发语言/Java/Spring/`（Spring-Boot、Spring-IOC与AOP、Spring-事务、Spring-Cache、Spring-Security、Spring-Cloud概览、Spring-MVC基础）
 - 子目录：MyBatis 2 篇在 `开发语言/Java/MyBatis/`（MyBatis-Plus、MyBatis原生）
 - 新增：[[幂等设计与接口防重]]、[[分布式锁实现与选型]]（Java 后端深篇）
 - 集合：[[集合框架总览]]、[[Set集合基础]]、[[HashMap]]、[[ConcurrentHashMap]]、[[ArrayList与扩容]]、[[LinkedHashMap与LRU]]、[[TreeMap与红黑树]]、[[Queue与Deque]]、[[CopyOnWriteArrayList]]（`开发语言/Java/集合/`）

@@ -18,6 +18,7 @@ Up: [[总览]]
 - [[FastAPI]]：给 Agent 与本地工具做服务
 - [[Python-打包与环境管理]]：venv、pyproject、uv
 - [[Python性能优化]]：定位、常见慢点、优化手段、过早优化误区
+- [[Python-NumPy与Pandas基础]]：ndarray/DataFrame、分组聚合、缺失值处理
 - 开发语言同层：[[JavaScript]]、[[Lua]]、[[正则表达式]]、[[正则表达式-常用样例]]
 
 ## 学习路径
