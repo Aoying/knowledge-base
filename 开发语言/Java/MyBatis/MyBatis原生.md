@@ -8,7 +8,7 @@
   - Java
   - Druid
   - 多数据源
-  - MySQL 数据库
+  - MySQL-数据库
 标签:
   - Java
   - 数据库
