@@ -89,6 +89,7 @@
 - [JVM 内存模型](开发语言/Java/JVM/JVM-内存模型.md)
 - [JVM 类加载](开发语言/Java/JVM/JVM-类加载.md)
 - [JVM 故障排查](开发语言/Java/JVM/JVM-故障排查.md)
+- [Java 性能联合排查](开发语言/Java/JVM/Java性能联合排查.md)
 - [JVM 字节码与 JIT](开发语言/Java/JVM/JVM-字节码与JIT.md)
 - [Java IO 与 NIO](开发语言/Java/Java-IO与NIO.md)
 - [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)（汇总）

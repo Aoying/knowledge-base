@@ -15,8 +15,8 @@ Up: [[总览]]
 - JVM 排错：[[JVM-故障排查]]（与 [[JVM-GC调优]] 配套）
 - 数据访问：[[Druid]]、[[多数据源]]、[[JDBC基础]]
 - 语言进阶：[[Async-异步]]、[[Stream与Optional]]、[[虚拟线程]]
-- JVM：[[JVM-GC调优]]、[[JVM-内存模型]]、[[JVM-类加载]]、[[JVM-字节码与JIT]]、[[JVM-故障排查]]
-- 子目录：JVM 5 篇在 `开发语言/Java/JVM/`，Spring 7 篇在 `开发语言/Java/Spring/`（Spring-Boot、Spring-IOC与AOP、Spring-事务、Spring-Cache、Spring-Security、Spring-Cloud概览、Spring-MVC基础）
+- JVM：[[JVM-GC调优]]、[[JVM-内存模型]]、[[JVM-类加载]]、[[JVM-字节码与JIT]]、[[JVM-故障排查]]、[[Java性能联合排查]]
+- 子目录：JVM 6 篇在 `开发语言/Java/JVM/`，Spring 7 篇在 `开发语言/Java/Spring/`（Spring-Boot、Spring-IOC与AOP、Spring-事务、Spring-Cache、Spring-Security、Spring-Cloud概览、Spring-MVC基础）
 - 子目录：MyBatis 2 篇在 `开发语言/Java/MyBatis/`（MyBatis-Plus、MyBatis原生）
 - 新增：[[幂等设计与接口防重]]、[[分布式锁实现与选型]]（Java 后端深篇）
 - 集合：[[集合框架总览]]、[[Set集合基础]]、[[HashMap]]、[[ConcurrentHashMap]]、[[ArrayList与扩容]]、[[LinkedHashMap与LRU]]、[[TreeMap与红黑树]]、[[Queue与Deque]]、[[CopyOnWriteArrayList]]（`开发语言/Java/集合/`）
