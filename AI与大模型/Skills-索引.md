@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-25
+更新日期: 2026-10-28
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -24,7 +24,7 @@
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow
 - [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）
-- [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)
+- [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
 ## 已收录
 
@@ -158,3 +158,12 @@
 - **热度/更新**：1.3k+ stars（2026-10-25 核验 GitHub API），2026-10-24 仍在更新。
 - **许可证**：MIT。
 - **安全注意**：官方仓库，内容为技能指令；仓库自述标注仍在早期开发、API 与技能内容可能变化——只收集不安装；要用时按单个 skill 通读后再装，不整库 `npx skills add --skill '*'` 盲装。
+
+### 16. obsidian-skills（kepano/obsidian-skills）Obsidian 官方背景的 Agent skills
+
+- **功能**：教 Agent 使用 Obsidian CLI 与开放格式（Markdown、Bases、JSON Canvas）操作 vault 的 skills，让 Agent 能读写、整理 Obsidian 笔记库。
+- **适用场景**：ao 的 Obsidian vault（本知识库）自动化整理的参考实现；小说引擎记忆 vault 交给 Agent 操作时的格式与权限范本。
+- **来源**：https://github.com/kepano/obsidian-skills（公开仓库，作者为 Obsidian CEO kepano）
+- **热度/更新**：50k+ stars（2026-10-28 核验 GitHub API），2026-10-28 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；这类 skill 会读写 vault，引入前通读 SKILL.md，确认无外部网络上传，权限只给指定 vault、能只读就只读。
