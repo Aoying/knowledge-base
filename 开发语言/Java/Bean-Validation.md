@@ -2,7 +2,7 @@
 知识点: Bean Validation 参数校验
 层级: 基础
 适用版本: Spring Boot 2.7
-更新日期: 2026-10-23
+更新日期: 2026-10-29
 关联:
   - Java
   - Spring-Boot
@@ -103,6 +103,19 @@ public class ValidateHandler {
 
 - 校验是第一道防线，不是唯一防线：金额、状态机流转这类业务规则放 Service 里再查一遍。
 - message 里别拼用户输入，防日志注入；对外返回的错误信息只给字段名与规则描述，不回显完整入参。
+
+
+## 8. 面试与自测
+
+1. 字符串必填该用 `@NotNull`、`@NotEmpty` 还是 `@NotBlank`？三者各拦不住什么？
+2. 嵌套对象和集合元素校验经常漏写什么，导致“校验没生效”？
+3. `@RequestBody` 入参和散参数（`@RequestParam`、路径变量）校验失败抛的异常一样吗？全局处理要接哪几个？
+
+### 参考答案
+
+1. 字符串必填一律 `@NotBlank`：`@NotNull` 只拦 null，拦不住 `""`；`@NotEmpty` 拦不住纯空白字符串；`@NotBlank` 拦 null 与纯空白，但只能用在 CharSequence 上。
+2. 嵌套对象漏标 `@Valid` 就不会级联校验；集合元素要双写——字段上 `@Valid` 加泛型上注解（如 `List<@NotBlank String>`），只写一个集合元素不校验。
+3. 不一样：`@RequestBody` 失败抛 `MethodArgumentNotValidException`（表单绑定是 `BindException`），散参数/方法校验失败抛 `ConstraintViolationException`，后者还要求类上加 `@Validated`。两个都要在全局处理里接，只接一个另一条路径会漏成 500。
 
 ## 关联知识
 
