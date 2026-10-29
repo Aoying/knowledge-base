@@ -2,7 +2,7 @@
 知识点: Stream 与 Optional
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-29
 关联:
   - Java
 标签:
@@ -75,6 +75,19 @@ String city = Optional.ofNullable(user)
 - **在 Stream 里改外部状态**：`forEach` 里往外部 List 里 add 是并发不安全且语义不清的，收集结果一律走 `collect`。
 - **排序稳定性**：对已按某字段排序的流再 `sorted` 其他字段，Stream 对有序流保证稳定排序，List 流就是有序的，这点可以依赖。
 - 性能敏感的大循环还是老 for，Stream 的可读性优先于那点性能——前提是先确认它真是热点，别凭感觉在业务代码里到处回退 for。
+
+
+## 5. 面试与自测
+
+1. 写了一串 `filter`、`map` 却没有任何输出或副作用，为什么？Stream 的执行时机是怎样的？
+2. `parallelStream()` 为什么不能默认用？什么情况下才考虑？
+3. `orElse` 与 `orElseGet` 有什么区别？为什么不要用 `get()` 取值？
+
+### 参考答案
+
+1. 中间操作是惰性求值，只登记不执行；没有终端操作（`collect`、`forEach`、`reduce`、`count` 等），整条管道一行都不会跑。
+2. 它共用 ForkJoinPool 公共池，数据量小或单元素处理轻时拆分调度开销反而更慢，在里面做阻塞 IO 还会拖累同 JVM 其他并行流。只在数据量大、单元素处理重、无共享状态时才考虑，且要实测对比。
+3. `orElse(默认值)` 的参数总是先求值，默认值构造贵时用 `orElseGet(() -> ...)` 惰性构造；空时该报错用 `orElseThrow`。`get()` 在空时抛 `NoSuchElementException`，和 NPE 一样难定位，不要用。
 
 ## 关联知识
 
