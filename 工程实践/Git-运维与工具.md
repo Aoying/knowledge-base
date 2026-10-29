@@ -2,7 +2,7 @@
 知识点: Git 运维与工具
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-22
+更新日期: 2026-10-29
 关联:
   - 工程实践知识点地图
   - Linux与Shell
@@ -134,16 +134,6 @@ git config --global http.postBuffer 157286400
 ```
 以上都无效，最稳妥的还是重新克隆。
 
-## Gitee / GitHub 对应
-
-- 两个平台的 git 协议操作完全一样，区别只在远端地址和网页功能。
-- 你的 ob_note（Gitee）和 knowledge-base（GitHub）都是私有仓，远端地址别贴到公开地方。
-
-## 待补充
-
-
-
-
 ### 11. push 被拒绝：non-fast-forward
 - **现象**：`git push` 报 `! [rejected] main -> main (non-fast-forward)`。
 - **原因**：远端有你本地没有的提交（比如别人推了，或你在别的机器推过）。
@@ -223,6 +213,12 @@ git fsck --lost-found       # 找悬空 commit（删分支误删的）
 - `reset --hard` 丢了代码别慌，reflog 里 90 天内都找得回来。
 - 分支删错了：`git branch <name> <reflog里的sha>` 原地复活。
 - 终极：reflog 也清了才算真没了，所以别手贱 `git reflog expire`。
+
+## Gitee / GitHub 对应
+
+- 两个平台的 git 协议操作完全一样，区别只在远端地址和网页功能。
+- 你的 ob_note（Gitee）和 knowledge-base（GitHub）都是私有仓，远端地址别贴到公开地方。
+
 
 ## 基础知识补强
 

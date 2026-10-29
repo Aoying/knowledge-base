@@ -2,7 +2,7 @@
 知识点: Python
 层级: 基础
 适用版本: Python 3.x
-更新日期: 2026-10-22
+更新日期: 2026-10-29
 关联:
   - Python知识点地图
   - asyncio
@@ -102,10 +102,6 @@ open("笔记.md", encoding="utf-8").read()
 import os
 os.system("chcp 65001 >nul")
 ```
-
-## 待补充
-
-
 
 
 ## 常见坑

@@ -2,7 +2,7 @@
 知识点: Nginx
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-22
+更新日期: 2026-10-29
 关联:
   - 工程实践知识点地图
   - Docker
@@ -75,9 +75,6 @@ proxy_set_header Connection "upgrade";
 3. **413 上传失败**：`client_max_body_size` 默认 1m。
 4. **后端拿不到真实 IP**：漏了 `X-Forwarded-For` 那三行。
 5. **Windows 下跑**：能用但生产别用，信号和性能都不如 Linux。
-
-## 待补充
-
 
 
 ## 疑难杂症
