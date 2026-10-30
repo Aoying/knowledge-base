@@ -2,7 +2,7 @@
 知识点: FastAPI
 层级: 基础
 适用版本: FastAPI（基于 Starlette + pydantic v2）
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Python
   - pydantic
@@ -98,6 +98,36 @@ FastAPI 的入参/出参模型就是 pydantic `BaseModel`，与 [pydantic 篇](�
 - **在路由函数里写业务逻辑**：路由只做收参、调 Service、返回；业务仍归 ChapterService 这类服务层（与引擎现有分层一致），否则接口一多逻辑就散。
 - **全局可变状态存请求间数据**：模块级 dict 存"当前项目"之类状态，多 worker/多请求立刻串数据；请求级状态走依赖注入或显式参数。
 - **异常裸抛给框架默认 500**：业务异常（如章节不存在）定义异常处理器返回明确状态码与结构化信息，调用方是程序不是人，错误契约和成功契约一样重要。
+
+## 小技巧与冷知识
+
+【小技巧】依赖的返回值用不上时，别写进参数里，挂到装饰器上：`@app.get("/x", dependencies=[Depends(verify_token)])` 只执行鉴权、不注入返回值，路由函数签名保持干净。参数里的 `Depends` 是“要结果”，装饰器里的 `dependencies` 是“只要执行”，鉴权、限流这类只求通过的依赖放后者，读函数签名的人一眼就知道哪些是输入、哪些是门禁。
+
+【小技巧】同一个依赖在一个请求里被多处引用时，默认只执行一次：FastAPI 的 `Depends` 默认 `use_cache=True`，同一请求内多次依赖同一个可调用对象，框架只算一次、结果复用。DB Session 依赖被三个子依赖同时引用时，不会开三个连接；想让每次都重新算（比如每次都要读一次最新配置），显式写 `Depends(fn, use_cache=False)`，别靠“多写几次就多算几次”猜行为。
+
+【小技巧】启动/关闭逻辑用 `lifespan` 上下文管理器，别再用 `@app.on_event("startup")`：`lifespan` 是 Starlette 推荐的写法，`yield` 前做初始化（建连接池、预热模型）、`yield` 后做收尾，`on_event` 已被标记废弃。启动期要做的事（比如小说引擎预热 Ollama 连接）放 `yield` 前，失败了服务直接起不来，比请求打进来才发现没准备好要强得多。
+
+【小技巧】“响应完再慢慢做”的活交给 `BackgroundTasks`，别在路由里等它：发通知、写审计日志这类不需要调用方等的收尾，路由参数里声明 `background_tasks: BackgroundTasks`，`add_task` 后直接返回，任务在响应发出后才跑。注意它只是“响应后执行”，不是任务队列——进程一重启就丢，重要任务还是要走真正的队列（见第 5 节的 202 + 任务 id 思路）。
+
+【小技巧】出参模型配 `response_model_exclude_unset=True`，只返回真正被赋值的字段：模型里大量字段是 `Optional` 默认 `None` 时，响应里会塞满一堆 `null`；加这个参数后没被显式设置的字段直接不出现，响应变小、调用方也不用猜“这个 null 是没值还是没算”。只对出参模型用，别把它和入参模型混在一起。
+
+【小技巧】路由多了就用 `APIRouter` 按模块拆，别把所有 `@app.get` 堆在一个文件里：`router = APIRouter(prefix="/chapters", tags=["chapters"])`，各模块各建一个 router，最后 `app.include_router()` 汇总。`prefix` 统一收口径，`tags` 让 /docs 里自动按模块分组；接口一多，单文件路由是第一个撑不住的地方。
+
+【小技巧】测试接口别起真实服务器，用 `TestClient`：`from fastapi.testclient import TestClient; client = TestClient(app)`，直接在进程内调接口，不用等 uvicorn 启动、不用占端口。配合 `dependency_overrides` 把 DB 依赖换成内存实现，pytest 里跑完整条请求链路比起服务再 curl 快得多；`TestClient` 底层是 httpx，行为和真实请求一致。
+
+【小技巧】要改响应头或 Cookie 时，在路由参数里声明 `Response`：`def f(response: Response)`，函数里 `response.headers["X-Request-Id"] = ...`，不用为了改个头就把返回值改成 `JSONResponse`。返回值继续写业务模型，框架按 `response_model` 序列化；`Response` 参数只管“顺带改点响应元数据”，两者分工别混。
+
+【小技巧】查询参数的默认值别写裸值，写 `Query(...)` 才能加约束：`q: str = Query(default=None, max_length=50)` 既能给默认值又能限长度，裸写 `q: str = None` 就没了校验入口。别名也一样，`Query(alias="pageSize")` 让接口接受驼峰参数名、函数里仍用下划线变量——外部命名和内部命名分开，是 Query 的本职工作。
+
+【小技巧】生产环境关掉交互文档：`FastAPI(docs_url=None, redoc_url=None)`，/docs 和 /redoc 直接 404。开发环境文档是契约，生产环境它是攻击面——接口形状、参数名、错误示例全暴露在外网等于送了一份说明书；本地开发照常用，部署时用环境变量控制开关，别让文档跟着服务一起上线。
+
+【小技巧】业务错误别 `return {"error": ...}`，抛 `HTTPException`：`raise HTTPException(status_code=404, detail="章节不存在")`，状态码、结构化错误体由框架统一出，调用方按状态码分支。路由里 `return` 字典永远是 200，调用方分不清“成功”和“失败但给了个 JSON”；错误契约和成功契约一样，都要靠状态码说话。
+
+【冷知识】FastAPI 是 Sebastián Ramírez 在 2018 年 12 月发布的：它站在 Starlette（ASGI 层）和 Pydantic（校验层）肩上，靠 Python 3.6+ 的类型注解把“参数解析、校验、文档”三件事一次做完。框架名里的 Fast 既指开发快，也指它跑在 ASGI + Uvicorn 上性能不输 Go 系框架的基准测试成绩。
+
+【冷知识】/docs 是 Swagger UI，/redoc 是 ReDoc，两个都是同一份 OpenAPI 文档的不同皮肤：FastAPI 启动后自动挂出两个文档地址，/docs 侧重交互试调，/redoc 侧重长文档阅读。改了模型或路由不用重新生成文档，刷新页面就是最新的——文档不是写出来的，是类型注解算出来的。
+
+【冷知识】FastAPI 默认用标准库 `json` 序列化响应，想换更快的序列化器不用改业务代码：`from fastapi.responses import ORJSONResponse`，建 app 时 `default_response_class=ORJSONResponse`，所有 JSON 响应改走 orjson。响应体大的接口（比如一次返回整章分析结果）收益最明显；换序列化器是 app 级配置，不是每个路由的活。
 
 ## 面试与自测
 

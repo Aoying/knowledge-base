@@ -2,7 +2,7 @@
 知识点: Python 多进程与 GIL
 层级: 进阶
 适用版本: Python 3.11+
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - asyncio
   - Python
@@ -90,6 +90,34 @@ ao 的小说创作引擎里有两类批量活，正好落在选型表的两边�
 - 误区：多进程一定快。进程启动、序列化、结果回传都是成本，任务小于几十毫秒量级时先算总账。
 - 误区：进程之间能像线程一样共享变量。默认完全不共享，`Manager` 和 `Value/Array` 是通过代理/共享内存模拟出来的，每次访问都有 IPC 开销，别拿它当普通变量高频读写。
 - 变化：CPython 3.13 起提供实验性的无 GIL 构建（free-threading），但非默认、需专门构建，第三方 C 扩展兼容性仍在补齐中。现阶段生产与学习口径都按「GIL 存在」理解，不要把选型押在它身上。
+
+## 小技巧与冷知识
+
+【小技巧】每个 worker 只加载一次大资源，别当任务参数反复传：用 `ProcessPoolExecutor(initializer=init, initargs=(...))` 或 `Pool(initializer=...)`，在 worker 启动时加载一次模型、词典、连接，存在 worker 的全局变量里复用。把大对象塞进每个任务的参数，等于每跑一个任务就序列化、反序列化一次，初始化函数的成本只付一次，参数传递的成本要付 N 次。
+
+【小技巧】结果量大时别用 `pool.map`，用 `imap` / `imap_unordered` 流式取结果：`map` 会把全部结果攒成一个 list 再返回，十万条结果先在内存里堆满；`imap` 返回迭代器，边算边取，内存里只留当前这一批。任务耗时不均时用 `imap_unordered`，它按完成顺序回结果，不会被最慢的那个任务堵住整条输出。
+
+【小技巧】想“谁先算完先处理谁”用 `as_completed`：`concurrent.futures.as_completed(futures)` 按完成顺序吐 future，快的先回、慢的后回，适合“先出结果先落库、先展示”的场景。`pool.map` 是按提交顺序回结果的，最慢的任务没回来之前，后面算好的结果也只能等着，批量任务里这是最常见的隐性等待。
+
+【小技巧】worker 用久了会脏：内存慢慢涨、缓存越来越旧、全局状态被前面的任务改乱。`Pool(maxtasksperchild=N)` 和 `ProcessPoolExecutor(max_tasks_per_child=N)` 让每个 worker 干满 N 个任务就重启换新，代价是一次进程启动，换来的是状态清零。长跑的批量任务里，这比在任务函数里手动清理全局变量可靠得多。
+
+【小技巧】父进程已有线程、锁、连接，又想用 fork 的便宜，选 `forkserver`：`forkserver` 启动方式先起一个干净的 server 进程，子进程都从它 fork，不复制父进程的线程和锁状态。它比纯 fork 安全（避开了复制死锁的雷区），比 spawn 快（不用重新 import 整个模块），是 Linux 上“父进程已经很脏了”时的折中方案，`multiprocessing.get_context("forkserver")` 就能拿到。
+
+【小技巧】`set_start_method` 只能在任何进程创建前调一次，调晚了直接报 `RuntimeError`：启动方式是进程级的全局设置，一旦起过一个进程就锁死了。想在 Linux 上强制用 spawn 又不想改全局，用 `multiprocessing.get_context("spawn").ProcessPoolExecutor(...)` 只影响这一个池子，别的库照常用默认方式，互不干扰。
+
+【小技巧】Jupyter 或交互式环境里起进程池，常在提交时报 `Can't pickle`：交互式里定义的函数没有可 import 的模块路径，pickle 按名字找不到它。解决办法是把任务函数写进一个 `.py` 文件再 `import` 进来，让子进程能按模块名重新找到它；同样的函数放进脚本文件跑就没事，问题不在代码逻辑，在“函数住在哪”。
+
+【小技巧】Ctrl+C 时 `Pool` 的 worker 默认忽略 SIGINT，只有主进程能收到 `KeyboardInterrupt`：这是设计好的——子进程不抢中断信号，主进程统一处理。主进程里要写 `try/except KeyboardInterrupt` 再调 `pool.terminate()`，否则主进程退了、worker 可能还留在后台继续算；`ProcessPoolExecutor` 的上下文管理器在退出时也会等 worker 收尾，异常路径别绕过它。
+
+【小技巧】fork 之后“共享内存”是假象：子进程靠写时复制（COW）和父进程共享页面，但 CPython 的引用计数本身会写内存——对象被引用一次、计数就加一次，页面一碰就复制。父进程预加载的大数据并不能免费共享给子进程，复制成本只是被摊薄了。真要零拷贝共享大数组，用 `multiprocessing.shared_memory` 配 `numpy.frombuffer`，别指望 fork 白送。
+
+【小技巧】`max_workers` 别直接照搬 `os.cpu_count()`：容器里 `cpu_count()` 看到的是宿主机的核数，进程实际能用的可能少得多，超配只会让进程互相抢核。Linux 上用 `len(os.sched_getaffinity(0))` 看当前进程的 CPU 亲和性，Python 3.13 起还有 `os.process_cpu_count()`，直接返回“这个进程能用的核数”，按它定 worker 数才贴合容器限额。
+
+【冷知识】macOS 上默认启动方式在 Python 3.8 就从 fork 改成 spawn 了：fork 一个多线程的父进程在 macOS 上频频出问题（锁、Objective-C 运行时状态复制过去都是雷），CPython 干脆在 3.8 把 macOS 的默认值改成了 spawn。同一份代码在 Linux 上默认 fork、在 macOS 上默认 spawn，跨平台跑多进程时启动方式不是“写死”的，是跟着平台走的。
+
+【冷知识】无 GIL 的路线来自 Sam Gross 的 nogil 工作，2023 年被接受为 PEP 703：他先在 2021 年做出概念验证，证明去掉 GIL 后单线程性能损失可以控制在可接受范围，2023 年 PEP 703 正式被采纳，Python 3.13 才有了实验性的 free-threading 构建。GIL 不是“没人想动”，而是动了三十年才找到一条性能账算得过来的路。
+
+【冷知识】`os.register_at_fork`（Python 3.7+）是官方给 fork 埋雷准备的补丁：它能在 fork 之后、子进程继续执行之前跑一段清理函数，比如重建一把被复制过来的锁、重新打开一个失效的连接。它的存在本身就说明了 fork 的风险是真实存在的——连标准库都要给它留一个“fork 后自救”的钩子。
 
 ## 7. 面试与自测
 
