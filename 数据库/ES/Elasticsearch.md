@@ -2,7 +2,7 @@
 知识点: Elasticsearch
 层级: 进阶
 适用版本: Elasticsearch 7 / 8
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - ES-倒排索引与查询
   - 数据库知识点地图
@@ -220,6 +220,40 @@ curl "localhost:9200/books/_count" -H 'Content-Type: application/json' -d'
 
 - [数据分析平台及统一门户](项目沉淀/数据分析平台及统一门户.md)：ES 在数据分析平台中的使用
 - [翼安反诈平台](项目沉淀/翼安反诈平台.md)：ES 检索实战
+
+## 小技巧与冷知识
+
+【小技巧】写别名做索引切换，别让业务代码直连真实索引名：先建 `books` 别名指向 `books-v1`，重建索引后用 `_aliases` 动作把别名原子切换到 `books-v2`，查询和写入的客户端一行不用改。reindex 失败时别名还能瞬间切回去，这是“mapping 定错只能重建”那条坑对应的标准解法。
+
+【小技巧】大索引 reindex 别同步等，用 `_reindex?wait_for_completion=false` 扔后台，再用 `GET _tasks/<task_id>` 看进度。任务 ID 记下来贴到运维群里，几百万文档的重建不用守着一个 curl 会话，断网也不会丢进度；小索引同步跑就行，不用走这套。
+
+【小技巧】`search_after` 翻页时排序里一定要带一个唯一字段做 tiebreaker：只按 `year` 这种会重复的字段排序，相同值的文档在两页之间会重复出现或漏掉。标准写法是 `sort: [{ "year": "desc" }, { "_id": "asc" }]`，`_id` 兜底保证每一页的边界唯一，这也是官方文档推荐的翻页姿势。
+
+【小技巧】批量改字段别先查出来再逐条 `_update`，用 `_update_by_query` 一次改完：比如把某批文档的 `status` 从 `draft` 改成 `published`，一条查询加一个 `doc` 片段就够。但要先 `GET _count` 确认命中数，改错条件的代价是整批文档一起错，删改类操作先数数再动手。
+
+【小技巧】`_update` 支持 `doc_as_upsert: true`，文档不存在时直接按 doc 内容新建：同步链路里“MySQL 有、ES 可能没有”的场景，一条 `_update` 既能更新又能补建，不用先 GET 判断存在性再决定调 `_doc` 还是 `_update`，竞态窗口也少了一个。
+
+【小技巧】查集群健康别只看三色，顺手看 `GET _cat/thread_pool?v&h=node_name,name,active,queue,rejected`：`rejected` 列一旦开始涨，说明写入或搜索线程池已经到顶，客户端马上会收到拒绝，比等业务报错早半拍。原文讲 bulk 被拒时提到过队列满，这张表就是日常盯队列的入口。
+
+【小技巧】堆内存超过 32GB 反而更慢，设堆时别贪大：JVM 在堆小于 32GB 时用压缩指针（compressed oops），超过这个阈值指针变大、实际可用内存反而缩水。单节点 64GB 内存的机器，堆设 30GB 左右、剩下的留给 Lucene 的文件系统缓存，官方文档也是这个口径，`GET _cat/nodes?v&h=heap.percent` 能看到当前堆占用。
+
+【小技巧】只读的历史索引跑一次 `forcemerge` 合并到 1 个段，查询变快还省磁盘：冷数据不再写入后，`POST /logs-2025.01/_forcemerge?max_num_segments=1` 把几十个小段合成一个，段越少查询时要扫的文件越少。只对不再写入的索引做，热索引上跑 forcemerge 会把写入和合并的 IO 抢成一团。
+
+【小技巧】`_cat/indices` 支持按列排序找大户：`GET _cat/indices?v&s=store.size:desc` 一眼看到哪个索引最占磁盘，磁盘水位报警时先看这张表再决定删哪个。配合 `GET _cat/indices/<pattern>?v&h=index,docs.count,store.size` 可以只看某类索引，不用在几百个索引里肉眼翻。
+
+【小技巧】时间序列日志别手建索引，用数据流（data stream）加 ILM 一起配：写入只打 `logs-app` 这一个名字，ES 自动按时间滚动出 `logs-app-2026.10.31-000001` 这样的后备索引，到期自动删。比原文的 ILM 策略再省一步——连 rollover 的索引名都不用自己算，日期数学表达式 `<logs-{now/d}>` 也不用写了。
+
+【小技巧】脚本里调 ES 别加 `?pretty`，用 `filter_path` 只要需要的字段：`GET _cluster/health?filter_path=status,number_of_nodes` 返回只有两行，监控脚本解析 JSON 不用扛整页输出。`pretty` 是给人眼看的，`filter_path` 是给程序看的，两个参数别混着用。
+
+【小技巧】建索引先写索引模板（index template），别每个索引手敲 settings：模板里定好 `index_patterns`、`number_of_shards`、mapping 骨架和 ILM 策略，之后按天建的日志索引自动继承，不会再出现“这个索引副本是 1、那个是 0”的手滑。8.x 用可组合模板（component template + index template），改公共部分只改一个组件。
+
+【冷知识】每个分片都是一个完整的 Lucene 索引实例：分片不是“数据的一块切片”那么简单，底层每个主分片和副本分片都各跑一个 Lucene 实例、各自维护倒排索引和段文件。这就是原文“分片不是越多越好”的根本原因——分片数翻倍，Lucene 实例数和文件句柄数也翻倍，集群的固定开销跟着涨。
+
+【冷知识】ES 的前身是 Shay Banon 2004 年写的 Compass，Elasticsearch 本体 2010 年 2 月首次发布：他先是为妻子做食谱搜索写了 Compass，后来把它重构成分布式版本才有了 Elasticsearch。所以 ES 从第一天起就是“先有搜索引擎、再长出分布式”，不是先有数据库再加搜索，这个出身解释了它为什么不适合当主库。
+
+【冷知识】7.x 干掉了多 mapping 类型，8.x 连 `_type` 字段都没了：老教程里的 `PUT /index/_doc` 其实是 7.x 的过渡写法，一个索引只剩 `_doc` 这一种类型；8.x 彻底移除类型概念，看到 `mytype` 之类的写法直接按过期处理。另一个 8.x 的大变化是安全默认开启：首次启动自动生成 elastic 用户密码并开启 TLS，不再是 7.x 那种裸奔就能跑起来的默认状态。
+
+【冷知识】索引名必须全小写，而且不能以 `-`、`_`、`+` 开头：这是 ES 的硬性命名规则，建索引时写了大写会直接报 `InvalidIndexNameException`。`_cat`、`.kibana` 这种下划线开头的索引是系统保留的，自己建索引别往那个方向撞，日期后缀索引用 `logs-2026.10.31` 这种小写加点的写法最稳妥。
 
 ## 面试与自测
 

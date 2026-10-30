@@ -2,7 +2,7 @@
 知识点: MySQL-主从复制与读写分离
 层级: 进阶
 适用版本: MySQL 5.7 / 8.0
-更新日期: 2026-10-24
+更新日期: 2026-10-31
 关联:
   - MySQL-binlog
   - MySQL-数据库
@@ -102,6 +102,34 @@ Java 侧应用层路线就是 [多数据源](开发语言/Java/多数据源.md) 
 - 上了读写分离读性能就翻倍：从库回放也占资源、热点读前面还有缓存层，先定位真瓶颈再扩。
 - 延迟显示为零就等于没延迟：无流量时恒为 0，大事务一来立刻跳秒。
 - 切换演练没必要：没演练过的流程，故障当晚必然卡在某一步（权限、位点、连接串）。
+
+## 小技巧与冷知识
+
+【小技巧】从库只开 `read_only` 还不够，改用 `super_read_only` 才算锁死：`read_only=1` 只拦普通账号，有 SUPER 权限的账号照样能写；`super_read_only=1` 连 SUPER 账号也写不了。从库上一次手滑写入就会产生 GTID 里的“野事务”（errant transaction），之后主从切换时 GTID 对不上、复制直接中断，所以从库建议两个开关一起开。
+
+【小技巧】复制断了先看 `SHOW REPLICA STATUS` 里的 `Last_IO_Error` 和 `Last_SQL_Error`：这两列直接写着断复制的报错原文，比翻 error log 快；再看 `Replica_IO_Running` 和 `Replica_SQL_Running` 是不是两个 Yes。IO 线程停了是网络或账号问题，SQL 线程停了多半是回放冲突（主键重复、表不存在），两者定位方向完全不同。
+
+【小技巧】想临时冻结从库回放、又不想断接收，用 `STOP REPLICA SQL_THREAD`：它只停 SQL 回放线程，IO 线程继续收主库 binlog 写 relay log。适合“在从库做一致性快照、等主库某批写入过去再放行”的场景；恢复时 `START REPLICA SQL_THREAD`，攒下的 relay log 会快速追赶，比整条复制停掉重建快得多。
+
+【小技巧】建新从库不用停主库：`mysqldump --single-transaction --master-data=2`，`--single-transaction` 让 InnoDB 在一致快照下导出，`--master-data=2` 会把当时的 binlog 位点以注释形式写进备份文件头。导入后按文件头里的 `CHANGE MASTER TO` 位点起复制，整个过程主库不用锁表停写。
+
+【小技巧】8.0 想让并行回放更充分，把主库的 `binlog_transaction_dependency_tracking` 从默认 `COMMIT_ORDER` 改成 `WRITESET`：COMMIT_ORDER 只允许按组提交顺序并行，WRITESET 按行写集判断冲突，行不冲突的事务更容易并行回放。改的是主库参数（写集信息要随 binlog 发过去），从库配合把并行工作线程数调上来才见效；大事务、热点行更新多时别指望它，治本还是拆事务。
+
+【小技巧】新从库上线前按清单验三项再接流量：`super_read_only` 已开、`SHOW REPLICA STATUS` 的两个 Running 都是 Yes、从库的 `Executed_Gtid_Set` 已经追上主库的 `Executed_Gtid_Set`。三项缺一项都别把读流量切过来，尤其第三项——复制线程跑着不等于数据追上了，位点没追平就接读流量，读到的还是旧数据。
+
+【小技巧】从库误写之后别直接 `SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1` 跳过去：跳事务只会把冲突藏起来，GTID 集合里多出的野事务还在，之后切换主库时照样对不上。正确做法是先 `SHOW REPLICA STATUS` 看清是哪个事务冲突，确认是误写后在从库上把那行数据手工改回与主库一致，再重启复制；金额类表宁可停复制对账，也别跳。
+
+【冷知识】`Seconds_Behind_Master` 是拿时间戳相减算出来的：从库用 SQL 线程最近执行事件的时间戳，和主库上同一事件的时间戳相减，差值就是显示的秒数。所以主从两台机器的时钟不同步会直接虚报延迟，时钟快几秒、延迟就虚高几秒；看延迟之前先确认两台机器都对了 NTP，这是原文“粗略口径”背后的具体原因。
+
+【冷知识】MySQL 8.0.22 起把复制术语里的 `SLAVE` 换成了 `REPLICA`：`SHOW SLAVE STATUS` 变成 `SHOW REPLICA STATUS`，`CHANGE MASTER TO` 变成 `CHANGE REPLICATION SOURCE TO`，状态里的 `Slave_IO_Running` 也改名 `Replica_IO_Running`。旧语法目前还能用，但已被标记废弃，新版官方文档、监控脚本和工具输出一律用 replica，写新脚本时直接用新名字。
+
+【冷知识】半同步“等一个从库确认”的等待是有上限的：`rpl_semi_sync_master_timeout` 默认 10000 毫秒（10 秒），等不到确认就自动降级为异步复制，之后有从库恢复会再悄悄切回半同步。生产上常把这个值调小（比如 1000 毫秒），宁可早降级也别让每次提交都卡满 10 秒；调多小合适看从库的网络往返，设得比正常往返还小等于变相关闭了半同步。
+
+【冷知识】GTID 长相就是“服务器 UUID + 事务序号区间”，比如 `3E11FA47-71CA-11E1-9E33-C80AA9429562:1-100`。看从库 `Executed_Gtid_Set` 的区间缺口，就能直接读出它缺了哪几段事务；主从切换时“选数据最新的从库”，本质就是比谁的 `Executed_Gtid_Set` 区间最全，不用再对 binlog 文件名和偏移量。
+
+【冷知识】`RESET MASTER` 是复制运维里最危险的一条命令：它会清空主库全部 binlog 并重置 GTID 执行集，在主库上误敲一次，等于把复制的“账本”撕了，所有从库的位点立刻作废，只能重建。相对安全的是从库侧的 `RESET REPLICA ALL`，它只清掉从库自己的复制配置；两条命令名字像、后果天差地别，敲之前先确认自己连的是哪台。
+
+【冷知识】主从复制是 MySQL 3.23 时代（2000 年前后）就有的老功能，比 InnoDB 成为默认存储引擎（5.5 版本）还早一代。它最初只是为备份和读扩展设计的，“主库挂了自动切换”这类高可用用法是后来 MHA、Orchestrator、MGR 这些工具一层层长出来的；理解这段历史，就明白为什么复制的默认行为偏保守——它生来就不是为强一致准备的。
 
 ## 10. 面试与自测
 

@@ -2,7 +2,7 @@
 知识点: MySQL binlog
 层级: 进阶
 适用版本: MySQL 5.7 / 8.x
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - MySQL-数据库
   - RocketMQ
@@ -282,6 +282,38 @@ mysqlbinlog --read-from-remote-server -h 127.0.0.1 -P 3307 -uroot -pdemo123 \
 ```bash
 # 清理
 docker rm -f mysql-binlog-demo
+
+## 小技巧与冷知识
+
+【小技巧】删 binlog 文件别直接 `rm`，用 `PURGE BINARY LOGS`：binlog 文件有个索引文件（`mysql-bin.index`）记录了所有文件列表，手动删文件不会更新索引，复制和恢复都会因为“索引里有、磁盘上没”而报错。想删就用 `PURGE BINARY LOGS BEFORE '2026-10-20 00:00:00'` 或 `PURGE BINARY LOGS TO 'mysql-bin.000042'`，让 MySQL 自己同时更新文件和索引。
+
+【小技巧】备份前先 `FLUSH BINARY LOGS` 再记位点：这条命令强制轮换出一个新 binlog 文件，备份开始那一刻的“当前文件+位点”就固定了，恢复时从这个位点往后重放 binlog 即可，不用再猜备份进行中途写进了哪个文件。mysqldump 的 `--master-data` / `--source-data` 也是这个思路，只不过它帮你自动做了轮换和记录。
+
+【小技巧】大事务有没有把 binlog cache 写满磁盘，看 `SHOW STATUS LIKE 'Binlog_cache%'`：`Binlog_cache_disk_use` 每次 +1 都代表一个事务的 cache 溢出到磁盘临时文件了，`Binlog_cache_use` 是总事务数，两者一对比就知道“大事务占比”。这个值一直在涨时，先拆大事务、再考虑调大 `binlog_cache_size`，只调参数不治源头，cache 早晚还是会溢。
+
+【小技巧】`mysqlbinlog` 解码时多加一个 `v` 能看到列名：`--base64-output=decode-rows -v` 只给伪 SQL 和 `@1`、`@2` 这种列序号；`-vv` 会把列的类型信息也打出来，定位“到底改了哪一列”时更直观。日常排障 `-v` 够用，写闪回或 CDC 解析逻辑之前，先用 `-vv` 对照一遍列类型，避免把 `@2` 认错字段。
+
+【小技巧】表被 DROP 之后再解码旧 binlog，行事件就只剩 `@1`、`@2`：ROW 事件解码成伪 SQL 时，列名来自当时的表结构（TABLE_MAP 事件），表删了、结构没了，`mysqlbinlog` 只能按序号显示。想保留可读的解码能力，误删表恢复前别急着清 binlog，闪回工具也是同理——它需要“当时的表结构”才能把镜像拼回 SQL。
+
+【小技巧】混合引擎事务里 MyISAM 的部分无法回滚，binlog 也救不了它：同一个事务里既改 InnoDB 表又改 MyISAM 表，事务回滚时 InnoDB 的改动能撤回，MyISAM 的改动已经落盘了；binlog 里这条事务照样按提交记录。别在需要原子性的事务里混用 MyISAM，发现一张 MyISAM 表混进核心事务，先改引擎再谈一致性。
+
+【小技巧】`mysqlbinlog --database` 的过滤依据是事件当时的默认库，不是行所属的库：ROW 格式下，一条跨库写的事务里，行事件按行所属的表归属，但 `--database` 只看事件发生时的默认数据库，跨库操作很容易被漏掉。想按库过滤 ROW 格式 binlog，别依赖这个参数，解码后按 `### UPDATE \`库\`.\`表\`` 里的库名再过滤才可靠。
+
+【小技巧】把备份恢复到新实例时，`GTID_PURGED` 要先手工设好：mysqldump 出来的备份里，`gtid_executed` 集合存在备份文件头部的 `SET @@GLOBAL.GTID_PURGED` 里；恢复到一台全新实例时，如果这台机器的 GTID 集合是空的，直接恢复会因为“备份里的 GTID 不在新实例的已执行集合里”而报错或导致后续复制错乱。恢复前确认备份文件里这行存在且已执行，跳过它等于埋了一个复制隐患。
+
+【小技巧】从库的位点信息默认存在表里，崩溃后才不会丢：8.0 默认 `relay_log_info_repository=TABLE` 和 `master_info_repository=TABLE`，位点随事务一起写进 `mysql.slave_relay_log_info` / `mysql.slave_master_info`，从库崩溃重启后能从表里恢复位点继续回放。老版本或手工改成 FILE 的实例，崩溃后位点可能停在“已读未回放”的中间态，重启后要先对位点再放量。
+
+【小技巧】`RESET MASTER` 之前先想想有没有更轻的办法：8.0.23 起可以用 `RESET BINARY LOGS AND GTIDS`，它只清空本机的 binlog 和 GTID 集合，语义比 `RESET MASTER` 更明确；`RESET MASTER` 还会清掉本机其他复制相关的状态。两种都是高危操作，只在重建复制关系时用，用前先确认没有从库还指着这台机器的旧位点。
+
+【小技巧】怀疑 binlog 文件损坏时，先校验 checksum 再怀疑磁盘：默认 `binlog_checksum=CRC32`，每个事件都带校验和，`mysqlbinlog --verify-binlog-checksum` 能逐事件校验，发现损坏的事件就停在那里并报错。恢复前跑一遍校验，比“直接重放到一半才发现文件坏了”省得多；校验通过但内容仍不对，再往“写错了、删错了”的方向查。
+
+【冷知识】binlog 文件开头 4 个字节是魔数 `0xfe 0x62 0x69 0x6e`，也就是 `FE 'b' 'i' 'n'`：`hexdump -C mysql-bin.000001 | head -1` 就能看到，之后才是一个接一个的事件。拿它可以快速判断一个文件“是不是 binlog”，而不是靠文件名猜；备份目录里混进别的文件时，这个魔数是最可靠的鉴别方式。
+
+【冷知识】binlog 可以加密：8.0.14 起 `binlog_encryption=ON` 会对 binlog 文件和 relay log 做加密，需要先配好 keyring 插件存主密钥。加密后直接 `cat` 或 `mysqlbinlog` 都读不出明文，必须经过 MySQL 自己的密钥才能解；主密钥轮换时要按官方流程走，丢了主密钥等于丢了整段 binlog 的恢复能力。
+
+【冷知识】`binlog_order_commits` 默认是 ON，意思是“事务提交顺序必须和写进 binlog 的顺序一致”：组提交时多个事务一起刷盘，提交顺序被强制对齐到 binlog 顺序，这样从库按 binlog 顺序回放才不会看到“后面的事务先提交了”的乱序。关掉它能换一点并发，但依赖“binlog 顺序即提交顺序”的工具（CDC、闪回）就可能读到错乱的顺序，生产上别动它。
+
+【冷知识】ROW 格式下触发器本身不会进 binlog：触发器触发后，真正被记录的是它改动的那几行的行镜像，触发器的定义、触发逻辑都不会出现在 binlog 里。主从之间触发器要事先在两边都建好，只靠同步 binlog 同步不了触发器；同理，存储过程在 ROW 格式下也只记录它改的行，不记录调用本身。
 
 ## 面试与自测
 
