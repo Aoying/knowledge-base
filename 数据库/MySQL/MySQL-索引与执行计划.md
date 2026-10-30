@@ -2,7 +2,7 @@
 知识点: MySQL 索引与执行计划
 层级: 进阶
 适用版本: MySQL 5.7 / 8.x（OceanBase MySQL 模式通用）
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - MySQL-数据库
   - MySQL-事务与MVCC
@@ -107,6 +107,16 @@ SHOW WARNINGS;                            -- 看优化器改写后的 SQL
 - **低区分度列单独建索引**：如 status 只有 0/1，单独建了优化器也多半不走；它适合做联合索引的后列。
 - **索引建了但统计没更新**：大批量导入/删除后 `ANALYZE TABLE` 一次，再看执行计划。
 - **长字符串前缀索引**：`KEY idx (name(10))` 能省空间但无法覆盖索引、不能用于排序，权衡后再用。
+
+## 小技巧与冷知识
+
+【小技巧】查联合索引的列顺序别凭记忆，直接问 `INFORMATION_SCHEMA.STATISTICS`：`SELECT INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_order' ORDER BY INDEX_NAME, SEQ_IN_INDEX;`。它能直接看到每个索引由哪些列组成、顺序是怎样的。排错时先对一下顺序，再判断最左前缀到底用到了哪几列，比凭印象猜要准，也能发现把 `(a, b)` 记成 `(b, a)` 这类低级错误。
+
+【小技巧】想删一个疑似无用的索引又不敢直接删，可以先把它设为不可见：MySQL 8.0 支持 `ALTER TABLE t_order ALTER INDEX idx_x SET INVISIBLE;`，设为不可见后优化器会忽略它，效果上等同于删掉，但随时能用 `SET VISIBLE` 恢复。观察一段时间，确认慢日志里没有因为缺它而变慢的查询，再真正执行 `DROP INDEX`，这样试错成本比直接删低得多。
+
+【冷知识】主键越宽，所有二级索引都会跟着变胖：InnoDB 二级索引的叶子节点存的是索引列加主键值，主键并不是只影响聚簇索引本身。原文只提了 UUID 主键会导致随机插页，但宽主键还有另一层代价，就是每个二级索引里都要重复存一份很长的主键值，索引变大、写入放大、缓存占用都会跟着涨。很多人只算主键列本身的长度，忽略了它会被复制到每一个二级索引里。
+
+【冷知识】一条查询不一定只用一个索引：优化器在合适的时候会对同一张表做索引合并，EXPLAIN 的 type 会显示 `index_merge`，Extra 里会出现 `Using union` 或 `Using intersect`。这说明 MySQL 会分别用两个索引各查出一批主键，再合并或取交集后回表，而不是像多数人以为的那样一次查询只能选一个索引。看到 `index_merge` 不用慌，它本身不是坏信号，真正要看的是合并后回表的行数是否仍然很大。
 
 ## 面试与自测
 
