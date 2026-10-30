@@ -2,7 +2,7 @@
 知识点: Git 运维与工具
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - 工程实践知识点地图
   - Linux与Shell
@@ -314,6 +314,28 @@ git push -u origin feat/login
 - **对公共分支用 force push**：`push --force` 会覆盖远程历史，队友基于旧历史的工作直接作废。自己的特性分支要改写历史也优先 `--force-with-lease`，公共分支禁止。
 - **提交说明写成「update」「fix」**：三个月后没人（包括你自己）知道这次提交干了什么。说明至少写清改了什么、为什么改，团队项目按约定的前缀规范写。
 - **大文件或构建产物进仓库**：Git 适合管文本源码。jar、zip、视频进库后每次克隆都背着全部历史版本，仓库只会越来越臃肿，该进忽略清单或走专门的大文件方案。
+
+## 小技巧与冷知识
+
+【冷知识】Git 的名字是 Linus Torvalds 的自嘲：2005 年他为 Linux 内核写这个版本控制系统时，把它取名叫 git——在英式俚语里 git 是“蠢货、不讨人喜欢的人”的意思。Linus 自己说过，他是个自大狂，所以所有项目都以自己命名，先是 Linux，现在是 git；名字本身就是一句玩笑，不是什么缩写。
+
+【小技巧】想找“某一行代码是哪次提交改坏的”，别一页页翻 log，用 `git log -S "关键词" --oneline`：它只列出增删了这个字符串的提交，改动行数、重构提交都不会干扰结果。配合 `git show <提交>` 看那次到底改了什么，定位回归问题比二分猜测快得多；`-S` 搜的是字符串出现次数的变化，改标点、换行这类纯格式改动不会触发它。
+
+【小技巧】回归 bug 不知道哪次提交引入的，用 `git bisect` 二分定位：先 `git bisect start`，在已知好的提交上 `git bisect good`、坏的提交上 `git bisect bad`，Git 会自动切到中间提交让你测，每次回 good 或 bad，几轮就锁定第一个坏提交。手动翻几十条提交是线性排查，二分是指数级收口；找出来后直接 `git bisect reset` 回到原来分支。
+
+【小技巧】两个分支要来回对照、又不想反复 stash 和切换，用 `git worktree`：`git worktree add ../项目名-分支名 分支名` 会在另一个目录检出同一仓库的另一个分支，两个目录共用一份 `.git` 历史、各自独立工作。比 clone 两份省磁盘、比来回 checkout 省现场，修热修复分支时主分支的进度一点不受影响；用完 `git worktree remove` 收掉。
+
+【小技巧】一次改动里混了两件事，别整包提交，用 `git add -p` 交互式分块：它按代码块逐个问你要不要暂存，y 暂存、n 跳过、s 再拆细，一次提交只进一件事。提交粒度干净了，之后 `git log`、`git revert`、`git bisect` 全部受益；原文只讲了 `git add .` 全量提交，分块提交是把“一个提交只干一件事”落到操作层的做法。
+
+【小技巧】stash 默认不带未跟踪文件，换分支前先确认现场收干净了：`git stash push -u`（或 `--include-untracked`）才把新文件也一起暂存，否则切分支后新文件会跟着跑过去。恢复时 `git stash list` 看编号、`git stash apply stash@{1}` 指定恢复哪一份，比只会 `stash pop` 恢复最新一份更稳；pop 失败时暂存还在，apply 失败同样不丢，确认无误再 `git stash drop`。
+
+【冷知识】新仓库默认分支是 main 还是 master，取决于“谁建的库”：GitHub 从 2020 年 10 月起新建仓库默认分支改为 main，但本地 `git init` 的默认分支仍是 master。想让本地也默认 main，配一次就行：`git config --global init.defaultBranch main`（Git 2.28 及以上版本支持）；已建好的仓库改默认分支要去远端设置里改，本地只改名不同步。
+
+【小技巧】把常用长命令收进别名，少敲一半字：`git config --global alias.lg "log --oneline --graph --all --decorate"` 之后 `git lg` 就是全部分支带图的历史；`alias.st "status -sb"` 看分支加状态、`alias.last "log -1 --stat"` 看上一次提交改了什么。别名存在 `~/.gitconfig` 里，换机器拷走这一个文件就能复用，比每次翻速查表快。
+
+【冷知识】Git 命令分两层：日常用的 status、add、commit、log 叫“瓷器”（porcelain），是给人用的友好接口；底下还有一套“管道”（plumbing）命令，如 `git cat-file`、`git hash-object`、`git update-index`，做的是读写对象、算哈希这类原子操作。排障时瓷器命令不够用就下沉到管道层——比如 `git cat-file -p HEAD` 直接看某个提交对象的内容，绕过所有友好包装看到原始数据。
+
+【小技巧】提交前跑一遍 `git diff --check`，能拦住最常见的低级错误：它会标出新增行尾的空白、行首混用的空格与制表符，这类问题进了仓库会在 diff 里一直飘红、还容易在合并时制造假冲突。把它放进提交前的固定动作，比事后在评审里被人指出要省事；团队项目里也可以配成 pre-commit 钩子自动跑。
 
 ## 面试与自测
 

@@ -2,7 +2,7 @@
 知识点: Flowable基础入门
 层级: 基础
 适用版本: Flowable 6.7.2
-更新日期: 2026-10-25
+更新日期: 2026-10-31
 关联:
   - Flowable
   - 工程实践知识点地图
@@ -156,6 +156,24 @@ flowable:
 | [工程实践/Flowable/Flowable-多实例与网关.md](工程实践/Flowable/Flowable-多实例与网关.md) | 多实例、网关高级用法 | 只列网关类型，不展开多实例与复杂汇合 |
 
 子流程、动态条件、流程迁移、自定义表单渲染都不在本篇，归进阶篇。
+
+## 小技巧与冷知识
+
+【小技巧】启动实例时顺手传 businessKey，把流程实例和业务单子绑死：`startProcessInstanceByKey("leave", "请假单-2026-118", 变量)` 里第二个参数就是业务主键，事后用 `createProcessInstanceQuery().processInstanceBusinessKey("请假单-2026-118").singleResult()` 就能直接反查到实例，不用在业务表里再存一列流程实例 id。原文只讲了按 key 启动，没提这个“业务主键当纽带”的用法；流程变量里只放 id 的原则不变，businessKey 是引擎原生支持的反查通道。
+
+【小技巧】Spring Boot 集成后不用手写部署代码：starter 启动时会自动部署 classpath 下 `processes/` 目录里的 BPMN 文件，`leave.bpmn20.xml` 放进 `src/main/resources/processes/` 就随应用一起发布。原文第 1 步贴的是编程式部署，入门练手可以写一次理解流程，真实项目里靠自动部署更省事；改了图重启应用即重新部署，版本号自动 +1。
+
+【小技巧】审批结论要随 `complete` 一起传，不要先完成任务再补变量：`taskService.complete(taskId, Map.of("approved", true))` 会先把变量写进实例、再往下走出线网关，网关条件读到的就是最新值。反过来先 `complete(taskId)` 再 `setVariable`，不光多一次数据库写，网关判断时还可能读不到结论——结论变量的生效时机就在 complete 那一刻，别拆成两步。
+
+【小技巧】查待办时显式排个序，别信默认顺序：`createTaskQuery().taskAssignee("director").orderByTaskCreateTime().desc().list()`，最新待办排在最前面。不加排序时返回顺序不保证，待办一多先看到的可能是几天前的旧单；按创建时间倒序是最常用也最不容易错的待办排序。
+
+【小技巧】生产环境的 `database-schema-update` 改成 `false`，表结构用脚本管：原文配置里 `true` 只适合入门和开发，生产发布前先在测试库核对它要改的 DDL。更稳的做法是生产配 `false`、建表与升级走人工审核的 SQL 脚本（或 Flyway/Liquibase），引擎启动时只校验不改表，表结构变化才有评审记录可查。
+
+【冷知识】BPMN 2.0 是 OMG 在 2011 年发布的标准，Flowable 是它的一个实现：图里那些圆圈、菱形、箭头的含义不是 Flowable 自创的，而是标准里定好的。`leave.bpmn20.xml` 这个文件名后缀也是约定俗成——`20` 指 BPMN 2.0，告诉部署器“这是一个 BPMN 2.0 流程定义”，换成 `.bpmn` 同样能被识别。
+
+【冷知识】三组表名的 `ACT_` 前缀来自 Activiti：Flowable 在 2016 年从 Activiti 分叉出来，表名沿用至今——`ACT_RE_*` 是 Repository（定义类）、`ACT_RU_*` 是 Runtime（运行类）、`ACT_HI_*` 是 History（历史类）。记表名不用死记硬背，看到前缀就知道它是定义、运行还是历史。
+
+【冷知识】`isExecutable="false"` 的流程部署成功却启动不了：BPMN 片段里 `<process isExecutable="true">` 不是装饰，设成 false 的流程定义能正常部署进 `ACT_RE_PROCDEF`，但按 key 启动时会找不到可执行的版本。流程图部署后启动报错“找不到定义”，先查 `isExecutable` 是不是被画图工具误改成了 false，别先怀疑部署代码。
 
 ## 面试与自测
 
