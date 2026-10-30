@@ -2,7 +2,7 @@
 知识点: LangGraph
 层级: 进阶
 适用版本: LangGraph 1.x（Python）
-更新日期: 2026-10-22
+更新日期: 2026-10-31
 关联:
   - Agent
   - Tool-Calling
@@ -144,6 +144,20 @@ app.invoke(Command(resume="yes"), config)
 - LangGraph 已发布 1.x，API 基本稳定：`StateGraph` / `add_messages` / `ToolNode` / `tools_condition` / `interrupt` + `Command(resume=...)` 是当前推荐写法；早期教程里的 `MessageGraph`、`interrupt_before` 硬编码暂停等方式已不推荐，照旧教程抄代码容易踩空。
 - 预制 Agent（如 `create_react_agent`）在新版本中逐步迁往 LangChain 的 agent 抽象下维护，自己拼图（StateGraph 手动连边）不受影响，且更利于理解原理，建议以手拼为主。
 - 来源：LangGraph 官方文档与 API 参考（StateGraph、checkpoint、interrupt 章节），2026-10 核对。
+
+## 小技巧与冷知识
+
+【小技巧】路由判断和状态更新是同一段逻辑时，让节点直接返回 `Command(update={...}, goto="下一节点")`，把“改状态”和“选路”合在一次返回里，不用再单写一个只读 State 的路由函数。但要注意分工：`Command(update=...)` 和 `Command(goto=...)` 是给节点返回值用的，不能当作 `invoke()` 的入参传进去；从外部恢复或继续对话时，入参只认 `Command(resume=...)`，其他写法传进去不会按预期工作。
+
+【小技巧】子任务数量运行前才知道时，用 `Send` 做动态扇出：路由节点返回 `[Send("worker", {...}), ...]`，有多少个子任务就生成多少个并行副本，再用 `Annotated[list, operator.add]` 这类追加型字段收结果，最后由汇总节点合并。不要在节点里用循环多次调用子图，那样容易碰到子图命名与命名空间的限制；`Send` 才是为这种 map-reduce 形态准备的写法。
+
+【小技巧】图卡住了先读 `app.get_state(config).next`，不要先猜原因：`next` 里就是图下一步打算跑的节点名，`next` 为空但任务又没完成，说明已经走到 END 或者路由指向了不存在的节点；再翻 `get_state_history()`，看哪个字段在某一步之后停涨了，停涨的字段往往就是缺 reducer、更新被覆盖掉的那个字段。
+
+【冷知识】`interrupt()` 恢复时，整个节点会从头重跑，`interrupt()` 之前那几行代码会再执行一次。所以 interrupt 之前不要放写库、发请求、追加列表这类不可重复的操作，副作用要放在恢复之后做；原文只说了恢复要用同一个 `thread_id` 和 `Command(resume=...)`，没提“节点从头重跑”这一点，第一次做人工确认很容易在这里重复落库或重复发请求。
+
+【冷知识】并行分支同时写同一个字段、又没有给这个字段配 reducer，框架不会悄悄覆盖，而是直接报错 `INVALID_CONCURRENT_GRAPH_UPDATE`。这是超步合并规则的硬性约束：同一轮里多个节点写同一字段，必须事先声明怎么合并。解决办法是给该字段配追加型 reducer，或者让各分支写各自的字段，再由下游汇总节点合并。
+
+【冷知识】`stream_mode` 除了原文提到的 `"updates"`，还有 `"debug"`：它会把每一步最详细的执行事件都流出来，比只给状态快照的 `"values"`、只给增量的 `"updates"` 看得更细。定位卡住或路由异常时，可以把 `"debug"` 和 `"updates"` 一起开，看完就关掉；生产上别长期开着 debug，它输出量大，只适合临时排查。
 
 ## 10. 面试与自测
 

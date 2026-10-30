@@ -2,7 +2,7 @@
 知识点: MCP
 层级: 进阶
 适用版本: MCP 规范 2026-07-28
-更新日期: 2026-10-22
+更新日期: 2026-10-31
 关联:
   - Agent
   - Tool-Calling
@@ -149,6 +149,20 @@ if __name__ == "__main__":
 - **2025-03-26 版**：Streamable HTTP 取代旧的 HTTP+SSE 双端点传输；老教程里的 SSE 写法已过时。
 - **2026-07-28 版**（当前）：核心协议无状态化，移除 `initialize` 握手与会话 ID；sampling、roots 弃用；elicitation 保留。跟教程前先确认它针对哪个版本。
 - 来源：MCP 官方规范（modelcontextprotocol.io，架构与传输章节）与 Real Python MCP 词条，2026-10 核对。
+
+## 小技巧与冷知识
+
+【小技巧】给工具标上行为标注（annotations），让 Host 知道该不该弹窗确认：`readOnlyHint: true` 表示只读不改，`destructiveHint` 表示是否会删改数据，`idempotentHint` 表示重复调用是否无额外效果，`openWorldHint` 表示是否触及外部系统。只读工具只标前两项就够了；但要记住，标注只是提示不是担保，默认值特意设得很谨慎（只读默认 false、破坏性默认 true），而且来自不可信 Server 的标注不能作为安全决策依据，Host 自己的权限控制不能省。
+
+【小技巧】耗时长的工具不要让调用一直空等，要发进度通知并响应取消：客户端在请求里带一个 progressToken，Server 干活时用 `notifications/progress` 陆续汇报进度，界面就能显示进度而不是一直转圈；用户点停止时，客户端发 `notifications/cancelled`，Server 应当尽快收尾停工。更彻底的做法是把几分钟的活拆成“先入队返回任务号、再查进度”的异步模式，别让一次工具调用挂几分钟。
+
+【小技巧】工具返回值不只有文本：一次 `tools/call` 的结果可以混装多种内容块——`text`、`image`（Base64 图片加 MIME 类型，如图表或截图）、`audio`、`resource_link`（只给 URI、不给内容）和 `resource`（把资源内容直接嵌进来）。想让程序直接用结构化结果时，还可以同时带 `structuredContent`，但规范要求同时给一份等价的文本渲染，免得只读文本的客户端看不懂。设计工具时先想好返回形态，别把图片、文件都硬塞进文本里。
+
+【冷知识】工具清单不是一成不变的：Server 可以在运行时增减工具、资源或提示模板，条件是它在能力声明里把对应项的 `listChanged` 设为 true；清单变了，它会发 `notifications/tools/list_changed`（资源、提示模板同理），客户端收到后要重新调一次 `tools/list` 刷新。只在连接时拉一次清单就缓存到底的客户端，插件热更新、权限变化后就会看到过期工具表，生产环境的客户端必须处理这个通知。
+
+【冷知识】通知是没有回执的：MCP 里带 `notifications/` 前缀的消息都是 JSON-RPC 通知，没有 `id` 字段，接收方不回响应，发送方也不等确认、发完就继续干活。这正是进度汇报、清单变更、日志这些边信道能与主请求并行而不互相阻塞的原因；反过来，取消通知也只是“尽力而为”，丢了就可能没生效，所以可靠的 Server 还要靠超时兜底，不能只指望收到取消通知。
+
+【小技巧】排障先别进 Host，用官方 Inspector 直接连 Server：`npx @modelcontextprotocol/inspector` 会打开一个网页客户端（另有 `--cli` 命令行版和 `--tui` 终端版），填好启动命令连上后就能看它到底暴露了哪些工具、资源和提示模板，还能当场填参数调一次、看原始 JSON-RPC 来回。原文 §6 说的“脱离 Host 直连验证”就是这个工具的用途；它比反复改 Host 配置、重启、看模型为什么不用某个工具要快得多。
 
 ## 10. 面试与自测
 
