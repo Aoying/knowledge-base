@@ -2,7 +2,7 @@
 知识点: Maven与依赖管理
 层级: 基础
 适用版本: Maven 3.x（通用）
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - CICD
   - Docker
@@ -97,6 +97,28 @@ mvn dependency:tree -Dverbose              # 连被调解掉的版本也显示�
 
 - 并行构建 `mvn -T 1C`：模块无依赖时并行，个别老插件线程不安全会翻车，遇问题退回串行定位；缩小范围（`-pl/-am`）通常比提速更有效。
 - 3.8.x 起默认屏蔽不安全的 HTTP 仓库（http blocker）：老私服若仍是 http 地址，升级 Maven 后会突然全线下不动包，先查这条。3.9.x 为当前主流稳定线，插件兼容性以各插件官方说明为准。
+
+## 小技巧与冷知识
+
+【小技巧】依赖树看完冲突还不够，跑一次 `mvn dependency:analyze` 查“声明了没用 / 用了没声明”的两类隐患：代码直接用了某个类、但 pom 里没声明它（靠传递依赖偷渡进来），升级上游一剪传递路径就编译失败；反过来声明了却没用到的依赖，白白拉大构建图。它是按字节码分析的，只靠注解、只在运行时起作用的依赖（如 Spring Boot starter 里的自动配置）会被误报成“未使用”，删之前先确认，别照单全删。
+
+【小技巧】`mvn dependency:analyze-dep-mgt` 专门对照 dependencyManagement 与实际解析结果：它会列出哪些依赖的解析版本和 dependencyManagement 里写的不一致，专治原文说的“统一不生效”。查到不一致时先搜子模块里有没有显式写死的版本——显式版本盖过统一管理，统一管理的版本只是默认值，不是强制值。
+
+【小技巧】版本到底从哪来，别靠猜，用 `mvn help:effective-pom` 看最终生效的 pom：父 pom、import 的 BOM、激活的 profile 叠加之后，某个依赖的版本、某个插件的配置到底是多少，这一条命令全摊开。依赖冲突查到最后发现“版本不知从哪冒出来”，先打 effective-pom，比一层层翻父 pom 快得多。
+
+【小技巧】弱网或断网环境先 `mvn dependency:go-offline` 预下载，再用原文的 `-o` 离线跑：go-offline 会把项目依赖、插件及插件的依赖一次性全部解析进本地仓库，之后 `-o package` 就不再碰网络。只 `mvn -o` 不预下载，缺一个包就中途停下；先 go-offline 再离线，等于把“下载”和“构建”两个动作拆开，出问题也分得清是哪一步。
+
+【小技巧】升级前先列清单，别一个个翻仓库：`mvn versions:display-dependency-updates` 列出所有有新版本的依赖，`versions:display-plugin-updates` 列出插件的。先看清单再决定升哪个、一次升几个，配合 dependencyManagement 钉版本，升级才是有计划的动作，而不是“看到提示就顺手改一个版本号”。
+
+【小技巧】多模块只跑某个测试类时，加上 `-DfailIfNoTests=false`：`mvn test -Dtest=FooServiceTest` 会在所有模块里找这个测试类，没有它的模块默认直接报错中断，加上这个参数后无匹配测试的模块跳过不报错。只想验证某一个模块时再配 `-pl`，两个参数配合才是“只跑我想跑的测试”的完整写法。
+
+【小技巧】settings.xml 里的私服密码别写明文，用环境变量引用：`<password>${env.MAVEN_REPO_PASSWORD}</password>`，密码只存在本机环境变量或 CI 的 Secrets 里。settings.xml 不进版本库只是第一层，凭据本身也不该以明文躺在磁盘文件里；换机器时只改环境变量，配置文件原样拷走就能用。
+
+【小技巧】`mvn clean` 只清 target，不清本地仓库里已装好的旧 SNAPSHOT：改了公共模块的代码，只 clean 不 install，别人拉到的还是旧版——install 才把新产物装进本地仓库，deploy 才推私服。本地联调“改了代码却没生效”时，先确认公共模块有没有重新 install，再怀疑缓存和版本。
+
+【冷知识】Maven 的名字来自意第绪语，意思是“知识的积累者”（accumulator of knowledge）：它最初是 Jakarta Turbine 项目里简化构建流程的尝试，名字取的就是“把构建知识攒起来”这个意思。理解这一点就明白它为什么坚持约定大于配置——整个工具的设计目标，就是让构建知识沉淀在 pom 和约定里，而不是散落在每个人的脚本里。
+
+【冷知识】子 pom 找父 pom 时，`<parent>` 里的 `<relativePath>` 默认就是 `../pom.xml`：Maven 先按这个相对路径在磁盘上找，找不到才去仓库里按坐标找父 pom。多模块改目录结构、把子模块挪了位置后构建报“找不到父 pom”，先查 relativePath 对不对，而不是先怀疑仓库和坐标；不写 relativePath 时它就是默认的 `../pom.xml`，不是“不查磁盘直接去仓库”。
 
 ## 8. 面试与自测
 

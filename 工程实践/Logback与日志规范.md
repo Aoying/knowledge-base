@@ -2,7 +2,7 @@
 知识点: Logback 与日志规范
 层级: 进阶
 适用版本: Logback 1.2 / Spring Boot 2.7.3
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Spring-Boot
   - 监控告警
@@ -130,6 +130,24 @@ public class TraceFilter extends OncePerRequestFilter {
 - 误区：日志越多越好查。日志量与磁盘、IO、采集成本成正比，无节制的 INFO 会淹没真正的错误行；「关键节点打、细节靠 DEBUG 动态开」才是可持续的策略。
 - 误区：异步 Appender 包上就万事大吉。丢弃阈值、队列深度、停机丢弃三个行为都得按日志重要性单独评估，账务审计类日志不适合与普通运行日志共用一条异步通道。
 - 误区：traceId 只在本服务打就够了。不向下透传，跨服务排查照样断链；不进 MDC 只拼在个别日志行里，框架与第三方日志行照样没有，串不起来。
+
+## 小技巧与冷知识
+
+【小技巧】占位符只省了拼接，参数表达式照样求值：`log.debug("结果 {}", toJson(bigObj))` 即使 DEBUG 关着，toJson 也会先跑完再决定不打印。原文只讲了占位符是惰性的，没提参数求值是急切的——拼大对象、调序列化这类贵操作，先用 `if (log.isDebugEnabled())` 包一层再打，级别关闭时连求值都省了。
+
+【小技巧】AsyncAppender 的 discardingThreshold 设 0 保不丢，但队列满了会堵业务线程：neverBlock 默认是 false，队列塞满时调用 log 的业务线程会阻塞在入队上，等落盘线程腾出位置才继续。原文只讲了丢弃阈值和 kill -9 丢队列，没提这一层——高峰期日志突增时，“异步”等于把落盘压力传回了业务线程；queueSize 要按峰值留够，或接受 neverBlock=true 丢日志的 trade-off，两者只能二选一。
+
+【小技巧】改配置不用重启，用 scan 热加载：`<configuration scan="true" scanPeriod="30 seconds">`，改级别、改 appender 后等一轮扫描周期即生效。生产上临时要开 DEBUG、又不方便走 Actuator 端点时，改文件等半分钟是最省事的办法；scan 默认周期是 1 分钟，scanPeriod 可以按需调小。
+
+【小技巧】想把某一级别单独分流，用 LevelFilter 别用 ThresholdFilter：ThresholdFilter 是“大于等于”，配 WARN 会把 ERROR 也一起收进来；LevelFilter 精确匹配 level，onMatch=ACCEPT、onMismatch=DENY，只收 WARN 这一档。单级别分文件（比如 WARN 单独一份告警复核日志）只能靠 LevelFilter，ThresholdFilter 做不到。
+
+【小技巧】配置里的变量写上默认值，本地没配也不启动失败：`${LOG_LEVEL:-INFO}`、`${LOG_DIR:-logs}` 这种 `:-` 写法，没配环境变量时自动用默认值兜底。同一份 logback-spring.xml 跑遍本地、测试、生产，差异只靠环境变量，少了“这台机器忘配变量、启动就报错”的翻车。
+
+【冷知识】SLF4J 的 `{}` 占位符有个“最后参数是异常就当堆栈”的规则：`log.error("审批失败 applyId={}", applyId, e)` 里只有一个占位符、两个参数，e 不会被当成第二个占位符的值，而是按异常打堆栈；占位符个数等于参数个数时，最后一个参数才当普通值。写错的表现是日志里少一个字段、多一段堆栈，排障先数占位符个数。
+
+【冷知识】配置改了不生效，先开 debug 看 Logback 内部状态：`<configuration debug="true">` 会在控制台打印它加载了哪个文件、哪个 appender 初始化失败、哪行配置解析报错。原文只讲了查 logging.config 和 logback.xml 抢加载，debug 输出是更直接的证据——配置文件到底有没有被读到、读到哪一步卡住，一眼就能确认。
+
+【冷知识】SLF4J 2.0 的流式 API 在本篇的版本下不可用：`log.atInfo().addKeyValue("loanId", id)` 这类写法要 SLF4J 2.0 + Logback 1.3 才支持，Spring Boot 2.7.3 用的是 SLF4J 1.7 + Logback 1.2，照抄网上的例子会编译不过。结构化键值对、流式日志 API 是升级 Boot 3.x 之后才有的东西，2.7 的项目别按新版文档写代码。
 
 ## 8. 面试与自测
 
