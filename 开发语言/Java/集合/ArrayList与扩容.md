@@ -2,7 +2,7 @@
 知识点: ArrayList与扩容
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - HashMap
   - LinkedHashMap与LRU
@@ -119,6 +119,34 @@ list.remove(Integer.valueOf(1)); // 这才是删值 1
 ## 9. 版本差异
 
 - JDK 9+ 新增 `List.of` 不可变工厂，适合小常量列表，但不可变、禁 null，不是 ArrayList 的替代。
+
+## 小技巧与冷知识
+
+【小技巧】列表装完就定型时，调一次 `trimToSize()` 把多余容量还回去：预分配 10000 只装了 3000 个元素，底层数组剩下的 7000 个空位会一直占着内存。`trimToSize()` 把数组缩到刚好等于 size，适合“一次性加载、长期持有、基本不再写”的列表；但缩完再 `add` 会立刻重新扩容，写操作还频繁的列表别用它。
+
+【小技巧】容量在运行时才知道时，用 `ensureCapacity(n)` 预先扩容：构造时传容量只适合编译期就知道规模的场景，容量是查库行数、文件行数这种运行时才有的数字时，拿到数字后先调 `ensureCapacity(n)` 再循环 `add`。效果和构造时传容量一样，都是避免循环里反复扩容拷贝；批量装数据前先问一句“这次大概装多少”，是 ArrayList 最划算的优化。
+
+【小技巧】`clear()` 只清元素不缩容：它把 size 置 0、把元素引用置 null 方便 GC，但底层数组的容量原样保留。清空后长期持有这个列表，容量还是扩容后的峰值；想把容量也还回去，要么 `trimToSize()`，要么直接新建一个列表。复用一个“峰值很大、平时很空”的列表时，这点内存要算进去。
+
+【小技巧】大列表扩容的瞬间内存占两份：`Arrays.copyOf` 是先建好新数组、再把旧元素拷过去，旧数组要等拷贝完成才释放。一个接近堆上限的大列表扩容时，同一时刻同时存在新旧两个数组，峰值内存接近两倍容量，恰好在临界点可能触发 OOM。已知规模时预分配不只是省拷贝次数，也是把内存峰值从“两倍”压回“一倍”。
+
+【小技巧】批量删元素用 `removeIf`，别在循环里逐个 `remove`：每次 `remove(i)` 都要把后面的元素整体前移一次，删 k 个元素就是 k 次搬移；`removeIf` 内部先用位图标记要删的位置，再一次遍历把保留的元素紧凑排好，只搬移一次。删除量越大差距越明显，删一半元素时循环 remove 是 O(n²)，`removeIf` 是 O(n)。
+
+【小技巧】`removeAll` 的参数传 `HashSet` 别传 `List`：`removeAll` 内部对每个元素调一次参数集合的 `contains`，参数是 List 时 `contains` 本身是线性扫描，整体退化成 O(n·m)。待删集合先装进 `HashSet` 再传进去，`contains` 变成 O(1)，整体回到 O(n)；待删集合本来就是 List 时，包一层 `new HashSet<>(toRemove)` 的成本远小于逐个扫描。
+
+【小技巧】`remove(Object)` 删不掉“看起来一样”的对象时，先查 `equals`：ArrayList 按值查找和删除都靠元素的 `equals` 方法，自定义类没重写 `equals` 时用的是 `Object` 的身份比较，两个字段完全相同的对象也会被当成不同对象。删之前先确认这个类有没有按业务字段重写 `equals`（以及配套的 `hashCode`），没重写就先补上，否则删、查、去重全都会按引用走。
+
+【小技巧】现代 JDK 里 `toArray` 传 `new String[0]` 是更推荐的写法：老写法 `toArray(new String[size])` 是为了在旧版本上省一次反射建数组，JDK 11 之后 JVM 对零长度数组的 `toArray` 有专门优化，会按实际大小一次分配到位，传预 sized 数组反而多一次初始化。写法上 `list.toArray(new String[0])` 也更短，容量变化时不用再改参数。
+
+【小技巧】按值查找是线性扫描，别拿 ArrayList 当索引用：`indexOf`、`contains`、`remove(Object)` 都是从头扫到尾，元素一多就慢。业务里需要“按某个字段反复查、反复判重”时，先建一个 `HashSet` 或 `Map` 当索引，列表只负责保序；列表和索引各干各的，查和删都回到 O(1)，代价是写操作要同步维护两份结构。
+
+【冷知识】无参构造和 `new ArrayList<>(0)` 用的不是同一个空数组：前者用 `DEFAULTCAPACITY_EMPTY_ELEMENTDATA`，第一次 `add` 直接扩到默认容量 10；后者用 `EMPTY_ELEMENTDATA`，第一次 `add` 只扩到 1。`new ArrayList<>(0)` 的语义是“我明确知道现在一个元素都没有”，扩容从 1 开始按 1.5 倍爬；两个空数组长得一样，第一次扩容的落点差了 10 倍。
+
+【冷知识】`hasNext()` 不做 fail-fast 校验，改完集合后它还能返回 true：迭代器的 `modCount` 检查只在 `next()` 和 `remove()` 里做，`hasNext()` 只比较下标和 size。循环里改了集合再调 `hasNext()`，它照常返回 true，真正抛 `ConcurrentModificationException` 的是随后那次 `next()` 调用；排障时别被“hasNext 还正常”误导，异常点永远在 `next()` 那一行。
+
+【冷知识】`Arrays.asList` 返回的不是 `java.util.ArrayList`：它是 `Arrays` 的私有内部类 `Arrays$ArrayList`，和 `java.util.ArrayList` 没有继承关系，只是都实现了 `List`。它底层直接包着传入的数组，改它就是改原数组，增删抛异常也是因为它根本没有扩容机制——名字里的 ArrayList 是巧合，不是同一个类。
+
+【冷知识】`elementData` 是 `transient` 的，序列化时不写整个数组：ArrayList 自定义了 `writeObject`，只写实际元素个数和这几个元素，数组里多余的空位不进序列化流。一个容量 10000、只装了 10 个元素的列表序列化后只有 10 个元素的数据量，不会把 9990 个空位也写进去；反序列化时再按元素个数重建数组，容量不会原样保留。
 
 ## 10. 面试与自测
 
