@@ -2,7 +2,7 @@
 知识点: Kafka 消息队列
 层级: 进阶
 适用版本: Kafka 4.x
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - RocketMQ
   - Kafka-消费者组与Rebalance
@@ -151,6 +151,40 @@ docker compose up -d
 ## 实战案例（项目沉淀）
 
 - [翼安反诈平台](项目沉淀/翼安反诈平台.md)：Kafka 在反诈数据管道中的使用
+
+## 小技巧与冷知识
+
+【小技巧】key 为 null 的消息不是随机进分区，默认走粘性分区器：Kafka 2.4 起默认分区器对 null key 用 StickyPartitioner，一段时间内粘在同一个分区攒批，攒满一批再换下一个分区。这样既打散了数据，又比逐条轮询少了大量小批次；如果你在压测里看到 null key 消息成批落在同一分区，不用怀疑是分区器坏了，这是刻意为之的优化。
+
+【小技巧】排障时让 console-consumer 把 key 和时间戳一起打出来：`kafka-console-consumer.sh --property print.key=true --property print.timestamp=true --property key.separator="|"`，一眼就能看出这条消息进了哪个分区键、时间戳是生产者写入时间（CreateTime）还是 broker 落盘时间（LogAppendTime）。只看 value 的排障等于蒙着一半眼睛，尤其是怀疑“同一用户消息进了不同分区”时，key 必须可见。
+
+【小技巧】compact 策略的 topic 里，value 为 null 的消息是墓碑：log compaction 保留每个 key 的最新值，但 value 为 null 的记录表示“删除这个 key”，清理线程会在 `delete.retention.ms`（默认 24 小时）后把墓碑和旧值一起清掉。往 compact topic 里写 null value 不是写了条空消息，是在删数据；想保留“空值”这个状态本身，别用 compact topic。
+
+【小技巧】segment 文件可以直接用 `kafka-dump-log.sh` 看，不用猜：`kafka-dump-log.sh --files /data/kafka/orders-0/00000000000000000000.log --print-data-log` 能看到段里每条记录的 offset、时间戳、key 和 value。怀疑“消息到底写没写进磁盘”时，直接看段文件比在客户端层面反复收发更可信；段文件配套的 `.index` 和 `.timeindex` 分别是 offset 索引和时间戳索引，查旧消息先走索引、不用全段扫描。
+
+【小技巧】改 topic 的保留期不用重建，用 `kafka-configs.sh` 动态改：`kafka-configs.sh --bootstrap-server localhost:9092 --alter --entity-type topics --entity-name orders --add-config retention.ms=259200000`，改完立即生效，新段按新保留期清理。`retention.ms` 和 `retention.bytes` 是“先到先清”的关系，时间到了整段删、大小超了也整段删，两个都设时以先触发的为准。
+
+【小技巧】副本掉出 ISR 先看 `replica.lag.time.max.ms`，而不是先加机器：副本超过这个时间（默认 30 秒）没跟上 leader 的写入就会被踢出 ISR，`--describe` 里 Isr 变少往往是这个原因。网络抖动、GC 停顿都可能让副本短暂落后，被踢出后它追上进度会自动回 ISR；反复被踢再查磁盘 IO 和网络，而不是一上来就扩副本数。
+
+【小技巧】新客户端连老 broker 一般能跑，老客户端连新 broker 未必行：Kafka 的兼容策略是“新客户端兼容老 broker”，协议向前兼容；但 4.x 的 KRaft 集群要求客户端支持较新的 wire protocol，太老的客户端直接连不上。升级顺序永远是先升客户端、再升 broker，原文 4.x 变化里说的“太老的客户端连不上 4.x”就是这个规则的落地。
+
+【小技巧】KRaft 集群的元数据可以用 `kafka-metadata-shell.sh` 直接看：`kafka-metadata-shell.sh --snapshot /data/kafka/__cluster_metadata-0/00000000000000000000.log` 能读出 controller quorum 里存的 topic、分区和副本分配，不用等集群起来再 `--describe`。集群起不来、怀疑元数据损坏时，这是第一手证据；但它读的是快照文件，看到的只是某个时间点的元数据状态。
+
+【小技巧】`kafka-storage.sh format` 的 cluster id 一台机器只能格式化一次：格式化后 cluster id 写进数据目录，换一个新 id 再 format 会报错，必须先清空数据目录。本地单机换个干净环境重建时，删数据目录和换 cluster id 要一起做，只换 id 不清目录等于白换。
+
+【小技巧】扩副本、搬分区用 `kafka-reassign-partitions.sh`，跟进度用 `--verify`：生成重分配 JSON 后执行，再用 `--verify` 反复看每个分区的搬迁状态，全部完成前别重启 broker。搬分区期间 leader 选举会短暂抖动，业务高峰别做；`kafka-leader-election.sh --election-type preferred` 可以在搬完后手动把 leader 触发回首选副本，恢复读写均衡。
+
+【小技巧】`auto.commit.interval.ms` 默认 5 秒，位移提交是“定期”不是“每条”：自动提交下消费者每 5 秒批量提交一次已 poll 的 offset，中间崩了会从上次提交点重读，最多重复 5 秒的量。把这个值调小能缩小重复窗口，但提交本身也是写 `__consumer_offsets` 的开销；`__consumer_offsets` 默认 50 个分区，消费组一多它就是高频写入的内部 topic，原文说的“别手贱去删”之外，还要知道它本身也会成为写入热点。
+
+【冷知识】Kafka 的名字来自作家弗兰兹·卡夫卡：LinkedIn 的 Jay Kreps 觉得 Kafka 的写作风格（荒诞、系统性的官僚）很像分布式系统，就借了这个名字。项目 2011 年在 LinkedIn 开源、2012 年成为 Apache 顶级项目，最初只是 LinkedIn 内部的日志管道，后来才长成今天的流平台。
+
+【冷知识】KRaft 的全名来自 KIP-500 的 “Kafka Raft Metadata mode”：它不是把 ZooKeeper 的功能原样搬进 Kafka，而是把元数据事件本身也写成一条日志（`__cluster_metadata`），controller quorum 用 Raft 协议对这条日志达成共识。也就是说 Kafka 用“自己的日志”管“自己的元数据”，元数据和业务消息第一次用上了同一套存储思想。
+
+【冷知识】Kafka 快的秘密有一半在操作系统不在自己手里：顺序写 + 页缓存的意思是，写进来的数据大概率还留在 OS 的 page cache 里，读的时候根本不用碰磁盘。所谓“磁盘顺序写比随机读内存快”只在页缓存命中时成立，内存给少了、页缓存装不下热数据，Kafka 也会慢下来——原文“内存比 CPU 更重要”的推论，根子就在这里。
+
+【冷知识】零拷贝 `sendfile` 在 Linux 上才真正零拷贝：Kafka 用 `FileChannel.transferTo` 把段文件直接送进 socket，数据不经过 JVM 堆；在 macOS、Windows 等系统上它会退化成普通的读 + 写拷贝，性能优势打折。所以同一套压测数字换了操作系统就不能直接套用，基准测试的机器环境本身就是变量之一。
+
+【冷知识】分区数“只增不减”还有一层原因在 segment 文件上：分区数翻倍后，broker 上每个分区的 segment 文件、索引文件和文件句柄也跟着翻倍，`__consumer_offsets` 里每个消费组要跟踪的 offset 也翻倍。原文说 controller 负担重，落到磁盘上就是“每个分区都是一组真实文件”，分区不是逻辑数字，是实打实的 IO 与句柄成本。
 
 ## 面试与自测
 
