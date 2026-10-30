@@ -2,7 +2,7 @@
 知识点: JDBC基础
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-27
+更新日期: 2026-10-31
 关联:
   - Druid
   - 多数据源
@@ -146,6 +146,26 @@ public class UserDao {
 - **连接当成员变量长期持有**：连接不是线程安全的，且长期占用等于池里少一个连接；每次用每次拿、用完即关。
 - **异常吞掉不回滚**：catch 里只记日志不 `rollback()`、不重抛，事务静默提交一半数据；异常处理规范见 [Java-异常体系](开发语言/Java/Java-异常体系.md)。
 - **`SELECT *` 图省事**：列一多就拖带宽，表结构一变还可能打乱按序号取值的代码；只取需要的列。
+
+## 小技巧与冷知识
+
+【小技巧】插完一行要拿自增主键，别再另发一条 `SELECT LAST_INSERT_ID()`：建 PreparedStatement 时传 `Statement.RETURN_GENERATED_KEYS`，执行后用 `ps.getGeneratedKeys()` 直接读回主键。多一次查询不只是多一次往返，还多了一个竞态窗口——两次查询之间另一条插入进来，拿到的就可能是别人的 id；主键和插入在同一次往返里回来，才是原子的。
+
+【小技巧】MySQL 下查大结果集别默认全量拉内存：Connector/J 默认把整个 ResultSet 一次性读进客户端内存，几十万行直接 OOM。改成流式读——`createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)` 再 `setFetchSize(Integer.MIN_VALUE)`，驱动就一行一行地流式返回。代价是读完或关闭它之前，不能在同一个连接上再发别的 SQL，流式读期间这个连接是被占住的。
+
+【小技巧】批处理写了却没提速，先查连接串里有没有 `rewriteBatchedStatements=true`：MySQL Connector/J 默认是 false，`executeBatch` 仍逐条发 INSERT，只是省了几次方法调用；开了这个参数，驱动才会把多条 INSERT 合并成一条多值插入发出去。原文第 3 节只说了“批量拼成一条多值插入要靠驱动参数开启”，参数名就是这个；改连接串之前先确认它，别怀疑批处理本身。
+
+【小技巧】给 Statement 设个超时，别让一条慢 SQL 拖住连接：`ps.setQueryTimeout(30)`，超过 30 秒没跑完就抛 `SQLTimeoutException`，连接得以释放回池。原文第 5 节的“连接池打满”很多时候就是几条慢 SQL 占着连接不放；超时是兜底，不是调优——设了超时能保住池子，但慢 SQL 本身还是要去修。
+
+【小技巧】大事务里只想撤销其中一段，用 Savepoint 别整单回滚：`Savepoint sp = conn.setSavepoint()` 打个点，出问题时 `conn.rollback(sp)` 只回滚到这个点，之前已执行的写操作还留着。原文第 3 节的事务是“全成功或全回滚”二选一，Savepoint 是中间态——比如主流程已落库、后续一段可选逻辑失败时，只撤掉那一段，主流程不用重跑。
+
+【小技巧】SQL 里写了别名，取值要用列标签：`SELECT name AS user_name` 之后，`rs.getString("user_name")` 按别名取才稳。ResultSetMetaData 里 `getColumnLabel()` 返回的是别名，`getColumnName()` 返回的是底层真实列名，两者不是一回事；原文只说了“优先用列名”，写了 AS 别名时，认准的是标签不是原列名。
+
+【小技巧】驱动的警告不会抛异常，要主动查：数据被截断、精度丢失这类问题，驱动只挂一个 `SQLWarning`，程序不查就悄悄过去了。`conn.getWarnings()`、`stmt.getWarnings()`、`rs.getWarnings()` 是一条警告链，执行完关键写操作后扫一眼，能提前发现“值存进去了、但被截断了”这类静默损坏；查完记得 `clearWarnings()`，否则下次查到的还是旧警告。
+
+【冷知识】JDBC 4.0（随 Java 6 发布）之后不用再写 `Class.forName("com.mysql.cj.jdbc.Driver")`：驱动 jar 里的 `META-INF/services/java.sql.Driver` 让 DriverManager 通过 SPI 自动发现并注册驱动，老代码里那行 Class.forName 只是历史遗留。看到新项目里还在写它，可以直接删掉；删不掉的场景只有一个——驱动 jar 不在 classpath 里，那时报的也不是“驱动没加载”，而是“No suitable driver found”。
+
+【冷知识】JDBC 1.0 是 1997 年随 JDK 1.1 一起发布的，比 MyBatis、比连接池这些上层东西都早一代：它最初只是一套“Java 怎么跟关系库说话”的接口规范，厂商各自实现驱动。理解这段历史就明白原文第 1 节的定位——JDBC 从来不是让你天天手写的，它是所有 Java 数据访问技术的地基，MyBatis、Spring JDBC、连接池全是站在它上面搭的。
 
 ## 7. 面试与自测
 

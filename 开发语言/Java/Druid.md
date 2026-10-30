@@ -2,7 +2,7 @@
 知识点: Druid 监控与慢 SQL 定位
 层级: 进阶
 适用版本: Druid 1.2.x
-更新日期: 2026-10-28
+更新日期: 2026-10-31
 关联:
   - Java
   - MyBatis-Plus
@@ -70,6 +70,28 @@ Boot 2.7 集成用 `druid-spring-boot-starter`，监控页账号密码走 `sprin
 1. 先看监控页「连接池」与 SQL 统计，确认是真慢（某条 SQL 占着连接久）还是连接没还（业务代码拿了连接不关——多见于手写 JDBC 或流式查询没关流）。
 2. 开 `remove-abandoned: true` + `remove-abandoned-timeout` 只能作临时止血和定位手段（它会在日志里打印疑似泄漏的堆栈），根因修掉后建议关掉，自动回收掩盖问题。
 3. 事务方法里调了慢的外部接口（HTTP 等待几十秒），事务全程占着连接——这类「长事务占连接」在监控页上看就是活跃连接高、SQL 却不慢，要把外部调用移出事务。
+
+## 小技巧与冷知识
+
+【小技巧】监控页里看到的 SQL 带问号占位符，是 StatFilter 默认把参数不同的同构 SQL 合并成一条统计：`druid.stat.mergeSql=true` 时，`WHERE id = 1` 和 `WHERE id = 2` 只算一条，执行次数和总耗时是汇总值。想按参数值分开看是哪条具体 SQL 慢，可以把 mergeSql 关掉，但统计条目会随参数值爆炸；平时定位慢 SQL 先看合并后的汇总，锁定某条再关合并下钻，别一上来就关。
+
+【小技巧】只看总耗时会误判“最慢的 SQL”：执行次数多的 SQL 总耗时天然大，未必每次都慢。用 `TotalTime / ExecuteCount` 算平均耗时，筛出“每次都慢”的 SQL；再看 `MaxTimespan` 单次最大耗时抓偶发大慢查。原文第 3 节给的三个字段就是这么配合用的——总耗时看总量，平均耗时看稳定性，最大耗时看毛刺。
+
+【小技巧】`test-while-idle` 只在空闲连接上探活，借出时并不校验：想借出时也验一次，用 `test-on-borrow: true`，但每次借连接都要多跑一次 `SELECT 1`，高并发下这笔开销不划算。生产上一般是空闲探活加合理的 eviction 间隔就够了；只有“偶发拿到坏连接、业务又极度敏感”的场景才开 test-on-borrow，权衡点在“每次借连接的成本”上。
+
+【小技巧】池打满时别只看活跃连接数，还要看 `WaitThreadCount`：监控页连接池统计里，有线程在排队等连接时这个数大于 0。活跃连接长期满、又有线程排队，才是“池太小”；活跃连接满但没人排队，更可能是长事务占着连接（原文第 5 节的情况）。两个数一起看，才能分清是扩池还是修代码。
+
+【小技巧】高频同构 SQL 可以开 PSCache 复用预编译语句：`pool-prepared-statements: true` 加 `max-pool-prepared-statement-per-connection-size`，每个连接缓存一批 PreparedStatement，MyBatis 每次执行的 `?` 占位符 SQL 不用反复编译。默认是关的——分库分表场景下 SQL 模板太多，缓存反而占内存；模板少、调用频次高的库开它收益才明显。
+
+【小技巧】Wall 误杀时不用整个关防火墙，它可以逐项放行：Wall 配置里 `selectAllow`、`deleteAllow`、`updateAllow`、`insertAllow` 等是分开的开关，某类合法语句被拦，先只放开对应的那一项。原文第 4 节的 `log-violation` 是先观察再拦截的路子，逐项开关是观察之后的第二步——放行范围越小，防火墙剩下的保护就越多。
+
+【小技巧】监控页除了 HTML，还有 JSON 接口可以直接拿数：`/druid/datasource.json`、`/druid/sql.json` 返回的就是监控数据，巡检脚本用 curl 拉 JSON 做阈值告警，比爬 HTML 监控页稳得多。原文第 3 节的 `DruidStatManagerFacade` 是代码里取数的路子，JSON 接口是脚本和外部监控取数的路子，两个入口按场景选，别只盯着浏览器页面。
+
+【小技巧】filters 里除了 stat、wall，还能再挂一个日志 filter：`filter: stat,wall,slf4j` 这样配，SQL 执行日志会打进应用的 Slf4j 日志里，和慢日志互补——慢日志只记超阈值的，日志 filter 记的是全量执行。生产上全量 SQL 打日志量太大，一般只在排障时临时加上、用完摘掉，别长期挂着。
+
+【冷知识】Wall 不是靠正则表达式拦注入的：它是基于 Druid 自带的 SQL Parser 做语义分析后拦截的，先把 SQL 解析成语法树再判断合不合法。所以注释里藏注入、`UNION` 拼接这类靠正则很难拦全的花样它能认出来；反过来，复杂合法 SQL 被误杀也是因为解析器是按语法判的——知道它是解析器，就明白误杀要从“语法”上找原因，而不是调正则。
+
+【冷知识】Druid 不只是一个连接池，它是三件套：连接池（DruidDataSource）+ Filter 链插件体系 + 手写的 SQL Parser。StatFilter、WallFilter、日志 Filter 都是挂在 Filter 链上的插件，监控和防火墙不是池的附属功能，是同一套扩展机制长出来的；理解这一点就明白，为什么 Druid 能在“池”之外长出这么多监控和安全能力——扩展点本来就在设计里。
 
 ## 6. 面试与自测
 
