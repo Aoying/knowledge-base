@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-28
+更新日期: 2026-10-31
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -23,7 +23,7 @@
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow
 - [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）
-- [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）
+- [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
 ## 已收录
@@ -167,3 +167,12 @@
 - **热度/更新**：50k+ stars（2026-10-28 核验 GitHub API），2026-10-28 仍在更新。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；这类 skill 会读写 vault，引入前通读 SKILL.md，确认无外部网络上传，权限只给指定 vault、能只读就只读。
+
+### 17. taste-skill（Leonxlnx/taste-skill）给 Agent 补前端设计品味
+
+- **功能**：教编码 Agent 做有品味的前端：美术指导（art direction）、参考图、浏览器实测检查，替代"通用 AI 风"页面；主 skill 是 `design-taste-frontend`，另有配套的审美校准 skill。
+- **适用场景**：小说引擎管理面板、知识库可视化等前端任务出图后"看起来 AI 味重"时，用它给 Agent 立审美标准；与 Anthropic 官方 `frontend-design`、vercel-labs `web-design-guidelines` 互补（官方管规范，它管品味）。
+- **来源**：https://github.com/Leonxlnx/taste-skill（公开仓库，另有官网 https://tasteskill.dev）
+- **热度/更新**：106k+ stars（2026-10-31 核验 GitHub API），2026-10-30 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；skill 本身是设计指令，另有浏览器检查步骤——引入前通读 SKILL.md，确认浏览器检查只读本地页面、不上传截图与源码到外部服务。
