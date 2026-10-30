@@ -2,7 +2,7 @@
 知识点: MySQL binlog
 层级: 进阶
 适用版本: MySQL 5.7 / 8.x
-更新日期: 2026-10-25
+更新日期: 2026-10-30
 关联:
   - MySQL-数据库
   - RocketMQ
@@ -282,3 +282,15 @@ mysqlbinlog --read-from-remote-server -h 127.0.0.1 -P 3307 -uroot -pdemo123 \
 ```bash
 # 清理
 docker rm -f mysql-binlog-demo
+
+## 面试与自测
+
+1. 为什么新项目默认 ROW 格式，而不必选 MIXED？
+2. `binlog_row_image=MINIMAL` 相比 FULL 会丢掉什么能力？
+3. Canal 伪装成从库拉 binlog，断线后在什么情况下续拉会断档、只能重做快照？
+
+### 参考答案
+
+1. STATEMENT 记录原始 SQL，体积小、可读，但 `NOW()`、`UUID()`、无序 LIMIT 等不确定语句主从可能执行出不同结果；ROW 记录每行变更前/后镜像，主从基本一致；MIXED 虽自动切换，但判断逻辑复杂。MySQL 8.x 默认 ROW，新项目不要改。
+2. FULL 是完整行镜像，闪回、CDC 拿变更前数据都靠它；MINIMAL 只记主键 + 变更列，省空间但闪回信息不足、CDC 拿不到完整旧镜像。ROW 下批量更新、大字段行的体积膨胀最明显时，先看的就是 `binlog_row_image` 的取舍。
+3. 位点丢了，或对应 binlog 已过期删除（`binlog_expire_logs_seconds` 到了就自动 purge），续拉就断档，只能重做快照。所以位点要持久化到外部存储，下游消费必须做幂等，因为位点语义是“至少一次”。
