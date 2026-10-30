@@ -1,52 +1,96 @@
 {
   "recentFiles": [
     {
-      "basename": "看板-任务总览",
-      "path": "效率工具/看板与模板/看板-任务总览.md"
+      "basename": "Windows-常用命令",
+      "path": "工程实践/Windows-常用命令.md"
     },
     {
-      "basename": "模板-灵感捕捉",
-      "path": "效率工具/看板与模板/模板-灵感捕捉.md"
+      "basename": "前缀和与差分",
+      "path": "计算机基础/算法/前缀和与差分.md"
     },
     {
-      "basename": "模板-项目管理",
-      "path": "效率工具/看板与模板/模板-项目管理.md"
-    },
-    {
-      "basename": "模板-技术学习",
-      "path": "效率工具/看板与模板/模板-技术学习.md"
-    },
-    {
-      "basename": "模板-会议纪要",
-      "path": "效率工具/看板与模板/模板-会议纪要.md"
-    },
-    {
-      "basename": "模板-读书笔记",
-      "path": "效率工具/看板与模板/模板-读书笔记.md"
-    },
-    {
-      "basename": "看板-项目总览",
-      "path": "效率工具/看板与模板/看板-项目总览.md"
-    },
-    {
-      "basename": "看板-读书追踪",
-      "path": "效率工具/看板与模板/看板-读书追踪.md"
-    },
-    {
-      "basename": "看板-笔记统计",
-      "path": "效率工具/看板与模板/看板-笔记统计.md"
-    },
-    {
-      "basename": "六十四卦上经详解",
-      "path": "易经/六十四卦上经详解.md"
+      "basename": "易经入门",
+      "path": "易经/易经入门.md"
     },
     {
       "basename": "README",
       "path": "README.md"
     },
     {
+      "basename": "Bean-Validation",
+      "path": "开发语言/Java/Bean-Validation.md"
+    },
+    {
+      "basename": "Java-反射与注解",
+      "path": "开发语言/Java/Java-反射与注解.md"
+    },
+    {
+      "basename": "Lambda与函数式编程",
+      "path": "开发语言/Java/Lambda与函数式编程.md"
+    },
+    {
+      "basename": "Agent-记忆系统",
+      "path": "AI与大模型/Agent/Agent-记忆系统.md"
+    },
+    {
+      "basename": "建造者",
+      "path": "开发语言/Java/设计模式/建造者.md"
+    },
+    {
+      "basename": "Spring-Security",
+      "path": "开发语言/Java/Spring/Spring-Security.md"
+    },
+    {
+      "basename": "知识库规范",
+      "path": "知识库规范.md"
+    },
+    {
+      "basename": "空对象",
+      "path": "开发语言/Java/设计模式/空对象.md"
+    },
+    {
+      "basename": "模板-媒体记录",
+      "path": "效率工具/模板/模板-媒体记录.md"
+    },
+    {
+      "basename": "模板-会话交接",
+      "path": "效率工具/模板/模板-会话交接.md"
+    },
+    {
       "basename": "总览",
       "path": "知识地图/总览.md"
+    },
+    {
+      "basename": "看板-笔记统计",
+      "path": "效率工具/看板/看板-笔记统计.md"
+    },
+    {
+      "basename": "模板-方案对比与选型",
+      "path": "效率工具/模板/模板-方案对比与选型.md"
+    },
+    {
+      "basename": "模板-读书笔记",
+      "path": "效率工具/模板/模板-读书笔记.md"
+    },
+    {
+      "basename": "模板-项目管理",
+      "path": "效率工具/模板/模板-项目管理.md"
+    },
+    {
+      "basename": "模板-问题排查",
+      "path": "效率工具/模板/模板-问题排查.md"
+    },
+    {
+      "basename": "看板-任务总览",
+      "path": "效率工具/看板/看板-任务总览.md"
+    },
+    {
+      "basename": "安全架构",
+      "path": "工程实践/安全架构.md"
+    },
+    {
+      "basename": "六十四卦上经详解",
+      "path": "易经/六十四卦上经详解.md"
     },
     {
       "basename": "Flowable",
@@ -59,10 +103,6 @@
     {
       "basename": "Netty",
       "path": "开发语言/Java/Netty.md"
-    },
-    {
-      "basename": "前缀和与差分",
-      "path": "计算机基础/前缀和与差分.md"
     },
     {
       "basename": "疑难杂症索引",
@@ -85,10 +125,6 @@
       "path": "易经/系辞与易理思想.md"
     },
     {
-      "basename": "易经入门",
-      "path": "易经/易经入门.md"
-    },
-    {
       "basename": "探索方向建议",
       "path": "探索/探索方向建议.md"
     },
@@ -109,10 +145,6 @@
       "path": "计算机基础/组成原理.md"
     },
     {
-      "basename": "数据结构与算法",
-      "path": "计算机基础/数据结构与算法.md"
-    },
-    {
       "basename": "大模型基础",
       "path": "AI与大模型/大模型基础.md"
     },
@@ -123,10 +155,6 @@
     {
       "basename": "Obsidian-插件使用指南",
       "path": "效率工具/Obsidian-插件使用指南.md"
-    },
-    {
-      "basename": "Java-反射与注解",
-      "path": "开发语言/Java/Java-反射与注解.md"
     },
     {
       "basename": "Java",
@@ -141,20 +169,12 @@
       "path": "开发语言/Java/集合/ArrayList与扩容.md"
     },
     {
-      "basename": "Windows-常用命令",
-      "path": "工程实践/Windows-常用命令.md"
-    },
-    {
       "basename": "交行企业网银",
       "path": "项目沉淀/交行企业网银.md"
     },
     {
       "basename": "pydantic",
       "path": "开发语言/Python/pydantic.md"
-    },
-    {
-      "basename": "知识库规范",
-      "path": "知识库规范.md"
     },
     {
       "basename": "Skills-索引",
