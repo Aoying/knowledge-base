@@ -2,7 +2,7 @@
 知识点: pydantic 数据校验
 层级: 基础
 适用版本: pydantic v2
-更新日期: 2026-10-23
+更新日期: 2026-10-30
 关联:
   - Python
   - Agent
@@ -105,6 +105,18 @@ class Settings(BaseSettings):
 - **在模型里写业务逻辑**：validator 里查数据库、调服务会让校验变成隐形业务层，测试和复用都痛苦；跨实体的规则放 Service 层（如矛盾检测），模型只管"形状与单实体规则"。
 - **v1/v2 混写**：v2 里 `parse_obj`、class 内部 `class Config` 都是旧写法（多半还能跑但已废弃），新代码统一 `model_validate` + `ConfigDict`。
 - **默认值可变对象**：`tags: list[str] = []` 在 pydantic 里其实是安全的（它会深拷贝默认值），但和 dataclass 的规则不一样，跨两个库写代码时容易记混——统一都写 `default_factory` 最稳。
+
+## 面试与自测
+
+1. 本篇把 pydantic 定位为“系统边界的守门员”，是什么意思？进了系统内部之后换什么传递？
+2. 宽容模式（lax）下，`chapter: "12"` 和 `chapter: "第十二章"` 分别会怎样？想拦住 `"12"` 这种静默转换怎么开严格模式？
+3. LLM 输出场景下，`extra` 为什么建议用 `forbid` 而不是默认的 `ignore`？
+
+### 参考答案
+
+1. 一切不可信输入——LLM 输出的 JSON、HTTP 入参、配置文件、外部 API 返回——进系统前先过一遍 pydantic，按注解做类型转换与校验，不合格直接抛 `ValidationError` 并给出结构化错误清单。进了系统内部之后换 dataclass 传递，BaseModel 只守边界。
+2. `"12"` 能转就转，会被静默转成 12，不报错；对接 LLM 时这其实是优点，因为模型常把数字带引号。`"第十二章"` 转不动，直接报错，正是要拦的。想拦住 `"12"` 这类静默转换，就开严格模式：字段级 `Field(strict=True)` 或模型级 `model_config = ConfigDict(strict=True)`。
+3. 默认 `ignore` 会丢弃多余字段，模型自创的字段就被悄悄吞掉了；`forbid` 让多余字段直接报错。LLM 场景建议 `forbid`，因为模型自创字段往往意味着它没按 schema 理解任务，早暴露才能早重抽。
 
 ## 8. 关联知识
 

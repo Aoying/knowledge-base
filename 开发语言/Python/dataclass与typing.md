@@ -2,7 +2,7 @@
 知识点: dataclass 与 typing
 层级: 基础
 适用版本: Python 3.10+
-更新日期: 2026-10-23
+更新日期: 2026-10-30
 关联:
   - Python
   - pydantic
@@ -111,6 +111,18 @@ ch = from_dict(Chapter, {"id": 3, "title": "重逢", "junk": 1})  # 多余字段
 - **注解 ≠ 校验**：`def f(x: int)` 传字符串照样跑；想要运行时拦截只有 pydantic 或手写检查。反过来，注解写错类型（如实际返回 None 却标 `-> Chapter`）会让 IDE 的提示变成误导，比不写更糟。
 - **继承 dataclass 时的字段顺序坑**：父类带默认值的字段会把子类字段全部"传染"成必须有默认值，设计继承体系时先想清楚，或用 `kw_only=True` 化解。
 - **`field(default_factory=list)` 写成 `default=list()`**：后者是定义时求值一次的共享实例，就是要避开的那个坑本身。
+
+## 面试与自测
+
+1. `entities: list = []` 为什么会报 `ValueError: mutable default`？正确写法是什么？
+2. `frozen=True` 是不是意味着对象里的 list、dict 也不能改了？它还带来什么附带好处？
+3. 按本篇的经验分工，LLM 吐的 JSON 应该先过谁、再转成谁进入业务层？这样业务层省掉了什么麻烦？
+
+### 参考答案
+
+1. 因为类属性级别的默认值会被所有实例共享，Python 干脆在定义期就拦下来，直接报 `ValueError: mutable default`。正确写法是用 `field(default_factory=list)`，每个实例各拿一份新的列表。
+2. 不是深度不可变：冻结的只是属性绑定，字段里装的 list、dict 本身仍可改。附带好处是实例自动可哈希，可以当 dict 的 key 或放进 set，适合表示“值对象”，如一条不可变的剧情事实 StoryFact。
+3. 先过 pydantic 验证，再转成 dataclass 对象进入业务层。分工是边界用 pydantic 校验、内部用 dataclass 传递：dataclass + 类型注解让 IDE 直接标红拼错的字段名，业务层里就不必再到处防空指针式地 `.get()` 了。
 
 ## 7. 关联知识
 
