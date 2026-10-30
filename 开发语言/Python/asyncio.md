@@ -2,7 +2,7 @@
 知识点: asyncio 并发模型
 层级: 进阶
 适用版本: Python 3.11+
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Python
   - Python知识点地图
@@ -95,6 +95,38 @@ async def worker(queue, client, results):
 - **gather 不加限流一口气放一万个任务**：连接数、内存、对方服务一起爆。并发上限永远要显式设（Semaphore / 固定 worker 数）。
 - **异常被 gather 吞没或一个失败全批作废**：见第 3 节，批量任务用 `return_exceptions=True` 或逐任务 try 收集。
 - **以为 asyncio 能加速 CPU 任务**：协程再多也是一条线程轮流算，总时长不变还多调度开销；GIL 之下多线程同理，CPU 密集只有多进程能真正并行。
+
+## 小技巧与冷知识
+
+【小技巧】同一个协程对象只能 await 一次：`c = extract_one(...)` 之后 `await c` 两次，第二次直接报 `RuntimeError: cannot reuse already awaited coroutine`。想跑两次就调两次协程函数、每次拿到新对象；把协程对象存进列表、循环里反复 await，是“协程复用”这个坑最常见的写法。
+
+【小技巧】任务里抛了异常又没人收，错误只会变成一条警告：Task 抛异常后没人 `await` 它、也没人调 `result()`，解释器只在 GC 时打一条 `Task exception was never retrieved`，程序照常往下跑。批量任务里每个 Task 都要有人收尾——`gather`、`TaskGroup`、或者 `add_done_callback` 里调 `result()` 触发异常；没人收的 Task 等于把错误静默丢掉。
+
+【小技巧】给 Task 起个业务名，排障时堆栈里直接能读出来：`asyncio.create_task(extract_one(...), name="extract-12")`，日志和 `asyncio.all_tasks()` 里看到的就不是一串匿名的 `Task-37`，而是“哪一章的抽取卡住了”。调试模式下（`PYTHONASYNCIODEBUG=1` 或 `loop.set_debug(True)`）还会把执行超过 100 毫秒的回调打出来，慢回调的定位先开 debug 再猜。
+
+【小技巧】`asyncio.run()` 一个进程只调一次，在已有事件循环里调它直接报错：在 Jupyter、FastAPI 端点、别的异步框架里再调 `asyncio.run(main())`，会报 `RuntimeError: asyncio.run() cannot be called from a running event loop`。已经在协程里时直接 `await` 就行；实在要在同步代码里从另一个线程提交协程，用 `asyncio.run_coroutine_threadsafe(coro, loop)`，它返回一个 `concurrent.futures.Future`，在别的线程里调 `.result()` 等结果。
+
+【小技巧】只想“等其中一个先完成”别用 `gather`，用 `asyncio.wait`：`wait(tasks, return_when=asyncio.FIRST_COMPLETED)` 返回已完成和未完成两组任务，适合“多个源抢首个响应、剩下的取消”这类竞速场景。`gather` 是“全跑完再一起收”，`wait` 是“按完成情况分批收”；竞速时用 `gather` 会被最慢的那个拖住，`wait` 拿到第一个就能先处理、再把剩下的 `cancel()` 掉。
+
+【小技巧】取消时 `finally` 里的 `await` 会再次触发取消：任务被取消后进入 `finally` 做收尾，里面再 `await` 写库、关连接，`CancelledError` 会在第一个 `await` 点重新抛出来，收尾做一半就断了。收尾里必须 `await` 的那几步用 `asyncio.shield(...)` 包起来，让它不受外层取消影响跑完；或者把收尾写成同步代码，别在取消路径上再 `await`。
+
+【小技巧】“超时取消但落库必须完成”也用 `shield`：`await asyncio.wait_for(asyncio.shield(save_result(...)), timeout=120)` 里，超时只取消外层的等待，内层的保存任务照常跑完。`shield` 的语义是“保护内层任务不被外层取消波及”，不是“不超时”——超时照样报 `TimeoutError`，只是被保护的操作不会半路夭折；落库、发确认、记账这类“做了就必须做完”的操作才配用它，普通查询别滥用。
+
+【小技巧】Semaphore 拿了就要放，`BoundedSemaphore` 会帮你查账：普通 `Semaphore` 多 `release()` 一次不会报错，计数悄悄变大，限流就漏了；`BoundedSemaphore` 超额释放直接抛 `ValueError: BoundedSemaphore released too many times`。限流信号量优先用有界版，超额释放是 bug 不是“多放了一次”，让它在开发期就炸出来比线上限流失效强得多。
+
+【小技巧】`asyncio.sleep(0)` 是协程里最轻的让步点：它不真睡，只是把控制权交回事件循环、让别的协程先跑一轮。长循环里全是纯 Python 计算、中间没有 `await` 时，别的协程会被饿很久，插一句 `await asyncio.sleep(0)` 就能让出；它和 `time.sleep(0)` 不是一回事，后者会阻塞整个事件循环。
+
+【小技巧】全局未处理异常用事件循环的异常处理器集中收：`loop.set_exception_handler(handler)` 能收到所有没人接的 Task 异常、回调里的异常，适合在批量管道入口统一记日志、发告警。别只靠 `try/except` 包每个任务——漏包一个，异常就只剩 `Task exception was never retrieved` 一条警告；集中处理器是最后一道网，单任务的 `try` 是第一道。
+
+【小技巧】`asyncio.Queue` 的 `get_nowait` / `put_nowait` 抛的是 `QueueEmpty` / `QueueFull`，不是返回 `None`：非阻塞取数要包 `try/except asyncio.QueueEmpty`，直接判 `if not queue.empty()` 再取是竞态——判断和取数之间别的协程可能先取走。`empty()` / `full()` 只适合做监控指标，不适合做分支条件。
+
+【小技巧】`asyncio.Event` 是“一对多通知”，`asyncio.Condition` 是“带条件的等待”：一个事件发生要叫醒所有等待者时用 `Event.set()`；生产者-消费者要“等到队列非空再取”时用 `Condition` 配 `while` 循环判条件。`Event` 没有计数语义，`set()` 之前就 `wait()` 的协程和之后才 `wait()` 的协程行为不一样——先 `set()` 再 `wait()` 的直接通过，别把它当信号量用。
+
+【冷知识】asyncio 是 Python 3.4 随 PEP 3156 引入的，由 Guido van Rossum 主导设计：`async`/`await` 语法是 3.5（PEP 492）才来的，`asyncio.run` 是 3.7、`TaskGroup` 和 `asyncio.timeout` 是 3.11。也就是说今天这套写法是三个大版本迭代出来的，3.4 时代的 `@asyncio.coroutine` + `yield from` 写法早已废弃，看到老代码里 `yield from` 就知道那是 3.5 之前的风格。
+
+【冷知识】Windows 上默认事件循环在 3.8 换成了 ProactorEventLoop：3.8 之前 Windows 默认是 SelectorEventLoop，子进程、信号这些能力受限；3.8 起默认用基于 I/O 完成端口（IOCP）的 Proactor 实现。同一份 asyncio 代码在 Linux 和 Windows 上跑的不是同一个循环实现，跨平台出问题时先问“这是在哪个循环上”，而不是先怀疑业务逻辑。
+
+【冷知识】uvloop 是 asyncio 事件循环的一个可替换实现：它是基于 libuv 的 C 扩展，uvicorn 默认就用它。用法是 `asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())`，业务代码不用改一行——事件循环是可插拔的，`asyncio` 只定义了协程、Task、Future 这套接口，底下的循环实现可以换。
 
 ## 面试与自测
 
