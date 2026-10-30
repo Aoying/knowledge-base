@@ -2,7 +2,7 @@
 知识点: Nginx
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-29
+更新日期: 2026-10-30
 关联:
   - 工程实践知识点地图
   - Docker
@@ -288,3 +288,15 @@ error_page 500 502 503 504 /50x.html;
 - **把后端端口暴露的锅扣给 Nginx**：请求绕过 Nginx 直连后端端口能通，是后端监听和防火墙的问题，Nginx 配置里没有能拦这个的指令。
 - **server_name 写了域名但用 IP 测试**：按域名选 server 靠的是请求里的 Host 头，浏览器输 IP 时 Host 就是 IP，自然落到默认 server。用域名测试，或手动带 Host 头验证。
 - **日志不看 error_log 只盯 access_log**：access_log 记录请求结果，error_log 才记录为什么出错（文件找不到、后端连不上、配置问题）。排障先看 error_log 的最后几行。
+
+## 面试与自测
+
+1. Nginx 的 location 匹配顺序是怎样的？`^~` 在其中起什么作用？
+2. 改完 Nginx 配置后，为什么标准动作是先 `nginx -t` 再 `nginx -s reload`，而不是直接 restart？
+3. 后端日志里拿到的客户端 IP 全是 127.0.0.1，通常是漏了什么？
+
+### 参考答案
+
+1. 顺序是 `=` 精确匹配 > `^~` 前缀匹配（不再看正则）> `~` / `~*` 正则（按文件顺序，区分/不区分大小写）> 普通前缀 / 通用 `/`。想让某个前缀截胡正则时用 `^~`；排障时以 `nginx -T` 打印出的全部生效配置为准逐条对。
+2. 因为 restart 是完全重启，会断连接，且语法有错时服务会起不来直接宕机。固定动作是 `nginx -t` 只测试语法不动正在跑的服务，通过后再 `nginx -s reload` 平滑重载：master 让新 worker 用新配置、旧 worker 处理完存量连接再退出，所以 reload 不断连接。顺序不能反。
+3. 漏了反向代理的 `proxy_set_header` 三件套：`proxy_set_header Host $host;`、`proxy_set_header X-Real-IP $remote_addr;`、`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`。不写这三行，后端拿到的都是 127.0.0.1，日志和限流全错。

@@ -2,7 +2,7 @@
 知识点: Windows 常用命令
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-22
+更新日期: 2026-10-30
 关联:
   - 工程实践知识点地图
   - Linux与Shell
@@ -274,3 +274,15 @@ Test-NetConnection host -Port 3306               # 测某端口通不通（替�
 - 管理员终端里映射的网络盘符在普通终端看不到：盘符映射按权限令牌隔离，同一路径换终端要重新映射。
 - 复制命令时带了中文标点：中文逗号、中文引号粘进终端多半直接语法错误，粘贴后先检查引号和括号是半角。
 - `cd` 切了目录却还在原盘：在 cmd 里忘了 `/d` 是最常见的一个，切完用 `cd` 单独回车看当前路径确认。
+
+## 面试与自测
+
+1. 在 PowerShell 里读环境变量为什么不能写 `%PATH%`？cmd 和 PowerShell 设置变量的作用范围各是什么？
+2. 在 cmd 里执行 `cd D:\work` 后却还在原盘，为什么？怎么确认切盘成功？
+3. WSL2 里连不上 Windows 上起的 localhost:8080 服务，原因是什么？有哪两种解法？
+
+### 参考答案
+
+1. `%PATH%` 是 cmd 语法，PowerShell 里读环境变量要用 `$env:PATH`，写错只会得到一串原样文本。作用范围上，cmd 的 `set FOO=bar` 仅当前窗口有效，PowerShell 的 `$env:FOO = "bar"` 仅当前会话有效；想永久生效要用 `[Environment]::SetEnvironmentVariable("FOO","bar","User")`，写完必须新开终端才读得到。
+2. 因为 cmd 切盘必须加 `/d`，不加只切了目录没换盘；单独一行盘符加冒号（如 `D:`）才是换盘，而 PowerShell 跨盘不用加参数。切完用 `cd` 单独回车看当前路径确认，这是最常见的一个坑。
+3. 因为 WSL2 是独立虚拟网卡，和 Windows 不在同一个 localhost 上。两种解法：WSL2 里用 `$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}')` 拿 Windows 宿主机 IP 来访问；或在 Windows 防火墙给 WSL 网段放行。
