@@ -2,7 +2,7 @@
 知识点: Spring IOC 与 AOP
 层级: 进阶
 适用版本: Spring Boot 2.7.3 / Spring Framework 5.3
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Spring-Boot
   - Spring-事务
@@ -122,6 +122,32 @@ A 依赖 B、B 依赖 A 时，Spring 用三级缓存解决**单例 + 字段/Sett
 - 认为 AOP 能拦截一切：private 方法、final 方法、自调用、容器外对象都拦不到。
 - 在切面里干重活（查库拼大对象写日志表）：切面在每次调用的必经之路上，开销乘以调用量。
 - 混淆 AOP 与拦截器/过滤器：Filter 在 Servlet 层、Interceptor 在 MVC 层、AOP 在 Bean 方法层，粒度与可用信息不同，别互相替代。
+
+## 小技巧与冷知识
+
+【小技巧】自调用想走代理有两个现成办法，不用把方法搬到别的类：自己注入自己（`@Autowired @Lazy private ApplyService self;`，调 `self.xxx()`）或开 `exposeProxy = true` 后用 `AopContext.currentProxy()`。前者靠 @Lazy 断环——自己依赖自己本来就是循环依赖，@Lazy 让容器先给一个代理占位；后者要在 `@EnableAspectJAutoProxy(exposeProxy = true)` 里显式打开，默认是关的，用完记得线程内取的是当前调用的代理。
+
+【小技巧】`@Around` 里忘了调 `proceed()`，目标方法根本不会执行：Around 通知的返回值就是 `pjp.proceed()` 的返回值，漏写这一行等于把业务方法悄悄短路掉，接口返回 null、数据库没写、还不报错。写 Around 先写 `return pjp.proceed();` 再往外加计时、try-finally，别先写日志逻辑再补核心调用。
+
+【小技巧】切面里吞掉异常会顺带吞掉事务回滚：Around 里 catch 住异常只记日志不重抛，调用方看到的是正常返回，事务拦截器也以为方法成功了，该回滚的数据就提交了。切面里要么不 catch、要么 catch 后处理完再 `throw e`；只想记日志就用 `@AfterThrowing`，别在 Around 里把异常消化掉。
+
+【小技巧】`@Configuration` 的 `proxyBeanMethods = false` 是轻量模式：关掉后 `@Bean` 方法互调不再走代理、每次都是新 new 出来的对象，不再保证单例。原文第 5 节说默认 true 保证互调同一单例，反过来就是——配置类里 @Bean 方法之间没有互相调用时，关掉它能省启动时间和代理开销，Spring Boot 的自动配置类用的就是这个模式。
+
+【小技巧】`@Autowired` 只在单构造器时可省：Spring 4.3 起，一个类只有一个构造器时不用标 `@Autowired`；有两个以上构造器时，必须显式标一个，告诉容器用哪一个，否则容器不知道选哪个注入。Lombok 的 `@RequiredArgsConstructor` 生成的也是单构造器，所以能直接省掉注解。
+
+【小技巧】`BeanPostProcessor` 自己不能注入普通 Bean：它在容器启动早期就被实例化，比所有普通 Bean 都早，注入普通 Bean 会触发 `BeanCurrentlyInCreationException`。自定义后置处理器里需要别的 Bean 时，用 `ApplicationContextAware` 拿到容器、等用时再 `getBean`，别在字段上直接 `@Autowired`。
+
+【小技巧】切入点里 `*` 和 `..` 的匹配层级不一样：`execution(* com.example.*.*(..))` 里包名位置的 `*` 只匹配一层包，`com.example.service` 能命中、`com.example.service.impl` 命中不了；想匹配所有子包要用 `..`，即 `execution(* com.example..*.*(..))`。切面只在部分包生效、子包里的类没被切到时，先看包名位置写的是 `*` 还是 `..`。
+
+【小技巧】判断注入的是不是代理，看类名后缀就够了：JDK 代理的类名是 `$Proxy0` 这类，CGLIB 代理带 `$$EnhancerBySpringCGLIB$$`。更可靠的是 `AopUtils.isAopProxy(bean)`，调试“为什么这个 Bean 的行为和源码对不上”时，先确认拿到的是代理还是原始对象，再决定是去看切面还是去看业务代码。
+
+【小技巧】构造器循环依赖用 `@Lazy` 能断环，但只是把环藏起来：`@Lazy` 让容器先注入一个代理占位，真正调用时才解析目标 Bean，启动不再报错。原文第 4 节建议拆环而不是藏环——@Lazy 适合临时过渡，长期留着等于把环依赖的爆炸点从启动期推迟到运行期，某个方法第一次被调时才暴露。
+
+【冷知识】“控制反转”这个名字是 Martin Fowler 在 2004 年的文章《Inversion of Control Containers and the Dependency Injection Pattern》里定下来的，DI（依赖注入）也是他在同一篇文章里给出的叫法。Spring 的前身是 Rod Johnson 2002 年的 Interface21 框架，脱胎于他写的《Expert One-on-One J2EE Design and Development》一书里的示例代码。
+
+【冷知识】Spring AOP 只支持方法执行这一个连接点：字段读写、构造器调用、静态初始化这些 AspectJ 能切的点，Spring AOP 都切不了——因为它只是运行时代理，只能在方法调用前后织入。需要切字段或构造器的场景，得用 AspectJ 的编译期或加载期织入，Spring AOP 的表达式再怎么写也够不着。
+
+【冷知识】JDK 动态代理要求目标有接口、CGLIB 要求类和方法不能 final，根子在两者的生成方式：JDK 代理是运行时生成一个实现目标接口的新类，根本不继承目标类；CGLIB 是生成目标类的子类、重写方法做拦截，final 方法子类重写不了、final 类干脆没法继承。理解这一点就明白为什么“没有接口又想用 JDK 代理”从一开始就不成立。
 
 ## 8. 面试与自测
 

@@ -2,7 +2,7 @@
 知识点: Spring Cache 缓存抽象
 层级: 进阶
 适用版本: Spring Boot 2.7.3 / Spring Framework 5.3
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Spring-Boot
   - Redis
@@ -118,6 +118,36 @@ public class CacheConfig {
 
 - 本地高性能需求可把 CacheManager 换成 Caffeine（`spring-boot-starter-cache` + caffeine 依赖，`spring.cache.type=caffeine`），注解不变——这正是抽象层的价值。
 - 多级缓存（一级 Caffeine 抗热点、二级 Redis 跨实例共享）没有开箱即用的官方实现，需要自定义 CacheManager 或引入专用组件，且要解决一级缓存的跨实例失效广播问题，不要低估复杂度，无明确瓶颈前不上。
+
+## 小技巧与冷知识
+
+【小技巧】`condition` 和 `unless` 的求值时点不一样，别混着用：`condition` 在方法调用前求值，决定“这次查不查缓存”；`unless` 在方法执行完后求值，决定“这次的结果写不写缓存”。两者可以叠加，比如 `condition = "#id != null"` 拦住空参数不查缓存，再配 `unless = "#result == null"` 让空结果不进缓存；只写一个，另一半的口子就还开着。
+
+【小技巧】`@CacheEvict` 默认是方法成功返回后才删缓存，方法抛异常就不删；想“不管成败都删”才加 `beforeInvocation = true`。删除方法本身失败时默认不删是对的——库里没删掉、缓存也留着，下次读到的还是旧值而不是“库里有、缓存没了”的空洞；别顺手把 `beforeInvocation = true` 当默认值写。
+
+【小技巧】`@Cacheable` 写多个 cacheNames 时按定义顺序逐个查，命中一个就直接返回，没命中的那些也会被补写一份。迁移缓存空间时可以利用这点：`@Cacheable({"dictNew", "dictOld"})`，读时先查新空间、再查旧空间兜底，方法执行一次、两个空间都写上，旧空间自然就被新数据覆盖完了。
+
+【小技巧】key 表达式里能用 `#root` 变量，不用每个方法手写前缀防冲突：`key = "#root.methodName + ':' + #id"`，key 天生带上方法名。`#root.target` 是被代理的目标对象、`#root.caches` 是本次操作涉及的缓存集合，拼复杂 key 时比只拿参数名灵活；原文的 SpEL 一节只列了参数和结果，这几个根变量是同一套表达式里的。
+
+【小技巧】多个方法共用一套 key 规则时，抽一个 `KeyGenerator` Bean：`keyGenerator = "bizKeyGenerator"`，所有方法共用同一套拼 key 的逻辑，改规则只改一处。注意 `key` 和 `keyGenerator` 不能同时写，两个都写了启动时就抛异常；二选一，固定规则用 keyGenerator、一次性拼写用 key。
+
+【小技巧】`sync = true` 除了原文说的跨实例无效，还有三条硬限制：不能配 `unless`、只能写一个 cache、不能和其他缓存操作组合。违反时不是静默失效，而是启动或调用时直接报错；热点 key 防击穿只用 sync 的前提是单实例、单缓存、不配 unless，三个条件缺一个就别硬上。
+
+【小技巧】不走注解也能直接操作缓存：注入 `CacheManager`，`cacheManager.getCache("dict").evict(key)` 删一条、`clear()` 清整个空间，管理端的“一键清缓存”接口、测试里清场都用它。再往下还有 `getNativeCache()`，能拿到底层的原生对象（Redis 的 `RedisTemplate`、Caffeine 的 `Cache`），注解够不着的精细操作走这条路。
+
+【小技巧】Redis 里真实 key 的拼法是 `前缀 + 缓存名 + "::" + key`：原文配了 `prefixCacheNameWith("cache:")`，dict 缓存的真实 key 就是 `cache:dict::type:code` 这种形式。用 redis-cli 排查时按这个完整格式搜，别只搜业务 key；不同缓存空间同名 key 也不会串，就是因为中间隔着缓存名这一段。
+
+【小技巧】`@Cacheable` 标在类上对全类方法都生效，配合 `@CacheConfig` 统一 cacheNames，整个 Service 不用每个方法重复写缓存名；某个方法想例外时再在方法上单独标注解，方法级优先于类级。原文只讲了类级 `@CacheConfig`，类级 `@Cacheable` 是同一层面的省事写法。
+
+【冷知识】Spring 的缓存抽象是 3.1 版本（2011 年）引入的，比 Spring Boot 还早两年多；最初开箱只有 ConcurrentMap 和 EhCache 两种实现，Redis、Caffeine 都是后来才接进来的。所以“缓存抽象”本身不绑定任何存储，原文第 3 节换 Redis 只改配置不动业务代码，正是这层抽象从第一天起的设计目标。
+
+【冷知识】`GenericJackson2JsonRedisSerializer` 存进 Redis 的 JSON 里带 `@class` 字段，那是 Jackson default typing 写进去的类型标记，反序列化靠它认出原来是哪个类。用 redis-cli 直接改缓存值时别删 `@class`，删了就认不出类型；看到值里混着 `@class` 也别当成业务字段去解析，它是序列化器的记号。
+
+【小技巧】单元测试不用起 Redis：配一个 `ConcurrentMapCacheManager` 的 Bean，注解逻辑照常跑，断言“第二次调用不进方法”就能验证缓存生效。切 Redis 只是换一个 `CacheManager` 实现，业务代码和注解一行不用动；等联调时再换 RedisCacheManager 去验序列化和 TTL。
+
+【小技巧】更新一个数据要清多个缓存空间时，用 `@Caching` 一次写完：`@Caching(evict = {@CacheEvict(value = "dict", key = "#type"), @CacheEvict(value = "param", allEntries = true)})`，一个方法上叠两个 evict。原文的注解表只列了 `@Caching` 是组合注解，这个“一次更新、多处失效”就是它最常见的用法，别拆成两个方法各清一处。
+
+【冷知识】`sync` 属性是 Spring 4.3 才加上的，原文适用版本 5.3 已经有了；从 4.2 及更早版本升上来的老项目，直接抄 `sync = true` 会编译不过。顺带一提，缓存抽象本身从 3.1 到 4.1 还补过一次大升级（JSR-107 注解支持），看老资料时注意版本，别把新属性往旧版本上套。
 
 ## 8. 面试与自测
 
