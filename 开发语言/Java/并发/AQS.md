@@ -2,7 +2,7 @@
 知识点: AQS
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Java-并发编程
   - synchronized与锁
@@ -94,6 +94,30 @@ class Mutex extends AbstractQueuedSynchronizer {
 - 把 AQS 当业务工具直接用：业务代码用它暴露出来的成品（锁、闩、信号量），继承 AQS 只在写框架/中间件时才需要。
 - 以为公平锁「更公平所以更好」：公平意味着每次唤醒都要严格按序、线程切换更频繁，吞吐明显低于非公平，默认别开。
 - 混淆 Latch 与 Barrier 的可复用性：Latch 计数到 0 后不可重置，要循环等待多轮任务会合用 Barrier。
+
+## 小技巧与冷知识
+
+【小技巧】`tryLock()` 没排队、没 park，直接试一次 CAS 就返回：`ReentrantLock.tryLock()` 底层只调一次 `tryAcquire`，抢不到立刻返回 false，不会进等待队列。想“抢不到就干别的、过会儿再试”的降级逻辑用它；把它当成“带超时的 tryLock”会误判——带超时的 `tryLock(timeout)` 才会入队等唤醒，两者走的根本不是一条路。
+
+【小技巧】看懂等待队列先认四个节点状态：`Node` 的 waitStatus 只有四个值——`CANCELLED(1)` 已取消、`SIGNAL(-1)` 后继节点要等我唤醒、`CONDITION(-2)` 在条件队列里、`PROPAGATE(-3)` 共享模式下要传播唤醒。读 AQS 源码卡住时，先把这四个值对上号，`acquireQueued`、`unparkSuccessor` 里的分支立刻能读下去；状态是负数是“还在等”，正数是“已取消”，符号本身就有含义。
+
+【小技巧】`getQueueLength()`、`getQueuedThreads()` 返回的只是估计值：队列在并发下随时在变，AQS 文档明确写了这些方法返回的是估计值，别拿它做“当前还有几个人在等锁”的精确判断。排障时用它看趋势可以，做限流、做“没人排队才执行”的业务判断不行，精确的排队感知要靠业务自己的计数器。
+
+【小技巧】共享模式的唤醒会“连锁传播”，独占不会：读锁释放时 `setHeadAndPropagate` 会顺着队列把后面符合条件的读线程一个个唤醒（PROPAGATE 状态就是干这个的），所以读锁能成批放行；写锁释放只唤醒下一个节点。读多写少的场景下“一次释放放行一批读线程”是正常的，不是惊群，别按独占锁的直觉去调它。
+
+【小技巧】`Condition.await()` 会把锁完全释放、再原样拿回来：`await()` 内部先记下当前 state（重入次数），全部释放后才 park，`signal()` 后重新排队、按原重入次数把锁拿满才返回。重入 3 次的线程 await 后，别人能拿到锁，signal 唤醒后它要重新拿到 3 次重入才继续跑；只释放一次的直觉是错的，条件等待和锁的“借出借回”是成套的。
+
+【小技巧】`LockSupport.park()` 不会丢唤醒信号：park/unpark 是“许可”语义——先 `unpark` 再 `park`，park 会立刻返回而不是一直挂起，信号不会丢。这是 AQS 敢用 park/unpark 做阻塞唤醒的根子；`Object.wait()` 没有这层保障，必须在循环里检查条件。自己写同步器时，用 park/unpark 就别再套一层“唤醒丢失”的防御逻辑，重复检查条件才是正道。
+
+【小技巧】公平锁的“公平”只查有没有人排队，不保证绝对按序拿到：公平锁入队前调 `hasQueuedPredecessors()`，队列非空就自觉排队，但 park 唤醒的时机、线程调度的顺序仍可能让后到的线程先跑。公平锁消灭的是“后来者直接插队抢锁”，不是“严格按到达顺序执行”；需要严格顺序的场景要靠业务自己排队，别指望公平锁兜底。
+
+【小技巧】读锁有个 65535 的上限：`ReentrantReadWriteLock` 的 state 高 16 位记读锁计数，读锁重入次数超过 65535 会抛 `Error: Maximum lock count exceeded`。正常业务到不了这个数，但递归里反复加读锁、循环里漏了 `unlock()` 时，读计数是会悄悄往上涨的；看到这个 Error 先查读锁的 unlock 是不是成对的，而不是去调锁的参数。
+
+【冷知识】AQS 出自 Doug Lea 2004 年的论文《The java.util.concurrent Synchronizer Framework》：ReentrantLock、Semaphore、CountDownLatch 这些工具都是这篇论文里的“同一套框架的不同用法”。读源码前先看论文的图——state + CLH 队列 + 模板方法三件套，整篇论文其实就讲了这一件事，JUC 的同步工具全是它的实例化。
+
+【冷知识】CLH 队列的原始论文比 AQS 早十多年：CLH 锁由 Craig、Landin、Hagersten 在 1993–1994 年提出，原始设计里每个线程自旋等前驱节点的标志位；AQS 改成“前驱节点状态变化 + park 挂起”，把自旋换成了阻塞，才适合 Java 这种“线程多、不能全自旋”的环境。理解这层演变，就明白为什么 AQS 叫“CLH 变体”而不是“CLH 锁”。
+
+【冷知识】`FutureTask` 也用 AQS，但 state 含义完全不同：它的 state 是任务状态机（NEW → COMPLETING → NORMAL/EXCEPTIONAL/CANCELLED），`get()` 就是一次共享模式的 acquire。同一个框架、同一套排队唤醒代码，换个 state 语义就长出一个完全不同的工具——这正是原文说“具体同步器只定义 state 怎么变”的意思，AQS 的复用粒度就是 state 的定义。
 
 ## 8. 面试与自测
 
