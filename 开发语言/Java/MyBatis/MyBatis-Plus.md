@@ -2,7 +2,7 @@
 知识点: MyBatis-Plus
 层级: 进阶
 适用版本: MyBatis-Plus 3.5.3.2
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Java
   - Spring-Boot
@@ -83,6 +83,30 @@ orderService.page(page, Wrappers.<Order>lambdaQuery().eq(Order::getStatus, statu
 
 - [解抵押平台](项目沉淀/解抵押平台.md)：MyBatis-Plus 与 MySQL → Oracle SQL 迁移
 - [神农-e贷-法人版](项目沉淀/神农-e贷-法人版.md)：企业级数据访问实战
+
+## 小技巧与冷知识
+
+【小技巧】`getOne` 查到多条会抛异常，想“只取第一条”用第二个参数：`getOne(wrapper, false)`，多条时不抛异常、直接返回第一条。默认的 `getOne(wrapper)` 等价于传 `true`，结果超过一条就抛 `TooManyResultsException`；按业务唯一键查用默认版兜底，查“最新一条”这类本来就可能多条的场景记得传 `false`，别让本该兜底的查询在线上炸掉。
+
+【小技巧】`saveOrUpdate` 默认只按主键判断是新增还是更新，想按业务唯一键判断用带 Wrapper 的重载：`saveOrUpdate(entity, new LambdaQueryWrapper<User>().eq(User::getCode, entity.getCode()))`。同步外部数据、导入时“code 已存在就更新、不存在就插入”的场景就靠它；只传实体时没有主键就永远走新增，重复导入会攒出重复行。
+
+【小技巧】想让某个字段允许置 null，不用改全局字段策略，在字段上单独标：`@TableField(updateStrategy = FieldStrategy.IGNORED)`，该字段更新时 null 也会写进库。原文第 5 节的 `updateById` 忽略 null 是全局默认行为，逐字段放开比全局改策略安全——只对“确实需要清空”的字段开这个口子，其他字段继续受防误清空保护。
+
+【小技巧】只取一列或不固定列时别建实体：`selectObjs(wrapper)` 直接返回第一列的值列表，取一批 id 只要一行代码；`selectMaps(wrapper)` 返回 `List<Map<String, Object>>`，报表、动态列的查询不用为了一次性字段硬造实体类。原文的 `list()` 永远返回实体集合，这两个方法是“只要数据不要实体”的轻量出口。
+
+【小技巧】只想判断“存不存在”别拉整行：`service.exists(wrapper)` 只查存在性，不用 `selectOne` 再判空，也不用 `count` 再比大小。存在性校验、幂等判断、唯一键前置检查都用它，语义一眼就能看懂，SQL 层面也只做到“查到一条就停”。
+
+【小技巧】`last("limit 1")` 是在 SQL 末尾直接拼原生片段，拼什么就原样追加，不做任何转义和占位符处理。只用来拼固定的 `limit 1`、`order by` 这类写死的片段，千万别把用户输入拼进去——它是 Wrapper 里唯一的“裸 SQL 出口”，拼错了就是注入口；需要动态条件时用 `eq`/`like` 这些带占位符的方法。
+
+【小技巧】分页的 count 查询可以单独控制：`page.setSearchCount(false)` 直接跳过 count，适合“总数已知或根本不需要总数”的列表；复杂查询 count 太慢时用 `page.setOptimizeCountSql(false)`，关掉 MP 自动改写 count SQL 的优化，改用原始 SQL 包一层 count。原文第 4 节只说了“复杂查询可关闭自动 count 后手写”，这两个开关就是不用手写也能先省掉 count 开销的办法。
+
+【小技巧】表名前缀统一配全局配置，别每张表写 `@TableName`：`mybatis-plus.global-config.db-config.table-prefix` 配好前缀后，实体类名按默认规则映射会自动带上前缀。项目里表全是 `t_` 或 `biz_` 开头时配一次就够了；只有个别表名不合规则的才单独标 `@TableName`。
+
+【小技巧】类名和字段名默认按驼峰转下划线映射，不用每个字段都标注解：`UserOrder` 默认对应 `user_order` 表，`createTime` 默认对应 `create_time` 列，`@TableName`/`@TableField` 只在名字对不上的时候才需要写。原文第 1 节只说了“不一致时必标”，反过来就是：命名规范的表和字段，实体类可以保持干净、一个映射注解都不用写。
+
+【冷知识】`IdType.ASSIGN_UUID` 生成的主键是 32 位无横线的字符串：默认实现 `DefaultIdentifierGenerator.nextUUID()` 用的是 `UUID.randomUUID().toString().replace("-", "")`，不是带 4 个横线的标准 36 位形式。建表时主键列按 `varchar(32)` 留长度就够了，按 36 位留也不会错，但对不上 32 位去查“为什么少了 4 位”就是白费时间；原文第 5 节只写了 ASSIGN_ID 的雪花算法，UUID 这条的格式细节容易被忽略。
+
+【冷知识】Lambda 包装器能认出 `User::getName` 对应哪个列，靠的是 `SerializedLambda`：方法引用本质上是一个可序列化的 Lambda 对象，MP 通过 `LambdaUtils.extract` 取出它内部记录的实现方法名 `getName`，再按“去 get 首字母小写”的规则还原出属性名 `name`，最后映射到列。理解这一点就明白：Lambda 包装器不是编译期魔法，而是运行期把方法引用“拆开读”；自己写的方法引用必须指向真实的 getter，写成任意 Lambda 表达式它就解析不出来了。
 
 ## 面试与自测
 

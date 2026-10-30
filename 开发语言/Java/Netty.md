@@ -2,7 +2,7 @@
 知识点: Netty
 层级: 进阶
 适用版本: Netty 4.1.x
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Java-IO与NIO
   - 计算机网络
@@ -120,6 +120,32 @@ class EchoHandler extends SimpleChannelInboundHandler<ByteBuf> {
 - 误区：Netty 是异步的，所以 handler 里可以随便阻塞。不行，EventLoop 的串行模型决定了阻塞一节、卡死一片。
 - 误区：writeAndFlush 返回了就是对方收到了。它只表示数据进了内核发送缓冲，送达确认要靠应用层 ack。
 - 误区：把 Netty 的「零拷贝」理解成 sendfile。它主要是 ByteBuf 层面的逻辑合并与池化，与文件 sendfile 是两回事（见 NIO 篇第 5 节）。
+
+## 小技巧与冷知识
+
+【小技巧】`writeAndFlush` 返回的 ChannelFuture 要挂监听器，别直接 `sync()`：`writeAndFlush(msg).addListener(ChannelFutureListener.CLOSE_ON_FAILURE)` 写失败才关连接，`sync()` 会阻塞当前线程。尤其别在 EventLoop 线程里调 `sync()` 等另一个 ChannelFuture——等的那一方也要同一个 EventLoop 执行，直接死锁；EventLoop 里一律用 addListener。
+
+【小技巧】攒一批消息只 flush 一次：`ctx.write(msg)` 只是把数据挂进出站缓冲，`ctx.flush()` 才真正发出。循环里每条都 writeAndFlush 等于每次都触发一次系统调用，改成循环里只 write、循环结束再 flush 一次，批量写场景的系统调用次数直接降下来；原文的心跳与回声示例都是一次一 flush，批量下发时别照抄。
+
+【小技巧】`ByteBuf.slice()` 切出来的片和原 Buf 共用同一份引用计数：slice 不产生新的计数，release 原 Buf 后片里的字节可能已被池子回收复用。要把一片数据单独交给别的线程或攒起来稍后发，先 `retain()` 再传走，用完再 release；只在当前 handler 内同步用完的片才不用 retain。直接拿 slice 当独立消息发出去，是原文第 4 节漏放问题的变体。
+
+【小技巧】测 handler 不用起真 socket，用 `EmbeddedChannel`：`new EmbeddedChannel(new MyDecoder(), new MyHandler())`，`writeInbound` 喂字节、`readOutbound` 取出站结果，编解码逻辑在单元测试里就能跑通。它只跑 Pipeline 不走网络，断言帧边界、半包、异常冒泡都比起服务器快得多；原文的回声示例要验证，EmbeddedChannel 是最省事的办法。
+
+【小技巧】`option()` 和 `childOption()` 作用对象不一样，别配反：`option()` 配的是服务端监听套接字（ServerSocketChannel），如 `SO_BACKLOG`；`childOption()` 配的是 accept 出来的子连接，如 `TCP_NODELAY`、`SO_KEEPALIVE`。把 `TCP_NODELAY` 写进 option() 里对已建立的连接完全不起作用，调优没效果时先看配进了哪一个。
+
+【小技巧】Pipeline 可以运行时动态插拔 handler：登录前挂解码器、登录后 `ctx.pipeline().remove("decoder")`，或握手成功后再 `addLast("ssl", sslHandler)`。这比“一个 handler 里用 if 分支处理前后两种状态”干净，状态切换就是 handler 的增删；拆包器、鉴权、业务 handler 各管一段，出了问题先看当前 Pipeline 里实际挂了谁。
+
+【小技巧】`Unpooled.wrappedBuffer(byte[])` 不拷贝、`copiedBuffer` 才拷贝：wrapped 直接包住你传进去的数组，改数组等于改 Buf 内容；copied 会复制一份再包。构造发送报文时用 wrapped 省一次拷贝没错，但前提是发完之前别再改那个数组；发完要复用数组的场景用 copied，否则会出现“发出的数据被后续写入覆盖”的灵异问题。
+
+【小技巧】优雅停机有等待期：`shutdownGracefully()` 默认静默期 2 秒、超时 15 秒，静默期内没新任务才真正停，超时到了就强制停。进程退出前只调一次、等它走完，别紧接着 `System.exit`；连接量大、关闭回调多时 15 秒可能不够，`shutdownGracefully(quietPeriod, timeout, unit)` 可以显式放宽，原文示例里 finally 块的停机调用走的就是这套默认值。
+
+【小技巧】不确定当前线程是不是 EventLoop，先问一句再动手：`ctx.executor().inEventLoop()` 返回 true 说明已经在该连接的 EventLoop 线程里，可以直接操作 Channel；返回 false 就用 `ctx.executor().execute(...)` 把任务递进去。跨线程直接调 `channel.writeAndFlush` 虽然线程安全，但“回调里更新共享状态”这类逻辑必须先确认线程，否则就回到了原文第 2 节说的“同一连接天然无并发”之外的竞争。
+
+【冷知识】Netty 5 曾经立项，后来被放弃了：Netty 5（alpha）尝试重写 API，2019 年左右官方决定停止开发，4.1 成为长期主线。所以“等 Netty 5 稳定再升级”这个说法已经过时，生产选型直接看 4.1.x 的版本说明；原文 Frontmatter 写的适用版本 4.1.x 就是这个背景。
+
+【冷知识】Netty 出自 JBoss，作者是 Trustin Lee：2004 年他在 JBoss 做即时通讯时觉得 NIO 太难用，写了 Netty 的前身；后来 Dubbo、RocketMQ、gRPC-Java、Elasticsearch 都拿它做传输层。知道这个出处就明白为什么 Netty 的线程模型和 JBoss 时期的“一个线程管一批连接”思路一脉相承。
+
+【冷知识】Epoll 传输是 Linux 下的另一条路：`EpollEventLoopGroup` + `EpollServerSocketChannel` 走 Linux 原生 epoll，比 NIO 实现少一层 Java 层的 Selector 封装，连接量大的服务端常用它。代码层面只换 group 和 channel 类，Pipeline 与 handler 不用动；但它只在 Linux 上能跑，跨平台部署时要按系统选实现，别写死。
 
 ## 10. 面试与自测
 

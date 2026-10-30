@@ -2,7 +2,7 @@
 知识点: MyBatis 原生
 层级: 基础
 适用版本: MyBatis 3.5 / Spring Boot 2.7
-更新日期: 2026-10-24
+更新日期: 2026-10-31
 关联:
   - MyBatis-Plus
   - Java
@@ -152,6 +152,32 @@ try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.BATCH, fals
 - 本项目栈：mybatis-spring-boot-starter 2.2.2（MyBatis 3.5.9 线）+ MyBatis-Plus 3.5.3.2 + PageHelper 1.4.3，跑在 Spring Boot 2.7.3 上，三者版本成套看，别单独升大版本。
 - MyBatis 3.5.x：默认 `aggressiveLazyLoading` 已改为 false；其余小增补不影响存量 XML 写法。
 - PageHelper 的 API（`startPage`/`PageInfo`）在 1.4→2.x 间有变化，升级前先核对分页调用点。
+
+## 小技巧与冷知识
+
+【小技巧】`<if>` 只判 `!= null` 拦不住空字符串：`custName = ''` 拼进 LIKE 会变成 `LIKE '%%'`，等于全表扫。判空要写全 `custName != null and custName != ''`，正文 §3 的例子就是这么写的——不是啰嗦，是空串和 null 在 SQL 里是两回事。
+
+【小技巧】OGNL 里单引号的单个字符是 char 不是 String：`test="type == 'Y'"` 里 `'Y'` 被当成字符，String 类型的 type 永远比不上，条件悄悄失效还不报错。改成 `test="type == 'Y'.toString()"`，或者直接用 OGNL 的字符串比较写法；排查“条件明明该进却没进”时，先看 test 里的引号。
+
+【小技巧】LIKE 的通配符用 `<bind>` 拼，别在 SQL 里 CONCAT：`<bind name="pattern" value="'%' + custName + '%'"/>`，然后 `LIKE #{pattern}`。参数照样走 `#{}` 预编译防注入，还不用依赖数据库的 CONCAT 写法，MySQL、OceanBase 换库也不用改 SQL。
+
+【小技巧】空集合进 `<foreach>` 拼 IN 会直接报错：`WHERE id IN ()` 是非法 SQL，list 为空时连执行机会都没有。外层包一层 `<if test="list != null and list.size > 0">`，空集合走兜底分支（比如返回空结果），别让空 list 走到 SQL 里。
+
+【小技巧】插完想拿回自增主键，用 `useGeneratedKeys="true" keyProperty="id"`：insert 执行完，id 会自动回填到传入的对象上，不用再查一次。但 BATCH 执行器下要等 `flushStatements` 或 `commit` 后 id 才回填，攒批期间读 id 是空的——正文 §4 说 BATCH 期间拿不到主键，根子就在这里。
+
+【小技巧】多参数方法没写 `@Param` 时，只能用 `param1`、`arg0` 这种默认名引用：单参数想按真实名字引用，要靠编译参数 `-parameters`（MyBatis 默认会读它），没开这个参数也只能用 `param1`。接口方法一律显式写 `@Param`，改名、加参数都不会悄悄断掉 XML 里的引用。
+
+【小技巧】同一 SqlSession 内重复查询读的是旧值，先怀疑一级缓存：长会话里别的会话改了库，本会话的 select 仍命中一级缓存。想关掉会话级缓存，把 `localCacheScope` 设成 `STATEMENT`；只想某条语句每次都查库，在该语句上加 `flushCache="true"`，不用把整个会话的缓存都关掉。
+
+【小技巧】可空参数传 null 报错时，加上 jdbcType：`#{name, jdbcType=VARCHAR}`。Oracle 驱动收到没类型的 null 会报 "Invalid column type"，MySQL 上一般不报错，所以这个坑只在换库或上 Oracle 时才冒出来——参数可能为 null 的字段，jdbcType 顺手写上。
+
+【小技巧】SqlSession 和 Mapper 都不是线程安全的：Mapper 是绑定到某个会话的代理，别把它存进单例字段跨线程复用；原生用法每次用完会话要 `close()`，Spring 托管的会话由框架关，自己 new 出来的必须自己关。
+
+【冷知识】MyBatis 的前身是 2002 年的 iBATIS：Clinton Begin 在 Apache 发起的项目，2010 年迁出 Apache 后改名 MyBatis。现在代码里 `org.apache.ibatis` 这个包名就是 iBATIS 时代留下的，搜老资料时用 iBATIS 这个名字能找到更早的讨论。
+
+【冷知识】`selectKey` 是 Oracle 序列时代的标配：自增主键用 `useGeneratedKeys`，Oracle 序列要在 insert 前先取号——`<selectKey keyProperty="id" order="BEFORE">SELECT seq.nextval FROM dual</selectKey>`。`order` 写成 AFTER 会变成插完才取值，主键字段就空着入库了，BEFORE/AFTER 的含义是相对 insert 的执行顺序。
+
+【冷知识】插件是按注册顺序层层包起来的，最后注册的在最外层、先执行：两个插件都拦截同一个方法时，执行顺序和注册顺序是反的。调插件互相干扰的问题时，先看配置里插件的注册顺序，别只盯着单个插件的逻辑。
 
 ## 10. 面试与自测
 

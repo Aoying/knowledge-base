@@ -2,7 +2,7 @@
 知识点: Quartz 定时任务
 层级: 进阶
 适用版本: Quartz 2.3 / Spring Boot 2.7.3
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Spring-Boot
   - 线程池
@@ -132,6 +132,32 @@ public class SpringJobFactory extends AdaptableJobFactory {
 - **任务在集群里重复执行**：先查 `isClustered` 是否真开启（共用库但没开集群 = 每节点独立调度，必重复）；再查是否有两套应用连了同一个库各自调度。
 - **表达式对但就是不跑**：按顺序查——Trigger 被 pause、身份 group 写错、cron「日/周」两位同时给了具体值、时区不是 Asia/Shanghai（容器默认 UTC 让「凌晨 2 点」变北京时间 10 点）。时区在 Trigger 上显式 `inTimeZone(TimeZone.getTimeZone("Asia/Shanghai"))` 或统一 JVM 时区，别靠部署环境碰运气。
 - **重启后任务消失**：memory JobStore 的必然结果，要么换 jdbc，要么靠启动时代码注册并保证幂等。
+
+## 小技巧与冷知识
+
+【小技巧】cron 表达式上线前先用 `CronExpression.isValidExpression(expr)` 静态方法校验一次：它在调度前就能拦住非法表达式，比等 `scheduler.scheduleJob` 抛异常再排查要早。动态录入 cron（运营后台填表达式）的场景必加这道校验，否则一条写错的表达式要到触发时才暴露，中间还可能静默不跑。
+
+【小技巧】`storeDurably()` 不是可有可无的修饰：没加它的 JobDetail 在最后一个 Trigger 被删掉时会被调度器自动清理掉，加了才会留下来等新 Trigger 挂。动态增删 Trigger 的任务一定要配 durable，否则删一次触发器、任务定义就跟着没了，下次想重建还得重新注册 JobDetail。
+
+【小技巧】JDBC 模式下 JobDataMap 里只放 String、数字这类可序列化值：持久化时 JobDataMap 是序列化后存进数据库的，放进一个没实现 `Serializable` 的业务对象，建任务时直接报错。参数能用字符串表达就用字符串，复杂对象只传 ID、执行时再查库，别把对象本身塞进 JobDataMap。
+
+【小技巧】Job 里抛 `JobExecutionException` 可以控制“这次失败后怎么办”：`setRefireImmediately(true)` 让调度器立刻重跑一次，适合偶发失败（如下游短暂抖动）；`setUnscheduleAllTriggers(true)` 则直接把该任务的所有触发器都摘掉，适合“再跑也没用、需要人工介入”的坏数据。直接抛普通 RuntimeException 是没有这些语义的，失败就只记一条日志。
+
+【小技巧】想中途停掉一个正在跑的长任务，Job 要实现 `InterruptableJob` 接口：它多一个 `interrupt()` 方法，调度器调 `scheduler.interrupt(jobKey)` 时会回调它，由你在里面置标志位、让 execute 里的循环尽早退出。普通 Job 没有这个入口，调度器只能等它自己跑完，`pauseJob` 也只能拦住下一次触发、停不掉正在跑的这一次。
+
+【小技巧】应用停机时调 `scheduler.shutdown(true)` 而不是 `shutdown(false)`：传 true 会等正在执行的任务跑完再关，传 false 立刻返回、不管手头的任务。滚动发布、优雅停机走 true 这条路，正在跑的对账任务不会被半路掐断；但要先确认任务有超时兜底，否则一个死循环任务会把停机无限拖住。
+
+【小技巧】“每天 9 点到 17 点、每 15 分钟跑一次”这种带时间窗口的规则，别硬拼 cron：用 `DailyTimeIntervalTrigger`，它天生就是“每天某个时间段内按间隔触发”，再配 `HolidayCalendar` 还能把法定节假日排除掉。cron 写这种窗口要写一串表达式还容易漏边界，专用触发器加日历才是正路。
+
+【小技巧】暂停要分清 `pauseTrigger` 和 `pauseJob` 的范围：前者只停某一个触发器，后者停掉该 Job 下的全部触发器；恢复时 `resumeJob` 会把该 Job 下所有触发器一起恢复，包括你之前单独 pause 的那个。只想临时停某一条触发规则时用 pauseTrigger，想整组停再用 pauseJob，恢复前先确认有没有“本想继续停着”的触发器被顺带恢复了。
+
+【小技巧】关键任务在 JobDetail 上开 `requestRecovery(true)`：节点崩溃时正在跑的任务，调度器恢复后会重新触发一次，相当于给“跑一半就宕机”留了后手。默认是不开的，崩溃时跑一半的任务直接按 misfire 逻辑走，不一定补跑；对账、资金类任务值得显式打开，非关键任务则没必要。
+
+【冷知识】集群节点之间靠 `clusterCheckinInterval` 互相“报到”，默认 7500 毫秒：每个节点每隔这段时间往 `QRTZ_SCHEDULER_STATE` 表写一次心跳，超过间隔没报到的节点会被其他节点判定为挂了，它手里正在跑的任务会被接管重跑。把这个间隔设得太大，故障接管就慢；设得太小，心跳写库本身就成了负担。
+
+【冷知识】`withIdentity("reconcile")` 只写名字不写 group 时，group 默认是 `"DEFAULT"`：`Scheduler.DEFAULT_GROUP` 就是这个字符串，所有没显式分组的 Job 和 Trigger 都落在同一个默认组里。按 name + group 寻址动态管理任务时，不知道这个默认值，查出来的任务可能比预期的多——不同业务的任务最好显式分组，别都挤在 DEFAULT 里。
+
+【冷知识】`SimpleTrigger` 的无限重复用常量 `REPEAT_INDEFINITELY`，它的值就是 -1：`withRepeatCount(SimpleTrigger.REPEAT_INDEFINITELY)` 和直接写 -1 等价，但读代码时常量一眼能看出意图。Quartz 里不少“无限”都是用 -1 表达的，看到 -1 先别当成写错了，对照一下是不是这个常量。
 
 ## 9. 面试与自测
 
