@@ -2,7 +2,7 @@
 知识点: synchronized与锁
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Java-并发编程
   - AQS
@@ -103,6 +103,30 @@ jstack <pid> | grep -A 10 "Found one Java-level deadlock"   # 直接给出死锁
 - `unlock` 不写 finally：临界区抛异常后锁永不释放，后续线程全挂，这类问题在压测下才暴露。
 - 锁的范围套住整个方法图省事：含远程调用的方法整体加锁，等于把系统改成单线程。
 - 混用两套锁保护同一状态：一处用 `synchronized`、一处用 `ReentrantLock` 保护同一字段——两套机制互不知晓，等于没锁。
+
+## 小技巧与冷知识
+
+【小技巧】锁对象用私有的 final Object，别直接锁 this：`synchronized (this)` 的锁是公开的，任何拿到你对象引用的外部代码也能 `synchronized (你的对象)`，锁竞争和死锁的源头就藏在类外面。写成 `private final Object lock = new Object()` 再 `synchronized (lock)`，锁的可见范围就收进了类内部，别人的代码想插手也插不进来；原文第 2 节只说了锁对象要固定共用，这条是“共用给谁看”的下一层。
+
+【小技巧】`wait()` 必须写在 while 循环里，不能写 if：线程可能在条件还没满足时被“虚假唤醒”（spurious wakeup），醒来就直接往下走会读到不满足条件的状态。标准写法是 `while (!condition) { obj.wait(); }`，醒来先复查条件，不满足就继续等；只用 if 判断一次等于默认“每次醒来条件都成立”，这是 wait/notify 代码里最常见的坑。
+
+【小技巧】一个 monitor 上挂着多个等待条件时，用 `notifyAll()` 别用 `notify()`：`notify()` 只唤醒一个任意线程，如果唤醒的是在等另一个条件的线程，它醒来发现条件不对又睡回去，这次信号就丢了，等真正该醒的线程一直没人叫。只有一个等待条件时 `notify()` 才安全；条件一多就用 `notifyAll()`，让所有等待线程自己醒来复查条件，原文第 3 节说 synchronized 只有一个 wait 集合只能 notifyAll 乱醒——这里是“乱醒”反而比“叫错人”安全。
+
+【小技巧】`wait()` 会把锁的重入次数一次性全放掉：一个线程重入同一把锁 3 次后调用 `wait()`，锁是彻底释放、不是只减一次，别的线程能完整拿到锁；它被唤醒后要按原重入次数把锁重新拿满才返回。排障时看到“重入的线程 wait 后别人进来了”别当成锁坏了，这是 wait 的语义——条件等待和锁是“整借整还”，不是按次借还。
+
+【小技巧】子类重写 synchronized 方法不会自动继承锁：`synchronized` 不是方法签名的一部分，父类方法标了 synchronized，子类重写时没写这个关键字，覆盖后的方法就是不加锁的。改父类实现时如果在子类里重写了同步方法，记得把 synchronized 补上；只看父类签名以为“这个方法天生是同步的”，重构后并发问题就悄悄回来了。
+
+【小技巧】StampedLock 的乐观读必须配 `validate()` 校验：`tryOptimisticRead()` 拿到的 stamp 只是“读到的数据可能有效”，读完要用 `validate(stamp)` 确认期间没有写锁进来过，校验失败就升级成 `readLock()` 重读。只拿 stamp、不校验，等于读了一段随时可能被改掉的数据还没发现；原文第 3 节只说了 StampedLock 提供乐观读，这行校验才是乐观读成立的前提。
+
+【小技巧】程序里也能主动查死锁，不用等线上 jstack：`ManagementFactory.getThreadMXBean().findDeadlockedThreads()` 会返回陷入死锁的线程 id 数组，没死锁时返回 null。健康检查或定时监控里定期调一次，死锁刚发生就能告警并定位到线程；等用户报障再去 jstack 留现场，中间已经丢了一段时间。
+
+【小技巧】`ReentrantLock.getHoldCount()` 能看当前线程把同一把锁重入了几次：怀疑“unlock 少写了一次、锁一直没放”时，在关键位置打一行这个值，返回几就说明当前线程还持有几重。配合 `isHeldByCurrentThread()` 一起用，比猜“锁是不是我这边没放”可靠；它只统计当前线程的持有次数，别的线程的持有情况它看不到。
+
+【冷知识】`synchronized` 编译后是两条字节码指令：方法体或代码块里的同步，javap -c 能看到 `monitorenter` 和 `monitorexit`。编译器还会给临界区加一张异常表，保证方法里抛异常时也走 `monitorexit` 把锁放掉——这就是 synchronized“自动释放、不会漏”的底层来源，不是 JVM 运行时额外做的善后。
+
+【冷知识】monitor 这个概念来自 Hoare 1974 年的论文《Monitors: an operating system structuring concept》：Java 是最早把 monitor 做进语言关键字的主流语言之一，`synchronized` + `wait/notify` 就是论文里 monitor 的直接落地。理解这一点就明白为什么 wait/notify 必须在 synchronized 块里调——monitor 的语义本来就要求“先持有监视器，才能等它的条件”。
+
+【冷知识】两把锁没有天然顺序时，按对象身份排加锁顺序是《Java 并发编程实战》给的经典解法：比较 `System.identityHashCode(a)` 和 `System.identityHashCode(b)`，小的先锁、大的后锁；两个哈希值撞了（概率极低），再加一把全局的 tie 锁兜底。原文第 4 节只给了“按账户 id 大小统一顺序”，这条是“连 id 都没有、只有两个对象时”的通用版。
 
 ## 7. 面试与自测
 

@@ -2,7 +2,7 @@
 知识点: ThreadLocal
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Java-并发编程
   - 线程池
@@ -95,6 +95,32 @@ ttlPool.execute(() -> System.out.println(TRACE.get()));   // 池线程里也能�
 - 只在正常路径 remove：异常路径漏清等于没清，remove 必须进 finally。
 - 在异步/池场景指望 InheritableThreadLocal：继承只发生在 new Thread 那一刻，池线程不新建，必丢。
 - 值里放大对象：value 的生命周期等于线程（池线程 ≈ 进程），大对象、连接、流句柄都不该放进来。
+
+## 小技巧与冷知识
+
+【小技巧】没 set 过的 `ThreadLocal.get()` 返回 null，不抛异常：普通 `new ThreadLocal<>()` 第一次 get 拿到的是 null，业务代码里直接 `.toString()` 或拆箱就会 NPE。原文第 2 节的 `withInitial` 就是治这个的——它给每个线程一个初始值，get 永远非空；不确定调用方会不会先 set 时，优先用 withInitial，别在每个 get 点写判空。
+
+【小技巧】`set(null)` 不等于 `remove()`：set(null) 只是把 Entry 的 value 写成 null，这条 Entry 还占着 map 里的槽位、还计入大小；`remove()` 才是真正把 Entry 从 map 里删掉。清理时永远调 remove，别用 set(null) 代替——后者留下的空 Entry 只有等启发式清理来扫，池线程里攒多了照样占地方。
+
+【小技巧】日志的 MDC 也是 ThreadLocal，漏清会串日志：SLF4J 的 MDC（`MDC.put("traceId", ...)`）底层就是 ThreadLocal，拦截器里 put 了 traceId，请求结束必须在 finally 里 `MDC.clear()`。漏清的后果和原文第 4 节一样——池线程复用后，下一条请求的日志会带上上一条请求的 traceId，链路追踪直接串线；MDC 和业务 ThreadLocal 要放在同一个 finally 里清。
+
+【小技巧】随机数别用 `ThreadLocal<Random>` 包，自己用 `ThreadLocalRandom.current()`：它是 JDK 专门给并发写的随机数生成器，不走 ThreadLocalMap，没有 Entry、不用 remove，也没有 `Math.random()` 的共享锁竞争。看到老代码里 `ThreadLocal.withInitial(Random::new)` 可以直接换成 `ThreadLocalRandom.current().nextInt(n)`，少一个泄漏点。
+
+【小技巧】`InheritableThreadLocal` 的子线程值默认是浅拷贝，想深拷贝要重写 `childValue()`：父线程传一个可变对象（比如 Map、List）给子线程，子线程改了它，父线程的值也跟着变——因为拷贝的只是引用。值是可变对象且子线程会改时，重写 `childValue()` 返回一份深拷贝；只读场景用默认浅拷贝就行，拷贝成本和安全性要先想清楚。
+
+【小技巧】`CompletableFuture` 的回调换了线程，ThreadLocal 跟不过去：`thenApply` 在哪个线程跑取决于前一个阶段的完成线程，`thenApplyAsync` 明确换线程池，两者都不会继承调用线程的 ThreadLocal 值。异步链路里要传 traceId、用户信息，要么在回调入口手动 set、出口手动 remove，要么用原文第 5 节的 TTL 包装任务；指望 ThreadLocal 自己跨过异步边界必丢。
+
+【小技巧】ThreadLocal 字段一律写成 static final，别每个对象 new 一个：ThreadLocal 的身份就是它自己——每个实例在每个线程的 map 里都占一条 Entry。把 ThreadLocal 写成实例字段，每 new 一个业务对象就多一个 key，map 里攒一堆只用一次的 Entry；static final 一份，全线程共用同一个 key，Entry 只有一条，清理时也只要 remove 一次。
+
+【小技巧】ThreadLocalMap 的表只长不缩：表满了触发 rehash 时容量翻倍，但之后哪怕大部分 Entry 被清掉，表的长度也不会缩回去。一个长期存活的池线程如果历史上塞过大量不同的 ThreadLocal 实例，它的 map 表会一直保持在峰值大小。控制 ThreadLocal 实例总数（复用 static 字段、少建临时实例），比事后指望 map 自己缩回去靠谱。
+
+【小技巧】虚拟线程（JDK 21+）里慎用 ThreadLocal：每个虚拟线程也有自己的一份 ThreadLocalMap，虚拟线程动辄几十万个，每个都挂一份值，内存是按线程数乘出来的。虚拟线程场景下传上下文优先用 `ScopedValue`（JDK 21 预览，JDK 25 正式）：值绑定在作用域上、退出自动失效，不用 remove，也没有残留串扰。
+
+【冷知识】每个 ThreadLocal 的哈希增量是 0x61c88647：JDK 用斐波那契散列给每个 ThreadLocal 实例分配 `threadLocalHashCode`，新实例的哈希在上一个基础上加 0x61c88647（黄金分割比的 2^32 倍取整）。这个增量让连续创建的 ThreadLocal 实例在 map 里的槽位均匀散开，配合原文第 3 节的线性探测，冲突时往后挪的格数最少。
+
+【冷知识】ThreadLocalMap 初始容量 16，扩容阈值是容量的三分之二：表里 Entry 数超过 `容量 × 2/3` 就触发 rehash，容量翻倍。结合“表只长不缩”那条看，一个线程里 ThreadLocal 实例数长期超过 10 个左右，map 就会从 16 扩到 32——数量本身就是性能信号，塞成百上千个时线性探测的步数会明显变长。
+
+【冷知识】`ScopedValue` 是 ThreadLocal 的官方继任者之一：JDK 21 以预览特性引入（JEP 446），JDK 25 正式落定（JEP 506），专为虚拟线程和结构化并发设计。它和 ThreadLocal 的根本区别是不可变——值只能在作用域内读、不能中途改，作用域退出自动失效，从机制上杜绝了“忘记 remove”和“跨请求串数据”这两类事故。
 
 ## 8. 面试与自测
 
