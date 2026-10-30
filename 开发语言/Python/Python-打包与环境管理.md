@@ -2,7 +2,7 @@
 知识点: Python 打包与环境管理
 层级: 基础
 适用版本: Python 3.x（工具用法以官方文档为准）
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Python
   - pytest
@@ -89,6 +89,46 @@ uv 是近年来主流的 Rust 编写的 Python 包与项目管理工具，一个
 - **拿 freeze 的产物当项目声明长期维护**：里面混着一堆间接依赖与本机偶然装的包，别人（或未来的自己）看不出哪些是真需要的；定期回看、给直接依赖补注释分组。
 - **多个项目共用一个 venv**：省磁盘，赔隔离；升级一个项目的依赖打坏另一个，是迟早的事。
 - **`.venv` 整个拷给另一台机器**：路径与解释器链接写死在里面，拷过去多半是坏的；搬运永远走"清单 + 重建"。
+
+## 小技巧与冷知识
+
+【小技巧】装包之前先空跑一遍：`pip install --dry-run -r requirements.txt` 只算依赖、不真装，能提前看到会装哪些包、哪些版本冲突；装完再跑 `pip check`，它会验已装包之间的依赖是否自洽。重建环境后先 `pip check` 再跑测试，依赖冲突早发现比测试跑一半报 ImportError 省事得多。
+
+【小技巧】对来源有要求时用哈希锁定：`pip install --require-hashes -r requirements.txt` 要求清单里每行都带 `--hash=sha256:...`，下载的包哈希对不上就拒绝安装，防中间人篡改。哈希可以用 `pip-compile --generate-hashes`（pip-tools）自动生成；内网可信源没必要上这套，公网拉包、或要给别人交付可复现环境时再上。
+
+【小技巧】换镜像源写进配置，别每次命令后贴 `-i`：`pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple`，或设环境变量 `PIP_INDEX_URL`，本地和 CI 用同一份配置。命令行临时加 `-i` 只适合一次性的试装，长期靠它等于把源地址散在每个人的 shell 历史里，换源时没人记得全。
+
+【小技巧】系统 Python 报 `externally-managed-environment` 时别加 `--break-system-packages` 绕过去：Debian 12、Ubuntu 23.04 之后的系统 Python 归 apt 管，pip 直接往里装包会和系统包打架，PEP 668 才加了这道锁。正确的反应是建个 venv 再装，`--break-system-packages` 是"我知道风险"的开关，不是"修好了"的开关。
+
+【小技巧】新建 venv 时顺手把 pip 升到最新：`python -m venv --upgrade-deps .venv` 会在建环境时就把 pip 和 setuptools 升到最新版；旧 pip 可能认不出新格式的 wheel、或解析新版依赖元数据失败。装包报错先看 pip 版本，比先怀疑包本身更划算，`python -m pip install -U pip` 是环境出问题时的第一步排查。
+
+【小技巧】判断当前在哪个环境看 `sys.executable`，别只看提示符：`python -c "import sys; print(sys.executable)"` 直接告诉你现在用的解释器路径，`echo $VIRTUAL_ENV` 看激活的是哪个 venv。Shell 提示符前的 `(.venv)` 可以被 `--prompt` 自定义、也可能被 IDE 隐藏，提示符说在环境里、解释器路径说不在时，以解释器路径为准。
+
+【小技巧】requirements 文件可以拆分：基础依赖放 `requirements.txt`，开发依赖放 `requirements-dev.txt`，开头用 `-r requirements.txt` 包含基础；再用 `-c constraints.txt` 统一钉间接依赖的版本上限，`-c` 只约束版本、不装新包。拆分后"生产装什么、开发多装什么"一目了然，比一个文件里混着 dev 包、还靠注释分组干净得多。
+
+【小技巧】本地开发自己的包用可编辑安装：`pip install -e .` 把项目以"指向源码目录"的方式装进环境，改代码不用重新安装，import 的就是正在写的源码。配合 pyproject 里 `[project] name` 的声明，测试和脚本都能直接 import 项目包；不发布到 PyPI 的应用型项目同样能用这招，不必等"打包发布"才用。
+
+【小技巧】开发依赖用 extras 分组，别塞进主 dependencies：pyproject 里 `[project.optional-dependencies]` 写 `dev = ["pytest", "ruff"]`，装时 `pip install ".[dev]"` 一次装齐。生产环境只装主依赖、开发环境再加 `[dev]`，同一份声明、两套安装组合；把 pytest 写进主依赖等于让生产环境也背上测试工具。
+
+【小技巧】锁文件要进版本库，`.venv` 不进：`requirements.txt` 或 `uv.lock` 提交上去，别人 clone 后 `pip install -r requirements.txt` 或 `uv sync` 就能一键重建出同样的环境。锁文件不提交，清单就只是"建议"，重建时装到哪个版本全看当天 PyPI 上有什么；进库的是"这次到底装了哪一版"的证据，不是环境目录本身。
+
+【小技巧】`uv sync` 是精确同步，会删多余的包：它按 `uv.lock` 把环境调成和锁文件完全一致，锁文件里没有的包会被删掉；只想追加、不想删包时用 `uv pip install`。刚从 pip 切到 uv 的人最容易在这里翻车——`uv sync` 之后发现之前手装的包不见了，那不是 bug，是"同步"这个词的本意。
+
+【小技巧】解释器版本也要钉，别只钉包版本：项目根目录放一个 `.python-version` 文件写 `3.12`，uv 和 pyenv 会自动按它选用解释器建环境。requirements 只管包的版本，Python 小版本一换（比如 3.11 升 3.12），某些包的 wheel、语法支持都会跟着变；包和解释器两个版本都钉死，重建才真的可复现。
+
+【小技巧】装包失败先怀疑缓存：`pip cache purge` 清掉本地 wheel 缓存，或加 `--no-cache-dir` 不用缓存重装一次。缓存里的 wheel 损坏、或源换了但缓存还留着旧包时，报错信息往往和真实原因对不上；清缓存是"装不上"排查里成本最低的一步，比换源、升级 pip 都便宜。
+
+【小技巧】升级依赖一次只升一个，升完跑测试：`pip list --outdated` 先看哪些包落后了，再一个一个 `pip install -U 包名` 升级，每升一个跑一遍测试。`pip install -U` 后面不带包名会把所有包全升上去，某个大版本一变、测试全红，根本定位不到是谁干的；升级是改动，改动就要一次只改一处。
+
+【冷知识】venv 是 PEP 405，Python 3.3 才进标准库：在此之前隔离环境靠第三方 virtualenv（2007 年就有了）；pip 也是 PEP 453（Python 3.4）靠 ensurepip 才随解释器自带。也就是说 Python 的"官方环境管理"满打满算只有十多年历史，Java 的 Maven 2004 年就发布了，Python 的包管理是后补的课。
+
+【冷知识】pyproject.toml 是两步定下来的：PEP 518（2016 年）只定了"用 pyproject.toml 这个文件放构建配置"，项目元数据（名字、版本、依赖）是 PEP 621（2020 年）才放进 `[project]` 表的。在此之前一个项目要散着 setup.py、setup.cfg、requirements.txt、MANIFEST.in 四五个文件，pyproject 是把它们收拢成一个文件的第二次尝试。
+
+【冷知识】uv 是 2024 年 2 月发布的，由 Astral 公司（ruff 的作者 Charlie Marsh 创办）用 Rust 编写：它一个二进制覆盖了建环境、装依赖、锁定、跑脚本，还能管理解释器版本本身。uv 出现之前，Python 生态是 pip、venv、pip-tools、virtualenv、pyenv 各管一摊，uv 的卖点之一就是把这几件工具收进一个命令。
+
+【冷知识】pip 的名字是个递归缩写："pip installs packages"，和 GNU 的"GNU's Not Unix"一个套路。wheel 格式则是 PEP 427（2012 年）才定下来的，在此之前分发只有源码包（sdist，tar.gz），装包时要在本机现场编译 C 扩展，没编译器就装不上；wheel 让"下载即用"成为默认，编译只在打包方做一次。
+
+【冷知识】requirements.txt 这个文件名没有任何标准规定：它只是社区约定俗成的名字，pip 本身只认 `-r` 后面给的文件名，叫它 deps.txt、prod.txt 也一样能用。真正被标准化的反而是 pyproject.toml（PEP 518/621），requirements.txt 至今仍是"大家都这么叫"的约定，不是规范。
 
 ## 面试与自测
 
