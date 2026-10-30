@@ -2,7 +2,7 @@
 知识点: 单元测试与 Mock
 层级: 基础
 适用版本: JUnit 5 / Mockito 3+ / Spring Boot 2.7.3
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Spring-Boot
   - CICD
@@ -126,6 +126,28 @@ class ApplyServiceTest {
 - 追求覆盖率数字，给每个 getter/setter 写用例，核心规则反而没测。
 - 集成测试连真实外部系统（短信、第三方接口）：慢且不稳定，外部边界一律打桩或录制回放。
 - 一个测试方法塞五个场景：失败时分不清哪条规则坏了，拆成小用例并用参数化收边界值。
+
+## 小技巧与冷知识
+
+【小技巧】一个测试类里场景一多，用 `@Nested` 分组比一堆平铺方法好读：`@Nested class 额度不足时 { ... }`、`@Nested class 额度充足时 { ... }`，每个内层类还能有自己的 `@BeforeEach`。IDE 和报告里按组展开，失败时一眼看出是哪类场景坏了；原文只讲了方法名要写清场景，分组是把场景结构直接写进代码里。
+
+【小技巧】多个断言别排队写，用 `assertAll` 一次跑完：`assertAll(() -> assertEquals(...), () -> assertTrue(...))`，第一个断言失败也不会截断后面的，失败报告里把所有不满足的断言一次列出来。排队写的断言每次只能看到第一个失败，修一个、跑一轮、再看到下一个，调同一条规则要反复跑好几遍。
+
+【小技巧】超时断言要分清两个版本：`assertTimeout` 是等方法跑完再判断有没有超时，方法本身卡死多久测试就卡多久；`assertTimeoutPreemptively` 是在另一个线程里跑，超时一到就直接判失败、不等它跑完。测“接口必须在 200ms 内返回”用后者，超时是真的超时，而不是等慢接口磨完才报数。
+
+【小技巧】`@BeforeEach` 里放的共享打桩，个别用例用不上时别删：Mockito 默认是严格打桩（strict stubs），没用到的打桩会报 `UnnecessaryStubbingException`。共享打桩改成 `lenient().when(...)` 就只对这个打桩放宽检查，别的打桩照样严格；比全局关掉严格模式好，误报只放宽一处，别处照样能揪出“写了却没用”的多余打桩。
+
+【小技巧】返回值要随入参变化时，别写一串 `thenReturn` 枚举：用 `thenAnswer(inv -> ...)`，在回调里拿 `inv.getArgument(0)` 按入参算返回值。比如按金额算手续费的 mock，`thenAnswer` 里直接写计算逻辑，入参换了返回值跟着变；`thenReturn` 只适合返回值固定的场景，枚举入参越写越长。
+
+【小技巧】测试要写临时文件，别自己拼 `/tmp` 路径再手动删：JUnit 5 的 `@TempDir` 会在每个用例前建一个干净的临时目录、用例后自动清理，`@TempDir Path tempDir` 直接注入。比手写 `Files.createTempDirectory` 省掉清理代码，也不会因为某个用例中途失败就把垃圾文件留在机器上。
+
+【小技巧】暂时跑不过的用例别注释掉、也别删：`@Disabled("原因 + 工单号")` 把它挂起，测试报告里会单独统计被禁用的用例数。注释掉的测试等于不存在，没人记得把它加回来；`@Disabled` 带上原因和工单号，之后翻报告就知道“这里还欠一个回归用例”，也和原文说的 flaky 先隔离、立单追踪是同一条路。
+
+【冷知识】JUnit 5 的编程模型叫 Jupiter（木星），而木星正是太阳系里离太阳第五颗行星：JUnit 5 由 Platform（跑测试的底座）、Jupiter（写测试的 API）、Vintage（跑老 JUnit 3/4 用例的适配器）三件套组成。名字里藏着版本号的梗——第五代 JUnit，用第五颗行星命名。
+
+【冷知识】没打桩的 mock 方法不会一律返回 null：Mockito 的默认回答是按类型给“空值”——集合返回空集合、Optional 返回 `Optional.empty()`、Stream 返回空流、数字 0、布尔 false，只有普通对象（含 String）才返回 null。所以 `mock.list()` 不用判空就能直接 `.size()`，而 `mock.getName()` 返回 null 照样会 NPE；写断言前先想清这个方法的默认返回值是什么。
+
+【冷知识】JUnit 5 的测试方法不必写成 public：`void shouldRejectWhenQuotaNotEnough()` 这样包级私有就能跑，`@Test` 方法和 `@BeforeEach` 方法都可以不用 public 修饰。JUnit 4 时代测试方法必须 public，升到 JUnit 5 后这个限制取消了；老项目升级时看到包级私有的测试别以为是写错了，这是新版的合法写法。
 
 ## 7. 面试与自测
 
