@@ -2,7 +2,7 @@
 知识点: Java-泛型与类型擦除
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-30
 关联:
   - Java
   - MyBatis-Plus
@@ -250,6 +250,18 @@ Integer i = ints.get(0);             // ClassCastException 抛在这里！
 - **JDK 5**：泛型引入；擦除实现（为兼容 1.4 字节码）。
 - **JDK 7**：菱形操作符 `<>`，`Map<String, List<String>> map = new HashMap<>();`，右侧类型由左侧推断。
 - **JDK 8**：目标类型推断增强——`List<String> list = Collections.emptyList();` 不再需要写 `Collections.<String>emptyList()`。
+
+## 面试与自测
+
+1. `new ArrayList<String>().getClass() == new ArrayList<Integer>().getClass()` 是 true 还是 false？为什么不能用 `instanceof List<String>` 区分两者？
+2. 只从集合里读数据时，通配符该用 `? extends` 还是 `? super`？只往集合里写时呢？请说出记忆口诀和 JDK 自带的例子。
+3. 框架在运行期需要知道类型参数 T 时（比如 MyBatis-Plus 的 `BaseMapper<T>` 反推实体类），靠什么办法？直接用 `getInterfaces()` 行不行？
+
+### 参考答案
+
+1. 是 true。Java 泛型只在编译期存在，编译后类型参数被擦除，运行时 `List<String>` 和 `List<Integer>` 是同一个 `Class` 对象；所以 `instanceof List<String>` 编译直接不让过，擦除是 Java 泛型与 C# 泛型最根本的区别。
+2. 只读用 `? extends`，只写用 `? super`，口诀是 PECS = Producer Extends，Consumer Super。读出来一定是 Number、可安全读，但不能 add；写进去一定安全，但读出来只知道是 Object。JDK 自己的例子：`Collections.copy(List<? super T> dest, List<? extends T> src)`。
+3. 靠读 `getGeneric*` 系列 API 里的泛型签名：`BaseMapper<T>` 是从实现类的泛型接口签名里抠出 T，用 `getGenericInterfaces()`；Gson/Jackson 的 TypeReference 则是 `getGenericSuperclass()` 可读。直接用 `getInterfaces()` / `getSuperclass()` 不行，它们只拿到擦除后的 Class。
 
 ## 关联知识
 - [Java](开发语言/Java/Java.md)：语言基础总览。

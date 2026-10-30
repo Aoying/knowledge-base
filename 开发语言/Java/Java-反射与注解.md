@@ -2,7 +2,7 @@
 知识点: Java-反射与注解
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-30
 关联:
   - Java
   - Spring-IOC与AOP
@@ -237,6 +237,18 @@ public class LogTimeRunner {
 - **JDK 8**：`Class#newInstance()` 尚可用（已不推荐）；`@Repeatable` 引入。
 - **JDK 9+**：`Class#newInstance()` 废弃，改用 `getDeclaredConstructor().newInstance()`；模块系统引入，`setAccessible` 受 `opens` 约束。
 - **JDK 16+**：强封装成为默认，反射访问 JDK 内部 API 必须显式 `--add-opens`。
+
+## 面试与自测
+
+1. 要读本类声明的 private 方法用 `getMethod` 还是 `getDeclaredMethod`？要读父类的 public 方法又用哪个？构造器有没有“继承版”之分？
+2. 框架用的注解为什么都要 `@Retention(RetentionPolicy.RUNTIME)`？编译期 APT 路线和运行期反射路线各有什么取舍？
+3. 反射调用为什么慢？框架一般用什么办法规避这个成本？
+
+### 参考答案
+
+1. 本类声明的全部成员（含 private）用 `getDeclaredField/Method/Constructor`，不含继承；本类 + 父类中 public 的成员用 `getField/Method`。构造器不存在继承，所以只有 `getDeclaredConstructor(s)` / `getConstructor(s)`，没有“继承版”之分。排查 `NoSuchMethodException` 的第一板斧就是：private 方法只能用 `getDeclaredMethod`，别用 `getMethod`。
+2. 保留级别是 SOURCE < CLASS < RUNTIME，框架用注解都是 RUNTIME 档，因为运行期反射要靠 `getAnnotation()` 读到它。编译期 APT（如 Lombok、MapStruct）在 `javac` 阶段扫描注解生成代码或报错，零运行期开销；运行期反射（如 Spring、MyBatis-Plus、Hibernate Validator）启动/运行时读取，灵活但有成本。
+3. 每次 `invoke` 都有参数装箱/拆箱、安全检查、方法查找，且反射调用阻碍 JIT 内联（JIT 看不到稳定调用目标）；冷路径下比直接调用慢 1–2 个数量级。框架的做法是“启动时反射一次、运行期缓存结果”（如 Spring 的 BeanDefinition、MP 的 TableInfo），别在循环热点里反复 `getMethod().invoke()`。
 
 ## 关联知识
 - [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)：IOC 容器与 AOP 代理是反射+注解最重的两个使用者。

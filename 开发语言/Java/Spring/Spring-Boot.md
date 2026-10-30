@@ -2,7 +2,7 @@
 知识点: Spring Boot
 层级: 进阶
 适用版本: Spring Boot 2.7.3
-更新日期: 2026-10-23
+更新日期: 2026-10-30
 关联:
   - Java
   - MyBatis-Plus
@@ -98,6 +98,18 @@ mybatis-plus:
 - **收益对得上神农这种 IO 密集型**：Boot 3.2+ 虚拟线程一键开（`spring.threads.virtual.enabled=true`），Tomcat 请求线程换虚拟线程，调 OceanBase/下游接口的等待不再占平台线程——和笔记里"虚拟线程"一节呼应。
 
 > 来源（2026-10-20 核验）：[spring-boot-4](https://www.danvega.dev/blog/spring-boot-4-is-here)；[spring-boot-3.5 EOL](https://dev.to/feezan_khattak/spring-boot-35-stopped-getting-patches-in-june-dont-migrate-to-40-4ba)；[boot-4.0.8](https://spring.io/blog/2026/08/20/spring-boot-4-0-8-available-now/)；[SimpleAsyncTaskExecutor Javadoc](https://docs.spring.io/spring/docs/5.3.24/javadoc-api/org/springframework/core/task/SimpleAsyncTaskExecutor.html)；[Flowable 7.0.0](https://www.flowable.com/blog/releases/flowable-open-source-7-0-0-release)
+
+## 面试与自测
+
+1. 自己定义的 Bean 为什么会让对应的自动配置退让？自动配置没按预期生效时，本篇推荐用什么手段排查？
+2. `@Transactional` 失效的 4 个经典场景各是什么？每个场景的解法是什么？
+3. 神农当前是 Boot 2.7.3，本篇给出的现实升级路径是什么？升级路上有哪三件硬骨头？
+
+### 参考答案
+
+1. 因为自动配置带 `@ConditionalOnMissingBean`，自己定义的 Bean 会让对应自动配置退让，这是“明明配了却没生效 / 没配却生效了”类问题的主线。排查手段是启动加 `--debug` 看 Condition Evaluation Report（哪些自动配置生效 / 没生效及原因），或看 `actuator/conditions` 端点。
+2. ① 同类自调用：`this` 直接调绕过代理，解法是注入自己 / `AopContext.currentProxy()`；② private / final 方法：代理不了，方法不是 public 同理（CGLIB 代理要求 public）；③ 异常被吞：try-catch 吃掉异常且没抛，事务以为成功，想回滚就 `throw new RuntimeException` 或 `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()`；④ checked 异常：默认只回滚 RuntimeException，受检异常要回滚加 `rollbackFor = Exception.class`。另注意：类没被 Spring 管理（自己 new 出来的对象）时注解全都不生效。
+3. 现实路径是 2.7 → 3.5（JDK 17）→ 4.1，别想一步到位；先在 3.5 上把 deprecation warning 清零（4.0 删掉了所有 3.x 标记废弃的 API）。三件硬骨头：① JDK 8→17（`--release`、反射 / 封装 API）；② `javax.*` → `jakarta.*` 全量改包名；③ 依赖对齐——Flowable 6.7.2 只能跑 Boot 2.7，上 Boot 3 必须升 Flowable 7.x，MyBatis-Plus / Druid 也要换支持 Boot 3（Jakarta）的版本，升级前逐个核对 release notes。
 
 ## 关联知识
 
