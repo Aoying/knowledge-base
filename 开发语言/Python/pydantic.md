@@ -2,7 +2,7 @@
 知识点: pydantic 数据校验
 层级: 基础
 适用版本: pydantic v2
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Python
   - Agent
@@ -105,6 +105,40 @@ class Settings(BaseSettings):
 - **在模型里写业务逻辑**：validator 里查数据库、调服务会让校验变成隐形业务层，测试和复用都痛苦；跨实体的规则放 Service 层（如矛盾检测），模型只管"形状与单实体规则"。
 - **v1/v2 混写**：v2 里 `parse_obj`、class 内部 `class Config` 都是旧写法（多半还能跑但已废弃），新代码统一 `model_validate` + `ConfigDict`。
 - **默认值可变对象**：`tags: list[str] = []` 在 pydantic 里其实是安全的（它会深拷贝默认值），但和 dataclass 的规则不一样，跨两个库写代码时容易记混——统一都写 `default_factory` 最稳。
+
+## 小技巧与冷知识
+
+【小技巧】回喂 LLM 重抽时，别直接把 `ValidationError` 的字符串拼进提示词，先调 `e.errors(include_url=False)`。默认报错里每条都带一个指向文档的 `url`，拼进提示词既占 token 又干扰模型；关掉后只剩 `loc`（出错路径）、`type`、`msg`、`input` 四个关键字段，模型一眼就能定位到是哪个字段、错在哪、原值是什么，重抽成功率更高。
+
+【小技巧】只想校验一个列表或字典、不想为它专门建一个模型时，用 `TypeAdapter`。比如 `TypeAdapter(list[EntityChange]).validate_python(raw_list)` 可以直接校验整个列表，报错路径精确到 `2.chapter` 这样的下标；它同样支持 `validate_json`，适合“LLM 一次吐回一个数组”的批量抽取场景，比先建一个只包一层列表的顶层模型省事。
+
+【小技巧】给函数入口加校验不用在函数体里手写一堆 `if`，用 `@validate_call` 装饰器。装饰后调用方的实参会按注解自动校验和转换，传错类型直接抛 `ValidationError`；它对 Agent 里“工具函数收 LLM 传来的参数”特别有用，等于把 pydantic 的守门员从模型入口延伸到了函数入口。
+
+【小技巧】需要“改一个字段、其余不变地复制一份”时，别先 `model_dump()` 再重新构造，用 `model_copy(update={...})`。它返回一个新实例，只替换你指定的字段，嵌套模型默认仍是浅拷贝；想让嵌套对象也一起深拷贝再改，就加 `deep=True`。这比手写“dump → 改 dict → 重新 validate”少一次完整校验，也不会丢掉原始实例。
+
+【小技巧】导出给外部系统时，用 `model_dump(mode="json")` 而不是默认的 `model_dump()`。默认模式会保留 Python 对象（比如 `datetime`、`UUID`、`Decimal`），直接 `json.dumps` 会报错；`mode="json"` 会先把它们转成 JSON 友好的表示（日期变 ISO 字符串等），再 `json.dumps` 就不会炸。需要同时按别名导出时，再叠加 `by_alias=True`。
+
+【小技巧】模型里有些字段只在导出时才需要、校验时并不存在，可以用 `computed_field`。比如在模型上定义一个 `@computed_field` 修饰的 `@property`，算出派生值（如 `full_name`、统计口径的汇总值），它会自动出现在 `model_dump()` 和 JSON Schema 里，但构造模型时不用传、校验时也不会要求它，适合“原始字段进、派生字段出”的场景。
+
+【小技巧】想让模型不可变、防止下游代码顺手改掉已校验的数据，在 `model_config` 里加 `ConfigDict(frozen=True)`。冻结后任何字段赋值都会抛错，实例也因此变得可哈希，可以放进 `set` 或当字典键；这对“校验完就当事实快照用、谁也不许改”的章节分析结果很合适。注意冻结是模型级的，改一个字段就要走 `model_copy(update=...)`。
+
+【小技巧】对接多形态的 LLM 输出（比如事件可能是“死亡事件”也可能是“结盟事件”，字段结构各不相同），用带判别字段的联合类型：`Field(discriminator="kind")` 配合 `Union[DeathEvent, AllianceEvent]`。pydantic 会先看 `kind` 的值再决定按哪个子模型校验，报错信息也会直接说“kind 对不上哪个分支”，比不加判别器时逐个分支试错、报错堆成一团要清晰得多。
+
+【冷知识】`ValidationError` 是 `ValueError` 的子类，所以 `except ValueError` 也能接住它。写通用异常处理时要注意顺序：如果先写了 `except ValueError`，后面专门的 `except ValidationError` 永远走不到；想区分“校验失败”和“其他值错误”，必须把 `ValidationError` 的分支写在前面。
+
+【冷知识】模型定义本身就是可 introspect 的数据：`EntityChange.model_fields` 是一个类属性字典，键是字段名，值是 `FieldInfo`，里面有注解、默认值、约束条件。写通用工具（比如自动生成字段说明表、检查哪些字段没给默认值）时可以直接读它，不用解析源码或手写映射表。
+
+【冷知识】pydantic 的 `BaseModel` 实例默认是不可哈希的，`hash(obj)` 会直接报错，根源是模型默认可变、Python 不给可变对象配默认哈希。上面提到的 `frozen=True` 不只是“防改”，它同时让实例获得哈希能力；反过来也可以理解：凡是需要把模型实例放进集合或当键的场景，先问一句“它冻结了吗”。
+
+【冷知识】`extra="allow"` 时多余字段不会丢，它们存在 `model_extra` 这个字典属性里，`model_dump()` 也会把它们带上。原文建议 LLM 场景用 `forbid` 是对的，但如果你确实想“先收下模型多给的字段、事后人工复核”，`allow` + 定期检查 `model_extra` 就是一条可行的折中路：既不丢信息，又能发现模型在偷偷加什么。
+
+【冷知识】pydantic 也有自己的 dataclass：`pydantic.dataclasses.dataclass` 装饰的 dataclass 会在构造时做校验，而标准库 `dataclasses.dataclass` 只管生成 `__init__`、不管值对不对。原文的分工是“边界用 BaseModel、内部用 dataclass”，如果某个内部结构也想顺带校验（比如配置对象），用 pydantic 的 dataclass 是个中间选项，不用把整个结构升级成 BaseModel。
+
+【冷知识】校验器里可以拿到调用方传进来的上下文：`@field_validator` 的第二个参数是 `ValidationInfo`，它的 `context` 属性就是 `model_validate(obj, context={...})` 传进去的字典。比如“同一批章节里人物名是否已出现”这种需要外部状态的校验，可以把已有人物集合放进 `context` 传进去，而不是把状态偷偷塞进全局变量或 validator 里查库。
+
+【冷知识】`Field` 的别名其实分两边：`alias` 管输入（校验时认哪个键），`serialization_alias` 管输出（`model_dump(by_alias=True)` 时用什么键）。对接外部系统时常遇到“输入是驼峰、输出也要驼峰，但内部字段是蛇形”的情况，两个别名分开设就能各管各的；只设 `alias` 时输出默认也跟着它走，容易在“导出给另一方”时踩坑。
+
+【冷知识】v2 里 `model_json_schema()` 生成的 schema 对可选字段用的是 `anyOf` 结构（比如 `str | None` 会展开成 `{"anyOf": [{"type": "string"}, {"type": "null"}]}`），而不是 v1 时代常见的单一 `type`。把 schema 直接喂给对 JSON Schema 支持有限的模型或工具时，先看一眼展开后的结构，别假设它还是你手写的那种简洁形态；必要时用 `mode="serialization"` 生成另一份更贴近导出形态的 schema 对照一下。
 
 ## 面试与自测
 

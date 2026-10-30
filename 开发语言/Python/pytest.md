@@ -2,7 +2,7 @@
 知识点: pytest 实战
 层级: 基础
 适用版本: Python 3.x
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Python
 标签:
@@ -122,6 +122,23 @@ addopts = "-q"
 - **在测试里写 sleep 等异步/等落盘**：慢且 flaky。等条件轮询要设上限，或直接把时间/IO 抽象出来 mock 掉。
 - **断言太松或太严**：只断言"不抛异常"等于没测；断言 LLM 返回的完整字符串又必然脆裂。断言落在结构和关键字段上（类型、数量、必填字段、状态迁移）。
 - **把测试当脚本随手改红不管**：红着的用例留久了就没人信 suite 了，要么修要么删要么 xfail 并注明原因。
+
+## 小技巧与冷知识
+
+- 【小技巧】`--ff`（`--failed-first`）比 `--lf` 更适合"修完再全跑"的场景：它先跑上次失败的用例，确认修好了，再按正常顺序跑其余用例；而 `--lf` 只跑失败的用例，修完后想顺手验证全量还得再跑一次。本地改完一个红用例后用 `pytest --ff -q`，一次命令完成"先验修好的、再验没改坏的"。
+- 【小技巧】`pytest --durations=10` 跑完后列出最慢的 10 个用例。慢用例往往是偷偷调了真实服务、写了 sleep、或在 fixture 里重复建表的地方；suite 越来越慢时先看这张榜，再决定把谁 mock 掉或把 fixture 作用域放大，比凭感觉优化有效。
+- 【小技巧】失败一多就用 `--tb=short`，CI 日志里只想扫失败清单时用 `--tb=line`：默认的长回溯（long）在几十个失败时刷屏，`--tb=line` 每个失败只留一行摘要，先定位"挂了哪些用例"，再对单个用例切回默认回溯细查。回溯风格是展示层面的选择，不影响用例本身的通过与否。
+- 【冷知识】`--stepwise`（`-sw`）可以在失败处断点续跑：它在第一个失败时停下，修好代码后再次运行 `pytest --stepwise`，会跳过已经通过的用例、直接从上次失败的用例继续；而 `-x` 每次都要从头跑。调试一串相互关联的失败用例时，stepwise 省掉大量重复等待。
+- 【小技巧】断言浮点数别写 `==`，用 `pytest.approx`：`assert 0.1 + 0.2 == pytest.approx(0.3)`，默认相对容差是 1e-6；它还能直接比较列表和字典，逐项按容差判定。RAG 里断言相似度分数、embedding 余弦值这类浮点结果时，approx 能避免"差 1e-16 就红"的假失败。
+- 【小技巧】可选依赖的测试文件顶部写 `pytest.importorskip("xxx")`：该库没装时整文件跳过（skip）而不是报错，CI 矩阵里"有的环境装了、有的没装"的用例就不用到处写 try/except。它只在 import 失败时跳过，库存在但版本不对时不会帮你兜底。
+- 【冷知识】pytest 的断言重写只发生在测试模块：它改写 `test_*.py` 里 `assert` 的字节码，失败时才能展开变量值；被测源码里的 `assert` 失败时只有一句普通的 AssertionError，没有变量展开。所以想看清"哪边的值不对"，断言要写在测试函数里，别指望源码里的 assert 也给出漂亮的 diff。
+- 【小技巧】`capsys` 只能抓 print，想断言日志走 `caplog`：`caplog` fixture 捕获 logging 输出，`caplog.set_level(logging.DEBUG)` 可以临时把级别调低，`caplog.text` 里按字符串断言"某分支有没有打出关键日志"。测"矛盾检测命中规则时是否记了审计日志"这类需求，用 caplog 比在 capsys 里找 print 靠谱。
+- 【小技巧】参数化 fixture 让一个用例跑多套环境：`@pytest.fixture(params=["memory", "file"])` 配合 `request.param` 取值，每个引用它的用例会按每个参数各跑一遍。测"同一段落库逻辑在内存 SQLite 和文件 SQLite 下都对"时，比复制两份用例干净，失败时用例名里自带参数值，定位也方便。
+- 【小技巧】给 parametrize 的用例起可读名字：`@pytest.mark.parametrize("text,expected", [...], ids=["空串", "纯风景"])`，失败时 `-v` 列表里一眼看出是哪组参数挂了，而不是 `test_parse_edge[text0-expected0]` 这种默认编号。参数组合一多，ids 就是失败清单的可读性。
+- 【冷知识】`--lf` 依赖项目根目录下的 `.pytest_cache`：上次失败记录存在 `.pytest_cache/v/cache/lastfailed` 里；删掉它、换目录跑、或 CI 每次全新 checkout，`--lf` 就认不出失败历史。所以 `--lf` 是本地开发的工具，在全新拉取的 CI 环境里用它等于跑全部。
+- 【小技巧】`-o` 可以临时覆盖配置而不改文件：`pytest -o addopts=""` 一次性清空 pyproject.toml 里的 addopts；`pytest -o log_cli=true` 临时打开实时日志输出。想试一个配置效果、又不想把实验性改动留在配置文件里时，用 `-o` 最干净。
+- 【小技巧】临时改环境变量用 `monkeypatch.setenv` / `monkeypatch.delenv`，别直接改 `os.environ`：monkeypatch 在用例结束时自动恢复原值，不会污染后面的用例；`monkeypatch.delenv("API_KEY", raising=False)` 还能覆盖"缺变量"这个分支。原文的 monkeypatch 换函数是同一机制在环境变量上的用法。
+- 【冷知识】`@pytest.mark.xfail(strict=True)` 会把"意外通过"变成失败：默认的 xfail 用例意外通过只报 XPASS、不影响整体通过；strict=True 时 XPASS 直接算失败，逼着修好 bug 后立刻摘掉标记。原文说的"修好后会报 XPASS 提醒你摘标记"就是这个机制，严格模式下提醒变成强制，适合"已知 bug 必须有人跟进"的团队。
 
 ## 面试与自测
 

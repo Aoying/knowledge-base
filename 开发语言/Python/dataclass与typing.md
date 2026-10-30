@@ -2,7 +2,7 @@
 知识点: dataclass 与 typing
 层级: 基础
 适用版本: Python 3.10+
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Python
   - pydantic
@@ -111,6 +111,30 @@ ch = from_dict(Chapter, {"id": 3, "title": "重逢", "junk": 1})  # 多余字段
 - **注解 ≠ 校验**：`def f(x: int)` 传字符串照样跑；想要运行时拦截只有 pydantic 或手写检查。反过来，注解写错类型（如实际返回 None 却标 `-> Chapter`）会让 IDE 的提示变成误导，比不写更糟。
 - **继承 dataclass 时的字段顺序坑**：父类带默认值的字段会把子类字段全部"传染"成必须有默认值，设计继承体系时先想清楚，或用 `kw_only=True` 化解。
 - **`field(default_factory=list)` 写成 `default=list()`**：后者是定义时求值一次的共享实例，就是要避开的那个坑本身。
+
+## 小技巧与冷知识
+
+【小技巧】给不需要参与比较或打印的字段加 `field(compare=False, repr=False)`。比如缓存用的大段文本、最后同步时间这类字段，排除了之后 `==` 只比较真正决定身份的字段，`repr()` 也不会被几百字的内容淹没，日志一下子就干净了。反过来想：默认所有字段都参与 `__eq__`，一个本不该影响相等的缓存字段被改动，就会让两个“同一条事实”的对象突然不相等。
+
+【小技巧】派生字段用 `field(init=False)` 加 `__post_init__` 来算，不要让调用方传。比如由 `title` 算出的 `slug`、由起止章节算出的 `span`，构造时只传原始字段，`__post_init__` 里统一算出来。这样构造签名保持干净，也避免调用方传了派生值却和原始字段对不上的自相矛盾。
+
+【冷知识】类级别常量必须标 `ClassVar`，否则它会变成一个字段。写 `MAX_RETRY: int = 3` 时，dataclass 会把它当成带默认值的字段收进 `__init__`；写成 `MAX_RETRY: ClassVar[int] = 3` 才会被排除在 `dataclasses.fields()` 之外。这个坑很隐蔽：类定义看着没问题，直到有人构造时发现多了一个本不该传的参数，或者 `asdict()` 里多出一项。
+
+【小技巧】只在构造时用、构造完不保存的参数用 `InitVar`。比如传一个原始字符串 `raw` 进来，在 `__post_init__` 里解析成结构化字段，解析完 `raw` 本身不留在实例上。它不会出现在 `fields()`、`asdict()` 和 `repr()` 里，实例上干干净净。适合“输入形态和存储形态不一样”的场景，比如 LLM 返回的原始文本先进来、解析后的字段留下来。
+
+【冷知识】`dataclasses.asdict()` 返回的是深拷贝，不是原对象的浅视图。它内部对非 dataclass 的值用了 `copy.deepcopy`，所以改返回的 dict 里嵌套的 list，不会反过来污染原实例。利用这一点可以放心地把 `asdict()` 的结果拿去改、拿去序列化；但也意味着对超大对象频繁调用 `asdict()` 会有拷贝开销，别把它当成零成本的“只读快照”。
+
+【冷知识】`dataclasses.replace()` 改不了 `init=False` 的字段，调用会直接报 `ValueError`。因为 `replace()` 本质是“用新参数重新走一遍 `__init__`”，而 `init=False` 的字段根本不在构造参数里。想改派生字段时要么重新构造整个对象，让 `__post_init__` 重算；要么把该字段改回 `init=True`。这个限制对 frozen 类尤其值得注意：`replace()` 本是 frozen 对象产生新版本的主力手段，派生字段却走不通这条路。
+
+【冷知识】`frozen=True` 不保证对象一定可哈希，字段里只要有一个不可哈希的类型（如 list、dict），`hash()` 就会报 `TypeError`。冻结只保证“属性绑定不能改”，不保证“字段值本身可哈希”。所以把 frozen 实例当 dict 的 key 或放进 set 之前，要确认所有字段都是可哈希类型；含 list 的字段可以先转成 tuple，或者干脆不要指望它可哈希。
+
+【小技巧】`Annotated` 可以在不改变类型的前提下给字段挂元数据，类型检查器会直接忽略附加信息。比如 `name: Annotated[str, "max_len=20"]`，静态检查时它就是 `str`，运行时用 `get_type_hints(Cls, include_extras=True)` 又能把 `"max_len=20"` 读出来。适合给字段贴“长度上限、单位、来源”这类备注，让校验逻辑或文档生成去读它，而不是另建一套并行的元数据表。
+
+【小技巧】做运行时类型内省（比如按字段类型做通用 `from_dict` 转换）时，用 `get_type_hints()` 而不要直接读 `fields()[i].type`。如果文件头写了 `from __future__ import annotations`，字段的 `.type` 只是字符串 `'int'`，拿它做 `isinstance` 判断会直接失败；而 `get_type_hints()` 会把字符串注解解析回真正的类型对象。这条在写通用序列化、校验工具时最容易踩到。
+
+【小技巧】本篇目标版本是 Python 3.10+，写泛型 dataclass 时优先用 `Generic[T]` 而不是 3.12 才引入的 `class Stack[T]:` 语法。比如 `class Box(Generic[T]): item: T` 在 3.10、3.11、3.12 上都能跑，而方括号新语法只在 3.12+ 有效。团队或部署环境版本不统一时，贪图新语法会让 3.10/3.11 的环境在 import 阶段就直接报错。
+
+【小技巧】循环引用的类型只在注解里出现时，把 import 藏进 `if TYPE_CHECKING:`，运行时不导入，静态检查照常通过。比如 A 模块的 dataclass 字段注解引用 B 模块的类，而 B 又引用 A，顶层互相 import 会报循环导入；把其中一边的 import 移到 `TYPE_CHECKING` 分支下、注解写成字符串，dataclass 本身不求值注解，构造和运行都不受影响，IDE 和 mypy 依然能解析类型。
 
 ## 面试与自测
 
