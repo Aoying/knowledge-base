@@ -2,7 +2,7 @@
 知识点: MySQL 数据库
 层级: 进阶
 适用版本: MySQL 5.7 / 8.x
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - 数据库知识点地图
   - MySQL-binlog
@@ -247,6 +247,44 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON shop.* TO 'app'@'%';  -- 按最小权限
 - SELECT *：取回无用列、覆盖索引失效、表结构变更时代码易炸，按需列出字段。
 - 钱用 FLOAT 存、时间用字符串存、枚举用中文字符串存：三类经典建模错误，分别改 DECIMAL、DATETIME、TINYINT + 字典表。
 - VARCHAR 长度按字符算不是字节：utf8mb4 下一个汉字占 3~4 字节但算 1 个字符，`VARCHAR(255)` 指 255 个字符，别按字节估算。
+
+## 小技巧与冷知识
+
+【小技巧】只看执行计划的预估不够，用 `EXPLAIN ANALYZE`（8.0.18+）看实际执行：它会真的跑一遍查询并打出每一步的实际耗时和实际行数，优化器“以为很快、实际很慢”的误判一眼就能看出来。线上排障先 `EXPLAIN` 看计划，怀疑优化器选错索引时再上 `EXPLAIN ANALYZE`，别一上来就对生产库跑它——它真的会执行那条 SQL。
+
+【小技巧】`INT(11)` 里的 11 只是显示宽度，不限制存多大的数：`INT` 存的永远是 4 字节有符号整数，范围 -21 亿到 21 亿，写 `INT(1)` 也一样能存 20 亿。8.0.17 起整数的显示宽度已被废弃，建表时别再纠结括号里的数字，该纠结的是用 INT 还是 BIGINT。
+
+【小技巧】`VARCHAR(255)` 这个 255 不是随便定的：长度小于 256 时长度前缀只占 1 个字节，超过 255 就要 2 个字节存长度，所以 255 是“单字节长度前缀能表示的最大值”。原文说“n 按实际设计，别无脑 255”是对的，补一个背景：255 本身没有性能魔法，短字段该用 32 就用 32。
+
+【小技巧】想让写入幂等，用 `INSERT ... ON DUPLICATE KEY UPDATE` 而不是“先 SELECT 再决定 INSERT 还是 UPDATE”：主键或唯一键冲突时自动走 UPDATE 分支，一条语句完成“有则改、无则插”，还少了一次往返和并发下的竞态窗口。注意它只在唯一键冲突时触发，普通列重复不会触发，别拿它当去重工具。
+
+【小技巧】`REPLACE INTO` 不是“更方便的 INSERT”，它是 DELETE 再 INSERT：先删旧行再插新行，DELETE 触发器会触发一次，自增 ID 也会重新分配，关联的外键行可能被级联影响。只想“冲突时更新几个字段”用 `ON DUPLICATE KEY UPDATE`，`REPLACE INTO` 留给“整行就是要被替换掉”的场景。
+
+【小技巧】读一致性快照和加锁读是两回事：普通 `SELECT` 读的是事务开始时的快照（不加锁），`SELECT ... FOR UPDATE` 是对读到的行加排他锁、`LOCK IN SHARE MODE`（8.0 里叫 `FOR SHARE`）是加共享锁。扣库存、转账这类“读完马上要改”的逻辑必须用 `FOR UPDATE`，只用快照读会在高并发下算出两份扣减。
+
+【小技巧】`CHECK` 约束在 5.7 里只解析、不执行，8.0.16 起才真正生效：5.7 建表写 `CHECK (amount >= 0)` 不会报错、也不会拦住负数入库，校验全靠应用层。项目还在 5.7/OceanBase 5.7 兼容模式时，别指望数据库替你拦住非法值；升到 8.0.16+ 之后它才是一道真防线。
+
+【小技巧】MySQL 8.0 里 `GROUP BY` 不再隐式排序：5.7 及之前 `GROUP BY` 会顺带按分组列排好序，8.0 取消了这个隐式行为，依赖排序结果的代码必须显式加 `ORDER BY`。升级 8.0 后“分组结果顺序变了”不是数据乱了，是隐式排序被拿掉了，查这类问题先看 SQL 里有没有漏写 ORDER BY。
+
+【小技巧】想精确区分大小写比对（如验证码、订单号），用 `utf8mb4_bin` 而不是默认的 `_ci` 排序规则：`utf8mb4_general_ci` 里 'AbC' 和 'abc' 算相等，`WHERE code = 'AbC'` 会把 'abc' 也查出来；`utf8mb4_bin` 按字节逐个比，大小写、全半角都分得清。只给需要精确比对的列单独设 `_bin`，别全库改——默认 `_ci` 对大多数业务查询更友好。
+
+【小技巧】5.7 里第一列 `TIMESTAMP` 会悄悄带上默认值和自动更新：`DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` 是 5.7 的隐式行为，建表时没写也会有；8.0 默认 `explicit_defaults_for_timestamp=ON`，不再自动加。跨版本迁移时“更新时间怎么不自动变了”先查这个变量，而不是怀疑业务代码漏了赋值。
+
+【小技巧】备份 InnoDB 表用 `mysqldump --single-transaction`：它在一次事务里导出一致快照，导出期间不锁表，业务照常读写。别对 InnoDB 表用 `--lock-tables`，那会把读也堵住；`--single-transaction` 只对 InnoDB 有效，混了 MyISAM 表的部分还是会被锁，导出前先确认引擎。
+
+【小技巧】找“谁在拖慢库”先看 `SHOW PROCESSLIST` 再看慢日志：`SHOW PROCESSLIST` 能直接看到当前每个连接在跑什么 SQL、跑了多久、卡在哪个状态（如 `Sending data`、`Waiting for table metadata lock`），慢日志只记录已经跑完的。长事务、DDL 锁表这类正在发生的故障，PROCESSLIST 比日志快半拍。
+
+【小技巧】`innodb_buffer_pool_size` 是最值得调的一个参数，专用数据库服务器上官方建议设到物理内存的 70%~80%：缓冲池是 InnoDB 的数据和索引缓存，太小了热点数据反复从磁盘读，太大又会和系统其他内存抢。改完要重启才生效，调之前先看 `SHOW STATUS LIKE 'Innodb_buffer_pool_reads'` 的磁盘读占比，确认真是缓冲池不够再动。
+
+【冷知识】MySQL 的名字来自创始人 Monty Widenius 的大女儿 My，MariaDB 则来自小女儿 Maria：父女俩各占一个数据库的名字。MySQL 被 Sun 收购、再被 Oracle 收购后，Monty 另起炉灶做的 MariaDB 用了二女儿的名字，这段家族史也是 MySQL 和 MariaDB 分叉的起点。
+
+【冷知识】自增计数器在 8.0 之前是存在内存里的，重启会回退：5.7 里重启 MySQL 后自增计数器会重置为 `MAX(id)+1`，删掉的最大 ID 会被重新用上；8.0 把计数器持久化到 redo log，重启后不再回退。原文说“自增不保证连续”在两个版本都成立，但 8.0 之后“重启复用已删 ID”这个坑已经没了。
+
+【冷知识】`information_schema` 里没有一张真表：它全是内存里的视图，每次查询都是现场从各存储引擎收集元数据拼出来的。`SELECT * FROM information_schema.tables` 慢不是磁盘慢，是它在实时统计；查库表规模、找大表时直接查它没问题，但别在高频业务 SQL 里引用它。
+
+【冷知识】MySQL 里也有 `DUAL` 这张虚拟表：`SELECT 1`、`SELECT NOW()` 这类不查任何表的语句，完整写法是 `SELECT 1 FROM DUAL`，DUAL 只是一行一列的占位表。从 Oracle 迁移过来的 SQL 里见到 `FROM DUAL` 不用删，MySQL 认它；自己写 SQL 时省略就行。
+
+【冷知识】InnoDB 不是 MySQL 原生的引擎：它来自芬兰 Innobase 公司，2001 年左右被集成进 MySQL，2005 年 Innobase 被 Oracle 收购。MySQL 最早的默认引擎是 MyISAM（由 ISAM 演变而来），直到 5.5 才把默认引擎换成 InnoDB——“MySQL=事务+行锁”这个印象，其实是 InnoDB 后来带来的。
 
 ## 面试与自测
 

@@ -2,7 +2,7 @@
 知识点: SQL基础与窗口函数
 层级: 基础
 适用版本: MySQL 8.0+
-更新日期: 2026-10-27
+更新日期: 2026-10-31
 关联:
   - MySQL-数据库
   - MySQL-索引与执行计划
@@ -354,6 +354,42 @@ FROM / JOIN → ON → WHERE → GROUP BY → HAVING → SELECT → DISTINCT →
 8. **LIKE 前导 `%` 走不了索引**：`LIKE '张%'` 可走索引，`LIKE '%张'` 不行；要全文检索需求用全文索引或 ES，别硬拼 LIKE。
 9. **UPDATE / DELETE 忘 WHERE**：见第 2 节，先 SELECT 确认行数再执行；生产删改优先逻辑删除。
 10. **把“能跑”当成“写对”**：小数据量下错的 SQL 也能跑出看似正确的结果（排序不稳定、NULL 判定、帧语义），上线前用边界数据（NULL、并列值、空组、单行组）各测一遍。
+
+## 小技巧与冷知识
+
+【小技巧】派生表（FROM 里的子查询）必须起别名，否则直接报错：MySQL 要求每个派生表都有自己的别名，报错是 1248 "Every derived table must have its own alias"。原文第 5 节的表子查询示例里 `) t` 就是这个别名，删掉它语句立刻跑不起来；CTE 反而不用每次起别名，这是 CTE 比派生表省事的一点。
+
+【小技巧】想取“每组最后一行”的值时，`LAST_VALUE` 默认帧会坑你：不写帧子句时默认帧是到当前行，`LAST_VALUE(amount) OVER (PARTITION BY user_id ORDER BY create_time)` 返回的其实是当前行的 amount，不是组内最后一行。要显式写 `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING` 把帧扩到整组，`LAST_VALUE` 才真正拿到最后一行。`FIRST_VALUE` 不受这个坑影响，因为它取的是帧的第一行。
+
+【小技巧】同一个 SELECT 里多个窗口函数共用分组时，用 `WINDOW` 子句只写一次定义：`SELECT ROW_NUMBER() OVER w, RANK() OVER w FROM t_order WINDOW w AS (PARTITION BY user_id ORDER BY amount DESC)`。窗口定义改了只改一处，多个函数也不会因为各写一份而悄悄写岔；MySQL 8.0 支持这种写法。
+
+【小技巧】分页查询的 `ORDER BY` 列如果不唯一，翻页会丢行或重复：`ORDER BY amount DESC LIMIT 20, 20` 里 amount 有并列值时，同一批并列行在两页之间可能被分到不同页，也可能两次都出现。稳妥做法是在排序末尾加唯一键做 tiebreaker，比如 `ORDER BY amount DESC, id DESC`，分页边界就固定了。
+
+【小技巧】NULL 在 MySQL 排序里被当成最小值：`ORDER BY amount ASC` 时 NULL 排最前面，`DESC` 时排最后面。想让 NULL 固定出现在末尾，用 `ORDER BY amount IS NULL, amount ASC`；想让它固定在最前面则反过来写。写“按金额排序、空值沉底”时别靠默认行为，显式写出来才稳。
+
+【小技巧】判“两个值相等、NULL 也算相等”用 `<=>`（NULL 安全等于）：`NULL <=> NULL` 返回 1，而 `NULL = NULL` 返回 UNKNOWN。写 JOIN 条件或去重逻辑时，字段可能为 NULL 又想把 NULL 当成同一类，用 `<=>` 一行搞定，不用再写 `a = b OR (a IS NULL AND b IS NULL)`。
+
+【小技巧】`SELECT DISTINCT a, b` 去重的是 `(a, b)` 组合，不是单列：它去掉的是两列完全相同的行，a 单独重复、b 不同时照样保留。只想对某一列去重时用 `GROUP BY a` 或 `COUNT(DISTINCT a)`，别指望 DISTINCT 只盯住第一列。
+
+【小技巧】`GROUP_CONCAT` 拼分组内字符串时留意默认长度上限：`group_concat_max_len` 默认是 1024，拼出来的字符串超过这个长度会被悄悄截断，不报错。拼订单商品名、标签列表这类字段时，先 `SET SESSION group_concat_max_len = 100000;` 再跑，否则截断了都不知道。
+
+【小技巧】CTE 可以强制物化或强制合并：MySQL 8.0 支持在 CTE 定义后写 `AS MATERIALIZED` 或 `AS NOT MATERIALIZED`。被多次引用的 CTE 写成 MATERIALIZED 只算一次；只引用一次、希望优化器把它合并进主查询时写 NOT MATERIALIZED。默认让优化器自己选，大多数场景不用干预，性能分析时再显式指定。
+
+【小技巧】`CASE WHEN` 按顺序匹配、第一个命中的分支胜出：写多档位判断时把最窄的条件放前面，`WHEN amount >= 1000 THEN '大' WHEN amount >= 100 THEN '中' ELSE '小'`；顺序写反了（先写 `>= 100`）大额订单会先落进“中”档。分支里没写 ELSE 时，不匹配的行返回 NULL，不是报错。
+
+【小技巧】聚合函数会忽略 NULL，但全是 NULL 时结果也是 NULL：`SUM(amount)` 会跳过 NULL 行求和，`AVG` 同理；如果一组里所有值都是 NULL，`SUM` 返回 NULL 而不是 0。下游拿这个结果再算占比会一路变 NULL，记得包一层 `COALESCE(SUM(amount), 0)`。
+
+【小技巧】`ROW_NUMBER() OVER ()` 不写 `ORDER BY` 也能跑，但行号顺序不保证：排名函数（RANK、DENSE_RANK）必须写 ORDER BY，没写会报错；ROW_NUMBER 不强制，但没排序依据的行号每次跑都可能不一样。想“给每行随便编个号”时可以这样写，别把它当成稳定排序用。
+
+【冷知识】MySQL 8.0 之前 `GROUP BY` 会隐式排序，8.0 取消了：5.7 及之前，`GROUP BY status` 的结果默认按 status 排好序返回；8.0 起不再保证这个顺序，想要有序必须显式写 `ORDER BY`。老代码里靠 GROUP BY 顺带排序的写法，升级 8.0 后结果顺序会变，这是升级后最容易踩的静默变化之一。
+
+【冷知识】窗口函数来自 SQL:2003 标准，MySQL 直到 8.0（2018 年）才支持：之前想实现“分组取 Top N”“累计求和”，只能用用户变量 `@rownum := @rownum + 1` 这种 trick 模拟，又难读又容易错。读 8.0 之前的老代码时看到 `@变量` 模拟排名的写法，别以为是某种高级技巧，那只是窗口函数出现之前的权宜之计。
+
+【冷知识】标准 SQL 里判断“NULL 也算不同”有 `IS DISTINCT FROM`，MySQL 不支持它：标准写法 `a IS DISTINCT FROM b` 在 NULL 和非 NULL 之间返回 true，MySQL 里没有这个运算符，对应写法是 `NOT (a <=> b)`。跨库抄 SQL 时见到 `IS DISTINCT FROM`，搬到 MySQL 要先翻译，别直接粘贴。
+
+【冷知识】`LIMIT` 是 MySQL 的方言，不是标准 SQL：标准 SQL 的分页写法是 `OFFSET 20 ROWS FETCH FIRST 20 ROWS ONLY`（Oracle、PostgreSQL、SQL Server 各有自己的方言：SQL Server 用 `TOP`）。所以 `LIMIT 20, 20` 这种写法换到别的数据库要重写，原文第 7 节说的“执行顺序”才是跨库通用的部分，分页语法本身不是。
+
+【冷知识】SQL 的名字原本是 SEQUEL：1970 年代 IBM System R 项目里，它叫 SEQUEL（Structured English Query Language），后来因为商标问题改成 SQL。两种读音“sequel”和“S-Q-L”至今都在用，MySQL 官方读法是“My-S-Q-L”，和 SQL 的读音是两回事。
 
 ## 面试与自测
 
