@@ -2,7 +2,7 @@
 知识点: Set集合基础
 层级: 基础
 适用版本: Java 8+
-更新日期: 2026-10-25
+更新日期: 2026-10-31
 关联:
   - HashMap
   - TreeMap与红黑树
@@ -82,6 +82,38 @@
 - `TreeSet` 比较与相等不一致坑：`compareTo` 只比了年龄、`equals` 比了全部字段时，两个同年龄不同人会被 `TreeSet` 当成同一个而去重。修法是比较逻辑与相等逻辑用同一组字段。
 - `Set.of` 的两个雷：元素重复直接抛异常（不是静默去重）、元素为 `null` 抛 `NullPointerException`，构造常量集合前先保证输入干净。
 - 并发坑：普通 `Set` 多线程读写必须换并发实现或外部加锁；`Collections.synchronizedSet` 只保证单操作安全，遍历仍需手动 `synchronized (set)` 包住整个循环。
+
+## 小技巧与冷知识
+
+【小技巧】`TreeSet` 的 `subSet/headSet/tailSet` 返回的是“活视图”，不是拷贝：对子集视图增删元素会直接改原集合，反过来原集合在视图范围内的改动也会在视图里看见。拿子集做区间统计、批量删除时很顺手，但别把它当快照用——想定格一份区间数据，先 `new TreeSet<>(set.subSet(...))` 拷一份；遍历视图时原集合在范围外改动同样可能触发 fail-fast。
+
+【小技巧】想倒序遍历 `TreeSet` 别先拷成 List 再倒排，直接用 `descendingSet()` 或 `descendingIterator()`：`descendingSet()` 返回的仍是活视图，倒序遍历零拷贝；`descendingIterator()` 一次倒序走完就够。排行榜“取后 N 名”这类需求，`set.descendingSet().stream().limit(n)` 一行搞定，比先转 List 再 `Collections.reverse` 少一次全量拷贝。
+
+【小技巧】`LinkedHashSet` 里重复 `add` 一个已存在的元素，不会把它挪到队尾：它是插入顺序，不是访问顺序——已存在的元素 `add` 返回 `false`、位置纹丝不动。想“最近用过的排最后”得用访问顺序的 `LinkedHashMap`，或者先 `remove` 再 `add`；指望重复 `add` 刷新顺序，淘汰逻辑会悄悄算错。
+
+【小技巧】遍历中删元素用迭代器的 `remove()` 或 `removeIf`，别在增强 for 里调 `set.remove()`：增强 for 内部就是迭代器，循环体里直接删会改 `modCount`、下一次 `hasNext` 抛 `ConcurrentModificationException`。批量按条件删直接用 `removeIf(条件)`，它内部一次遍历完成，比手写迭代器循环更短；想“删一批、留一批”时 `retainAll` 同样是一次原地操作。
+
+【小技巧】元素类型优先用 record 或不可变类，别拿可变 POJO 当 Set 元素：record 会按全部组件自动生成一致的 `equals/hashCode`，字段全是 final，天然满足“参与哈希的字段不可变”这条规矩。手写 POJO 时 `equals/hashCode` 容易只写一半字段、或漏掉一个字段；用 record 或 Lombok 的 `@Value`，去重语义由编译器兜底，而不是靠每次 code review 人肉检查。
+
+【小技巧】`Set.of` 和 `Collections.unmodifiableSet` 不是一回事：`Set.of` 是彻底不可变的独立拷贝，元素不能为 `null`、不能重复；`unmodifiableSet` 只是给原集合包一层“只读壳”，原集合改了，透过壳读到的内容也会变。常量集合用 `Set.of`，想“对外只读、对内可改”才用 `unmodifiableSet`；把后者当常量用，内部一改就从外部漏出去。
+
+【小技巧】`EnumSet` 还有 `range` 和 `complementOf` 两个少用的工厂：`EnumSet.range(周一, 周五)` 一行取连续一段枚举，`EnumSet.complementOf(工作日)` 直接取补集，位运算在内部完成。权限位、星期、状态机这种“枚举子集”场景，别手写循环一个个 `add`，工厂方法本身就是按位向量设计的入口。
+
+【小技巧】`CopyOnWriteArraySet` 的 `add` 是 O(n)，别拿它当高频判重表：它的 `add` 内部先线性扫描整个数组确认不存在再拷贝写入，元素一多、每次 `add` 都是一次全表扫描加一次全表拷贝。读多写极少的小监听器集合才适合它；判重频率高、数据量上千时，`ConcurrentHashMap.newKeySet()` 才是 O(1) 的选择。
+
+【小技巧】流式去重想保序用 `distinct()`，别先 `collect(toSet())` 再排序：有序流的 `distinct()` 会保留元素首次出现的顺序，内部按插入顺序去重，效果等同 `new LinkedHashSet<>(list)`。无序流或并行流的 `distinct()` 不保证顺序；顺序有要求时先确认流是有序的，或者显式用 `LinkedHashSet` 收尾，别把顺序寄托在 `HashSet` 的遍历上。
+
+【小技巧】`HashSet` 有初始容量构造器，大集合去重前先估规模：注意 `new HashSet<>(n)` 里的 n 是初始桶容量，不是“期望元素数”——扩容阈值是容量 × 加载因子 0.75，传 10000 只装得下 7500 个元素不扩容；要装 N 个元素不触发扩容，应传 `(int)(N / 0.75f) + 1`。已知要装 10 万个 ID 时按这个公式给够容量，避免装到一半反复扩容重哈希；估不准也别乱给一个极大值，桶数组本身占内存，容量和元素量要成比例。
+
+【小技巧】`TreeSet` 里 `null` 能不能放，看比较器而不是看 Set：无比较器时 `add(null)` 直接抛 `NullPointerException`，因为自然排序没法比较 `null`；传了 `Comparator.nullsFirst(...)` 或 `nullsLast(...)` 的比较器，`null` 就能正常入队。判空逻辑别写在 `add` 之前，先确认比较器对 `null` 的态度，`null` 在 `TreeSet` 里是“比较器说了算”，不是“Set 说了算”。
+
+【小技巧】需要“元素个数”而不是“去重”时，别用 Set 充数：Set 会静默丢掉重复元素，统计词频、计数出现次数时用它等于主动丢数据。计次用 `Map<元素, Integer>` 或 `merge(key, 1, Integer::sum)`，多重集语义用 Guava 的 `Multiset`；Set 只回答“在不在”，不回答“有几个”，拿它计数是语义错配。
+
+【冷知识】`Set.of` 的遍历顺序不保证，而且同一份输入在不同次运行里顺序可能不同：JDK 文档只说迭代顺序未指定，实现里用了每次启动随机的盐值打乱顺序。所以别拿 `Set.of(a, b, c)` 的打印顺序写断言，也别指望它和 `HashSet` 的顺序一致——不可变集合的顺序是“未定义”，不是“插入顺序”也不是“哈希顺序”，测试里按顺序比较 `Set.of` 的元素是注定会 flaky 的写法。
+
+【冷知识】`Set` 接口是 JDK 1.2（1998 年）随集合框架一起进 JDK 的：Java 1.0/1.1 时代只有 `Vector`、`Hashtable` 这些遗留类，没有统一的集合接口；JDK 1.2 由 Joshua Bloch 主导的集合框架一次性带来了 `Collection`、`Set`、`List`、`Map` 和 `HashSet`、`TreeSet` 等实现。`EnumSet`、`CopyOnWriteArraySet`、`Set.of` 都是后来才补上的——Set 的核心语义二十多年没变，变的是实现和构造方式。
+
+【冷知识】`HashSet` 只是 `HashMap` 的一层薄壳，`TreeSet` 也只是 `TreeMap` 的薄壳：`HashSet` 内部就是一个 `HashMap`，元素当 key、value 是同一个固定的占位对象；`TreeSet` 内部就是一个 `TreeMap`，排序、范围操作全是 `NavigableMap` 的能力透传。这也是为什么 `HashSet` 的遍历顺序、扩容行为和 `HashMap` 一模一样——理解了 `HashMap`，`HashSet` 就只剩“value 被藏起来了”这一个差别。
 
 ## 6. 面试与自测
 

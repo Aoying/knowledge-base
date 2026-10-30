@@ -2,7 +2,7 @@
 知识点: TreeMap与红黑树
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - HashMap
   - LinkedHashMap与LRU
@@ -113,6 +113,36 @@ m.put("cd", 2);   // 比较结果 0，被当成同一 key，覆盖为 2，且 ke
 ## 9. 版本差异
 
 - `NavigableMap` 的 floor/ceiling/poll 等方法自 JDK 6 引入后稳定；JDK 8 起可配合函数式 API 使用，无结构变化。
+
+## 小技巧与冷知识
+
+【小技巧】多级排序用 `Comparator.comparing(...).thenComparing(...)` 链起来，别只比一个字段：只比高位字段（比如只比分数）时，分数相同的不同 key 比较结果是 0，会被当成同一个 key 覆盖掉。链式比较器先比主字段、再比次字段（分数相同比学号），比较结果为 0 才真正意味着“同一个 key”；比较器写几级，取决于“几个字段合起来才能唯一区分一个 key”。
+
+【小技巧】比较浮点数别用减法，用 `Double.compare`：`a - b` 在 double 上会丢精度、还可能溢出成无穷大，NaN 参与减法结果还是 NaN，比较直接乱掉。`Double.compare` 对 NaN 有明确定义——NaN 比任何数都大、两个 NaN 视为相等（比较结果为 0，即同一 key）；比较器里遇到浮点字段，先问一句“NaN 该排哪”，别让它悄悄混进树里。
+
+【小技巧】`floorKey` / `ceilingKey` 查不到时返回 null，不是抛异常：按分值查档位、按时间查最近一次配置时，查不到就是“没有更小/更大的 key”，返回 null 是正常结果。拿到返回值先判 null 再用，别直接解包或调方法；“找不到”在导航方法里是返回值语义，不像 `firstKey` 那样抛异常，两类方法的空处理方式不一样。
+
+【小技巧】取 Top N 别全表排序，用 `descendingMap` 迭代取前 N 个：排行榜取前 10 名时，`map.descendingMap().entrySet()` 从最大往下走，数够 10 个就停，复杂度是 O(N log n) 级别而不是全表遍历加排序。反过来从最小取前 N 个直接正序迭代就行；“取一端的前几名”是 TreeMap 的主场，全表遍历过滤是把它当 HashMap 用。
+
+【小技巧】`subMap(from, to)` 默认左闭右开，右端点想含进来要用四参数版：`subMap(10, 25)` 取的是 [10, 25)，25 本身不在区间里；想含 25 得写 `subMap(10, true, 25, true)`。区间边界含不含是范围查询最常见的差一错误，写视图时先把四个布尔参数想清楚——`headMap(to, true)`、`tailMap(from, false)` 同理，别靠“试一次看结果”定边界。
+
+【小技巧】遍历 TreeMap 时别在循环里调 `map.put` / `remove`，要用迭代器的 `remove()`：增强 for 内部就是迭代器，循环体里直接改 map 会触发 fail-fast 抛 `ConcurrentModificationException`，视图遍历也一样。需要边遍历边删时显式拿 `Iterator`、调 `it.remove()`；需要边遍历边加时先收集到临时集合，遍历结束再统一 put——“遍历中改结构”是所有集合的通病，TreeMap 也不例外。
+
+【小技巧】自定义 key 的 `compareTo` 要和 `equals` 保持一致，且比较字段要不可变：比较结果为 0 但 `equals` 为 false 时，`containsKey` 和 `containsValue` 会给出互相矛盾的答案，序列化后重建的 map 也可能“丢”数据。比较字段用 `final` 修饰、put 之后不再改；字段一改，节点在树里的位置就错了，get 按新值找旧节点必然失败——这条和原文比较器坑是同一根子，落点在“字段本身就不能变”。
+
+【小技巧】想支持 null key 时用 `Comparator.nullsFirst` / `nullsLast` 包装：自然顺序下 null key 无法比较直接抛 NPE，但自定义比较器可以显式处理 null——`new TreeMap<>(Comparator.nullsFirst(Comparator.naturalOrder()))` 让 null 排在最前，`nullsLast` 让它排最后。null 的位置是比较器说了算，不是“放不放得进”的问题；不包装就别放 null，别等线上 NPE 再想起这条。
+
+【小技巧】`descendingMap().descendingMap()` 回到的是原 map，不用拷全表建逆序副本：`descendingMap` 返回的是逆序活视图，对它再调一次 `descendingMap`，拿到的就是原顺序的视图本身。想在“正序处理”和“逆序处理”之间来回切时，直接在两个视图间切换；新建一个 `new TreeMap<>(Comparator.reverseOrder())` 再 putAll 全表，是白白多一次 O(n log n) 的拷贝。
+
+【小技巧】多线程下用 TreeMap 要么包 `Collections.synchronizedMap`、要么换 `ConcurrentSkipListMap`：`synchronizedMap` 只锁单个方法调用，遍历时仍需手动 `synchronized (map)` 包住整个循环，否则遍历中途被改照样抛异常。读多写少且要范围查询的有序并发场景，直接用跳表实现的 `ConcurrentSkipListMap`，它和 TreeMap 一样实现 `NavigableMap`，导航方法基本能平替。
+
+【小技巧】空 map 上调 `firstKey` / `lastKey` 抛 `NoSuchElementException`，先判空或用 `firstEntry`：`firstKey` 在没有元素时没有“返回 null”这个选项，只能抛异常；`firstEntry` / `lastEntry` 在空 map 上返回 null。取两端元素前要么先 `isEmpty()`，要么用返回 null 的 Entry 版——“取不到”在 TreeMap 里有抛异常和返回 null 两种风格，用错了就是一次不必要的崩溃。
+
+【冷知识】红黑树最早不叫红黑树：Rudolf Bayer 在 1972 年发明时叫它“对称二叉 B 树”（symmetric binary B-tree），Leonidas Guibas 和 Robert Sedgewick 在 1978 年的论文里把它改名成 red-black tree，红黑只是给节点涂的两种颜色，名字本身没有更深的含义。
+
+【冷知识】`TreeSet` 内部就是一个 `TreeMap`：和 `HashSet` 内部包一个 `HashMap` 一模一样，`TreeSet` 的每个元素在内部 map 里对应一个 value 为固定占位对象 `PRESENT` 的键值对。理解了这层关系就知道 `TreeSet` 的排序、范围查询、比较器坑和 `TreeMap` 是同一套——它只是把 value 藏起来的 TreeMap。
+
+【冷知识】Linux 内核的完全公平调度器（CFS）也用红黑树：内核按每个进程的虚拟运行时间（vruntime）把可运行进程排进一棵红黑树，调度时取最左边的节点（vruntime 最小者）运行。红黑树在这里的价值和 TreeMap 一样——有序、增删查 O(log n)、不需要严格平衡；操作系统调度器和 Java 集合用的是同一种数据结构。
 
 ## 10. 面试与自测
 
