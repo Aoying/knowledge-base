@@ -2,7 +2,7 @@
 知识点: SQLAlchemy
 层级: 进阶
 适用版本: SQLAlchemy 2.x
-更新日期: 2026-10-23
+更新日期: 2026-10-30
 关联:
   - Python
   - pydantic
@@ -126,6 +126,18 @@ session.execute(text("SELECT * FROM entity WHERE name = :name"), {"name": name})
 - **循环里逐个 commit**：性能差且破坏原子性；批量落库一次事务收口。
 - **ORM 对象当 DTO 跨层乱传**：出了 Session 作用域再访问懒加载属性就炸；服务层出口转 dict / dataclass 再传。
 - **cascade 删除图省事**：状态历史、快照大多只追加不删除，cascade 误配会删掉一片历史且不可恢复；删除策略按表逐个定，默认不配。
+
+## 面试与自测
+
+1. 遍历 50 个人物各取 states 为什么会变成 1 + 50 条 SQL？怎么改？
+2. flush 和 commit 有什么区别？什么时候需要手动 flush？
+3. Session 已关闭后，再访问提交过的对象属性为什么会抛 DetachedInstanceError？怎么避？
+
+### 参考答案
+
+1. 因为 relationship 默认懒加载：访问 entity.states 时才单独发一条查询，遍历 50 个人物就是 1 + 50 条，这就是经典 N+1。批量场景改预加载，如 .options(selectinload(Entity.states))，用一条额外 IN 查询把集合批量带出；joinedload 是 JOIN 一次带出，适合多对一/一对一，一对多会行膨胀，别滥用。排查手段是开 echo=True 数 SQL 条数，N+1 是一排同构 SQL；raiseload 可让懒加载访问直接报错，排查期好用。
+2. flush 只是把变更发到数据库（拿到自增主键、触发约束检查）但未提交，commit 才落定。先拿 id 再建关联时手动 flush()，别为了拿 id 提前 commit 把业务动作拆成两个事务；批量落库也要一次事务收口，不能循环里逐个 commit。
+3. 因为默认 expire_on_commit=True，提交后对象属性过期，下次访问触发懒加载刷新，而 Session 已关闭就抛 DetachedInstanceError。避法是显式设置 expire_on_commit=False（代价是对象可能是旧快照），或按第 8 节的做法：服务层出口转 dict / dataclass 再传，不要把 ORM 对象当 DTO 跨层乱传。
 
 ## 9. 关联知识
 
