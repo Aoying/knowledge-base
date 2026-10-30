@@ -2,7 +2,7 @@
 知识点: Docker
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - 工程实践知识点地图
   - Nginx
@@ -287,6 +287,28 @@ docker rmi myapp:1.0               # 删镜像；还有容器在用它时删不�
 - **在容器里改了文件当修复**：`docker exec` 进去改配置当时有效，容器重建后改动消失。正解是改 Dockerfile 或挂载的配置文件后重建。
 - **清理命令乱用**：`docker system prune -a` 会删掉所有未被容器使用的镜像和缓存，机器上其他项目的镜像也会没，下次用要重新拉。执行前先用 `docker system df` 看清要清什么，只清确定不要的。
 - **分不清删的是镜像还是容器**：`rm` 删容器、`rmi` 删镜像，敲混了要么报不存在，要么删错对象。删之前分别用 `docker ps -a` 和 `docker images` 各看一眼当前列表。
+
+## 小技巧与冷知识
+
+【小技巧】进容器排障用 `docker exec`，别用 `docker attach`：attach 是连到容器的 1 号进程上，看日志可以，但按 Ctrl-C 会把 SIGINT 发给主进程、容器直接停掉；exec 是在容器里另开一个新 shell，退出只关自己的 shell，容器照常跑。原文只写了 `docker exec -it <容器> bash`，记住“attach 是接管主进程、exec 是另开会话”，排障时就不会误杀容器。
+
+【小技巧】日志只看最近一段，用 `--since` 划时间窗：`docker logs --since 1h <容器>` 只看近 1 小时的日志，`--since 2026-10-31T00:00:00 --until 2026-10-31T01:00:00` 能框出故障窗口。原文的 `--tail 100` 是按行数截，--since 是按时间截；半夜出问题要复盘时，时间窗比行数更准，配合 `-f` 还能边跟边看。
+
+【小技巧】镜像不知道哪一层变胖了，用 `docker history`：它按层列出每条指令和这一层占用的大小，某次 COPY 打进几百 MB 大文件、某层装了编译工具没删，一眼就能定位。原文只讲了多阶段构建能压体积，history 是“压完之后验证到底压在哪一层”的工具，镜像瘦身前先跑它再动手。
+
+【小技巧】多阶段构建里只想调试构建阶段，用 `--target`：`docker build --target build -t myapp:build .` 只构建到名为 build 的那个阶段就停，不走到运行阶段。构建阶段装了 Maven、源码都在镜像里，`docker run -it myapp:build bash` 进去能直接看编译产物、跑 mvn 命令复现构建失败，比在完整构建里猜哪一步出错快得多。
+
+【小技巧】构建时反复下载依赖慢，挂 BuildKit 缓存：Dockerfile 开头写 `# syntax=docker/dockerfile:1`，再写 `RUN --mount=type=cache,target=/root/.m2 mvn package -DskipTests`，Maven 仓库会被缓存起来，下次构建直接复用，不用重新下载。原文的“先 COPY pom.xml 再下依赖”是利用层缓存，这招是更进一步——改了 pom 也只下载新增的依赖，缓存不随层失效一起丢。
+
+【小技巧】端口映射默认绑在所有网卡上，本地调试只想本机访问就写死 127.0.0.1：`-p 127.0.0.1:6379:6379` 只监听本机回环地址，局域网其他机器连不上。原文的 `-p 6379:6379` 是 `0.0.0.0:6379` 的简写，等于向整个局域网敞开；本机跑的 Redis、MySQL 没设密码时，这一行就是一道防线。
+
+【小技巧】Java 容器里出现僵尸进程，用 `--init`：容器里 1 号进程是 Java 时，它不会像 init 系统那样回收子进程，子进程退出后变僵尸、越积越多。`docker run --init` 会在容器里塞一个轻量 init（tini）当 1 号进程，专门负责回收孤儿进程；compose 里对应 `init: true`，一行配置解决，不用改代码。
+
+【小技巧】非 root 镜像进不去排障时，用 `-u root` 临时提权：`docker exec -u root -it <容器> bash`，以 root 身份另开一个 shell。原文教了 Dockerfile 里建 app 用户、USER app 跑服务，这招是配套的——平时跑服务是非 root，排障时临时用 root 进去看文件权限、装个调试工具，退出后容器还是按原用户跑，不用改镜像。
+
+【冷知识】Docker 最初是基于 LXC 的：2013 年 3 月，Solomon Hykes 在 dotCloud 内部把 Docker 开源，最早版本就是给 LXC 包了一层更友好的接口，后来才换成自研的 libcontainer。名字 Docker 来自英文 dock worker（码头工人），吉祥物那条驮着集装箱的鲸鱼叫 Moby Dock；容器、镜像、集装箱的比喻，都是从码头装卸那套行话里来的。
+
+【冷知识】`docker compose config` 能先算后跑：它会把 compose 文件里的变量替换、多个 compose 文件合并、默认值填充全部算出来，打印成最终生效的完整配置。CI 里跑 `docker compose config -q` 只做校验不打印，文件写错了在提交阶段就拦住；本地调试 `${TAG:-latest}` 这类变量到底展开成什么，先跑 config 看一眼，比 up 起来再查容器实际镜像快。
 
 ## 面试与自测
 
