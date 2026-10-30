@@ -2,7 +2,7 @@
 知识点: JVM 类加载
 层级: 进阶
 适用版本: JDK 8+（涉及 JDK9 模块化变化时注明）
-更新日期: 2026-10-22
+更新日期: 2026-10-31
 关联:
   - Java
   - JVM-内存模型
@@ -229,6 +229,28 @@ java.lang.ClassCastException: com.example.User cannot be cast to com.example.Use
 
 - JDK9 后三层加载器仍在，但 Bootstrap 加载部分平台模块，Platform 加载其余平台模块。
 - 模块化下同包拆分受限，`--add-exports` / `--add-opens` 仅作迁移期临时放行。
+
+## 小技巧与冷知识
+
+【小技巧】`URLClassLoader` 用完要 `close()`：Java 7 起它实现了 `Closeable`，close 后释放占用的 jar 文件句柄，加载器本身也不再加载新类。插件、热部署场景不 close，Windows 上最明显——应用还跑着，jar 文件删不掉、覆盖升级直接失败；Linux 上旧文件 inode 也一直被占着。用 `try-with-resources` 包起来最省事，卸载顺序是先停用加载器、再 close，别反过来。
+
+【小技巧】`getResourceAsStream` 拿到的流用完要关：从 jar 里读配置、读模板的流不关闭，jar 文件句柄会一直被占着；Windows 上应用还跑着，jar 就删不掉、覆盖升级失败。资源流和普通文件流一样是需要关的资源，读完 `close()`，或者用 `try-with-resources` 包起来；只读一次的小配置也别偷懒，句柄泄漏攒多了照样出问题。
+
+【小技巧】`Class.getResource` 与 `ClassLoader.getResource` 的斜杠规则正好相反：`SomeClass.class.getResource("/config.xml")` 开头带 `/` 表示从 classpath 根找，不带 `/` 表示相对当前类所在包；`loader.getResource("config.xml")` 则永远从根找，前面不能加 `/`。两者混用时最容易错的就是斜杠——一个方法要加、一个方法不能加，写反了返回的是 null 而不是报错，排障时先看斜杠在不在。
+
+【小技巧】框架扫描类时用 `Class.forName(name, false, loader)`：第三个参数 false 表示只加载、不初始化，静态块不会执行。扫描注解、做依赖分析时这点很关键——用默认的 `forName(name)` 会连带触发 `<clinit>`，静态块里连数据库、读配置的副作用会在扫描阶段就被触发，框架启动就跑偏了。
+
+【小技巧】自定义加载器记得注册并行类加载能力：静态块里调 `ClassLoader.registerAsParallelCapable()`，类加载锁就从“整个加载器一把锁”变成“按类名分锁”。不注册时两个线程加载不同类也会串行排队，容器启动这种并发加载场景会卡在锁上；注册后只有加载同一个类才互斥。注意必须在类初始化之前注册，写在自定义加载器的 static 块第一行最稳。
+
+【小技巧】`Thread.getContextClassLoader()` 可能返回 null：系统线程、刚启动的线程上下文加载器可能是 null，框架代码里直接 `tccl.loadClass(...)` 会抛 NPE。稳妥写法是先取 TCCL、为 null 时回落到当前类的加载器再加载；SPI 和 ServiceLoader 内部也是这么兜底的，别假设上下文加载器永远有值。
+
+【小技巧】`getProtectionDomain().getCodeSource()` 拿到的可能是 null：JDK 内部类、动态生成的代理类都没有 CodeSource，直接 `.getLocation()` 会抛 NPE。原文 5.2 节的定位代码对应用类没问题，写通用工具时先判空再取 location；拿不到 jar 路径时，改用 `clazz.getResource(类名转成的路径)` 反推类文件在哪。
+
+【冷知识】Lambda 生成的类是隐藏类：Java 15 正式引入的隐藏类（Hidden Class），`LambdaMetafactory` 生成的 `$$Lambda$...` 类就是隐藏类。它们不能通过 `Class.forName` 按名字加载，也不会出现在类枚举里，`isHidden()` 返回 true。理解这点就明白为什么 lambda 的类名每次运行都不一样、且无法用反射直接取到——它们天生就是“只能用、不能找”的类。
+
+【冷知识】JDK 9 之后应用类加载器的类名变了：JDK 8 是 `sun.misc.Launcher$AppClassLoader`，JDK 9+ 改成 `jdk.internal.loader.ClassLoaders$AppClassLoader`。日志里靠打印加载器类名做判断的代码，升级 JDK 后字符串匹配会悄悄失效；要判断是不是应用加载器，用 `ClassLoader.getSystemClassLoader()` 比较对象，别比类名字符串。
+
+【小技巧】同一个加载器不能重复定义同名类：`defineClass` 对同一个名字调两次，第二次抛 `LinkageError: attempted duplicate class definition`。字节码增强、热替换工具想让新版本生效，必须新建一个加载器重新加载，而不是在旧加载器上再 define 一次；这也是热部署“新加载器 + 丢旧加载器”这个套路的底层原因。
 
 ## 10. 面试与自测
 - 类生命周期七阶段是什么？准备阶段为何只赋零值？

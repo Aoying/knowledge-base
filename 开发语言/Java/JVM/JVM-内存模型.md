@@ -2,7 +2,7 @@
 知识点: JVM 内存模型
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Java-并发编程
   - JVM-GC调优
@@ -256,6 +256,26 @@ static Holder holder; // 非 volatile，无锁发布，不安全
 | JDK 8 | 无 JMM 模型变更，`LongAdder`、`CompletableFuture` 等基于既有语义构建 |
 | JDK 9+ | VarHandle 提供 acquire/release/opaque 四种内存语义，比 volatile 更细粒度 |
 | JDK 17/21 | 模型本身不变，虚拟线程不改变可见性规则，共享变量仍需同步 |
+
+## 小技巧与冷知识
+
+【小技巧】`volatile` 修饰数组只保护引用，不保护元素：`volatile int[] arr` 换一个新数组引用时可见，但 `arr[0] = 1` 这种元素写不保证对其他线程可见。元素也要跨线程可见时，用 `AtomicIntegerArray`，或者把数组整体换掉、只用 volatile 引用发布新数组；数组和它的元素是两层东西，volatile 只管最外面那一层。
+
+【小技巧】别把 volatile 标志先缓存到局部变量再进循环：`boolean r = running; while (r) { ... }` 里，r 只在循环前读了一次，之后主线程把 running 改成 false，循环照样不退出。条件里每次直接读 `while (running)`，让每次判断都走一次主内存；原文 6.1 的 JIT 提升是编译器干的，这条是自己手写出来的同一个坑。
+
+【小技巧】一次性启动、一次性关闭用 `AtomicBoolean.compareAndSet`：`if (!started) { started = true; 启动(); }` 里两个线程可能同时通过检查，各启动一次。`started.compareAndSet(false, true)` 是原子地"检查并翻转"，只放一个线程进去，返回值直接告诉你是不是第一个；volatile boolean 只能保证"看到最新值"，保证不了"只有一个线程通过检查"。
+
+【小技巧】发布对象时，把 volatile 标志写在最后一行：先写完所有普通字段，最后再写 `ready = true`（volatile）。读方读到 ready 是 true 时，靠 happens-before 传递性，ready 写之前的所有普通字段写也一起可见。顺序反过来——先写标志、再写字段——读方可能看到标志已就绪、字段还是默认值；发布的"最后一笔"必须是 volatile 写。
+
+【小技巧】自旋等一个标志时，循环里加一行 `Thread.onSpinWait()`：它告诉 CPU"我在等别的线程改个值"，CPU 可以省电、让出执行资源，比纯空转更友好。只在确实要忙等的地方用，别把它当 sleep 的替代品——它不释放 CPU 时间片，只是给硬件一个提示；Java 9 才引入，Java 8 的项目照抄编译不过。
+
+【小技巧】锁里读普通变量就够了，不用再套一层 volatile：`synchronized` 进出本身就同步可见性，锁内读到的普通变量已经是最新的，再给字段加 volatile 只是多一层屏障成本。volatile 留给锁外的场景——标志位、发布、安全发布；锁内用普通变量，锁外才轮到 volatile 上场，分工别混。
+
+【冷知识】happens-before 这个概念不是 Java 发明的：它来自 Leslie Lamport 1978 年的论文《Time, Clocks, and the Ordering of Events》，原意是给分布式系统里的事件定一个"谁先发生"的偏序关系。Java 内存模型把它借了过来，当作可见性的契约——"A happens-before B"在论文里是逻辑时钟的排序依据，在 JMM 里变成了"读到 A 的结果就能看到 B 之前所有写"的保证。
+
+【冷知识】JSR-133 由马里兰大学的 Bill Pugh 牵头，2004 年随 JDK 5 落地：修的正是 JDK 5 之前 volatile 语义太弱的老问题——那时 volatile 只保证"写了马上能看到"，不禁止重排序，双重检查锁定写了 volatile 照样可能读到半初始化对象。JSR-133 把"禁止相关重排序"写进 volatile 语义，DCL 才从"公认的反模式"变回可用写法；原文 5.1 说"JDK 5 前 DCL 失效"，根子就在这次修订。
+
+【小技巧】`static final` 字段是最省事的安全发布：类初始化由 JVM 加锁保证只跑一次，`static final Config CFG = new Config(...)` 写好后，所有线程读到的都是初始化完成的值，不用 volatile、不用加锁。配置对象、单例、常量表这类"初始化一次、之后只读"的东西，能放 static final 就别自己搭发布逻辑；JVM 的类加载锁已经替你把 happens-before 链搭好了。
 
 ## 10. 面试与自测
 

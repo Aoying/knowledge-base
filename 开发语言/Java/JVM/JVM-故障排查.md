@@ -2,7 +2,7 @@
 知识点: JVM 故障排查
 层级: 进阶
 适用版本: JDK 8 / JDK 11（项目 TongWeb + Spring Boot 2.7.3）
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - JVM-GC调优
   - JVM-内存模型
@@ -116,6 +116,28 @@ Arthas 路径更短：`thread -n 3` 一步给出最忙线程及栈；再 `trace`
 - 看到 Full GC 多就调大堆：泄漏型增长调多大都会满，只是把爆炸时间推后。
 - 单次 jstack 下结论：一次快照只能证明「那一刻」，热点判断靠多次采样一致性。
 - 用 `System.gc()` 在代码里「帮忙回收」：触发 Full GC 的停顿远比省下的内存贵，框架（如 RMI）默认周期调用也要显式关掉或配 `-XX:+DisableExplicitGC` 前先想清副作用。
+
+## 小技巧与冷知识
+
+【小技巧】容器里没装 jstack、又急着看线程栈时，用 `kill -3 <pid>`：它给 JVM 发 SIGQUIT，JVM 会把全量线程栈直接打印到标准输出（或 nohup 日志），不用任何外部工具。原文的定位链路默认 jstack 可用，kill -3 是 jstack 不可用时的兜底；发完信号进程不会退出，只是多打一份栈，相对安全。
+
+【小技巧】jstack 卡住没输出时，别反复敲同一条命令，改用强制模式 `jstack -F <pid>`：正常 jstack 要和目标 JVM 握手，进程挂死或响应不了时就一直等；`-F` 绕开握手直接读内存取栈，专治“连 jstack 都拿不到栈”的场面。拿到栈之后再按原文的定位流程走，强制模式只是换了个取栈的办法。
+
+【小技巧】查死锁不用逐条对锁，jstack 自己会报：`jstack -l <pid>` 输出末尾如果有 `Found one Java-level deadlock`，下面直接列出死锁环里涉及的线程和它们互相等的那两把锁。原文的命令表只说了 jstack 能看死锁，没提它自带检测——输出里没这行字，就先排除死锁，别在锁竞争里白找。
+
+【小技巧】JVM 崩溃（进程直接没了）后，第一件事是找 `hs_err_pid<pid>.log`：这是 JVM 崩溃时自动写下的致命错误日志，默认落在进程的工作目录，文件名里的 pid 就是崩溃进程的 pid。它记了致命信号、崩溃线程的原生栈和当时的 JVM 参数，比 GC 日志更早看；原文只在参数里配了 `-XX:ErrorFile` 改路径，崩溃后先去那个路径（或工作目录）把这份日志收走。
+
+【小技巧】`jstat -gcutil` 只能看使用率，想看“上次 GC 为什么触发”用 `jstat -gccause <pid> 1000`：它在 gcutil 的列之外多出 LGCC（上次 GC 原因）和 GCC（本次 GC 原因）两列，比如 `Allocation Failure`、`Metadata GC Threshold`。原文教的是翻 GC 日志找触发原因，gccause 是不用翻日志的快捷版，现场定位时先看它再决定要不要细读日志。
+
+【小技巧】堆快照只想看存活对象时，加 `live` 参数：`jmap -dump:live,format=b,file=heap.hprof <pid>` 只导出还活着的对象，dump 文件更小、MAT 打开也更快。但代价是它会先触发一次 Full GC 才统计存活对象，大堆生产环境用之前同样要报备、避开高峰——原文只说了 dump 会长时间停顿，live 版是“停顿换体积”，取舍要先想清楚。
+
+【小技巧】出事后想临时开 GC 细节日志，不用重启：`jinfo -flag +PrintGCDetails <pid>` 可以在运行时改掉一部分可管理参数，GC 细节日志立刻开始打。原文的 GC 日志是“预先开好”，这招是“事后补开”——线上没预开日志的进程，事后用 jinfo 补开，再配合 jstat 看现场，也能拿到后续的 GC 证据。
+
+【小技巧】`HeapDumpPath` 的目录要提前确认可写、有空间：OOM 时自动 dump 的文件大小接近整个堆，目录没空间或没写权限，dump 写一半就失败，等于没留现场。原文只写了配路径，没提配完要验证——上线前先 `touch` 一个文件确认可写，再按堆大小留足磁盘，dump 才是真的“自动留下”。
+
+【冷知识】`jcmd` 是 JDK 7 引入的统一诊断命令，一个命令能干原来三个工具的活：`jcmd <pid> Thread.print` 相当于 jstack，`jcmd <pid> GC.heap_dump 文件名` 相当于 jmap -dump，`jcmd <pid> VM.flags` 相当于 jinfo -flags。原文的命令清单全是老三件套，jcmd 是后来收拢它们的统一入口；容器镜像里只留一个 jcmd 也够用，排障时少记两套命令名。
+
+【冷知识】hs_err_pid 日志里最常见的致命信号是 SIGSEGV（信号 11）：日志开头 `siginfo: si_signo: 11 (SIGSEGV)` 的意思是进程访问了非法内存地址，多半是 JNI/本机库或 JVM 自身 bug，纯 Java 代码一般撞不上它。看到 SIGSEGV 先别怀疑业务代码，去日志里找崩溃线程的原生栈、看它停在哪一个 `.so` 里，再决定是升级 JDK、换驱动还是修 native 代码。
 
 ## 6. 面试与自测
 
