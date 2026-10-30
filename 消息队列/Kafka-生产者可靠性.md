@@ -2,7 +2,7 @@
 知识点: Kafka 生产者可靠性
 层级: 进阶
 适用版本: Kafka 4.x
-更新日期: 2026-10-23
+更新日期: 2026-10-30
 关联:
   - Kafka-消息队列
   - Kafka-消费者组与Rebalance
@@ -99,6 +99,18 @@ producer.close();   // 退出前必须 close/flush，没发完就关进程会丢
 - **现象**：broker 挂了一个，恢复后发现少了一段消息。
 - **原因**：`unclean.leader.election.enable=true` 时，非 ISR 副本也能当选 leader，它没同步到的数据就丢了。
 - **解决**：生产设 `unclean.leader.election.enable=false`，宁可短暂不可用也不丢数据；`min.insync.replicas` 至少 2，与 `acks=all` 配套。
+
+## 面试与自测
+
+1. `acks=all` 单独开为什么还不够？“不丢”的三件套是什么？
+2. 幂等生产者解决什么重复、管不了什么重复？开启后对配置有什么硬约束？
+3. Kafka 事务消息和 RocketMQ 事务消息解决的是同一个问题吗？消费者侧要配什么才看不到回滚的消息？
+
+### 参考答案
+
+1. 还不够，必须和 broker 侧参数配套：`min.insync.replicas`（≥2），ISR 少于这个数时直接拒绝写入，宁可失败也不假成功；再加 `unclean.leader.election.enable=false`，非 ISR 副本不许当选 leader；三件套齐了才叫“不丢”。代价是延迟，等多个副本确认必然比 `acks=1` 慢。
+2. 解决的是单生产者、单会话内的重试重复：broker 给每个生产者分配 PID，并对每个分区维护发送序列号，重试携带同一序列号，broker 识别出重复批次直接丢弃。生产者重启换了新 PID，序列号体系重来，跨会话的重复它管不了，只能靠事务或业务幂等兜底。硬约束：开启后要求 `acks=all`、`retries>0`、`max.in.flight.requests.per.connection ≤ 5`，配置不满足直接报错。
+3. 不是同一个问题：Kafka 事务解决跨分区原子写 + 消费位点与产出消息的原子性（consume-transform-produce 链路的 exactly-once 就靠它）；RocketMQ 是 half message + 事务回查，解决“本地事务与发消息一致”，别混着选型。消费者侧要配 `isolation.level=read_committed` 才看不到已回滚的事务消息，默认 `read_uncommitted` 等于没隔离。
 
 ## 8. 关联知识
 
