@@ -2,7 +2,7 @@
 知识点: Spring 事务
 层级: 进阶
 适用版本: Spring Boot 2.7.3 / Spring Framework 5.3
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Spring-Boot
   - Spring-IOC与AOP
@@ -134,6 +134,30 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 
 - 缩小事务范围：参数组装、校验、查字典等只读前置动作移出事务方法；`timeout` 给批量任务设上限，避免失控长事务堵住连接池。
 - OceanBase 下关注长事务对 undo 的压力，批处理分片提交（每 N 条一事务）。
+
+## 小技巧与冷知识
+
+【小技巧】排障时先确认当前到底有没有事务：`TransactionSynchronizationManager.isActualTransactionActive()` 返回 true 才说明当前线程真的开着事务。方法上明明标了 `@Transactional` 却怀疑没生效时，在方法里打一行这个判断，比翻代理类、翻日志快得多；返回 false 就按原文第 6 节的失效表逐项排查，别先去调传播行为。
+
+【小技巧】`isolation` 只在新建事务时生效，加入已有事务时会被忽略：外层已经是 REQUIRED 的事务，内层方法再标 `isolation = SERIALIZABLE` 不会升级隔离级别，内层注解的隔离级别直接作废。想让某个查询跑在更高隔离级别下，必须让它走一个新建事务的入口（如 REQUIRES_NEW），而不是在同一个事务里改注解。
+
+【小技巧】`timeout` 是整个事务的截止时间，不是单条 SQL 的超时：超时到点时事务会被标记为仅回滚，方法体本身不会被中途打断，走到提交时直接回滚。它不等同于 JDBC 的 `queryTimeout`，后者是单条 SQL 的执行上限；批量任务既要防长事务占连接，timeout 要设，也要给慢 SQL 单独设查询超时，两层都得有。
+
+【小技巧】测试里 `@Transactional` 会让测试方法跑在事务里、结束后自动回滚，数据库不留脏数据；想留数据排查时在测试方法上加 `@Rollback(false)`。这是 Spring TestContext 的特性，不是业务代码的事务——生产代码里别照抄 `@Rollback`，它只在测试里有效。
+
+【小技巧】事务提交后再发消息、再调外部接口，用 `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)`：方法里 `publishEvent` 只是把事件记下来，等当前事务提交成功后才真正执行监听器。原文第 5 节说事务里禁止发 MQ，正确姿势是把“发”这一步挂到提交后，事务回滚时事件根本不会发出去，也就不用写补偿去撤消息。
+
+【小技巧】编程式事务别只会用 `TransactionTemplate.execute`：有返回值用 `TransactionCallback<T>`，没返回值用 `TransactionCallbackWithoutResult`，后者省掉一个无意义的 return null。动态决定边界、循环里分批提交的场景用编程式比注解灵活，但模板对象要注入对应的事务管理器，多数据源下别拿错了管理器去构造模板。
+
+【小技巧】`NESTED` 在 JTA 下不支持：保存点是 JDBC 驱动的能力，JTA 全局事务没有保存点概念，内层标 NESTED 会直接抛 `NestedTransactionNotSupportedException`。单库用 JDBC 事务管理器时 NESTED 是分批容错的利器，换成 JTA 或 XA 场景要改回分批提交，别指望保存点跟着跨过去。
+
+【小技巧】事务方法里查自己刚写的数据能读到，但别的连接还读不到：同一事务内是同一连接，自己的未提交写入对自己可见；其他线程、其他连接按读已提交隔离级别看不到这批数据。排障时在事务里打日志查库看到数据，别误以为已经提交入库了——提交前它只对当前事务可见。
+
+【冷知识】`readOnly = true` 只是给框架和驱动的提示，不是数据库层面的强制只读：MySQL/OceanBase 下它主要让驱动和 ORM 少做脏检查、跳过 flush，写操作照样能执行成功。别拿 readOnly 当“防误写”的安全锁，真正的防误写靠权限和代码审查；它的价值是优化提示，不是访问控制。
+
+【冷知识】`@Transactional` 注解是 Spring 2.0（2006 年）才有的，Spring 1.2 时代的声明式事务只能用 XML 的 `<tx:advice>` + 切面配置。注解出现之前，事务边界是配在 XML 里的，改一个方法的事务属性要改配置文件；现在看 XML 方式觉得啰嗦，它却是声明式事务的起点。
+
+【冷知识】`TransactionStatus.isNewTransaction()` 能告诉你当前事务是不是新建的：加入外层事务时返回 false，新建时返回 true。调试传播行为时在方法里打这个值，比猜“到底是加入还是新建”可靠；配合 `isActualTransactionActive()` 一起用，REQUIRED、REQUIRES_NEW、NESTED 的实际行为一眼就能分清。
 
 ## 9. 面试与自测
 

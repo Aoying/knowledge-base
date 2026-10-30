@@ -2,7 +2,7 @@
 知识点: Spring Security
 层级: 进阶
 适用版本: Spring Security 5.7 / Spring Boot 2.7
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Spring-Boot
   - 接口设计与文档
@@ -97,6 +97,32 @@ public class SecurityConfig {
 
 - 5.7（Boot 2.7 对应线）：`WebSecurityConfigurerAdapter` 废弃，改 `SecurityFilterChain` Bean 组件式配置；`authorizeHttpRequests` 与 `AuthorizationManager` 体系引入，旧 `authorizeRequests` 仍可用。
 - Boot 3 / Security 6：包名换 Jakarta、`antMatchers` 换 `requestMatchers`，写法主线延续 5.7 的组件式。本篇代码按 5.7 口径，升级时对照这两点改，不要把 6.x 的示例代码抄进 2.7 项目。
+
+## 小技巧与冷知识
+
+【小技巧】`hasRole("ADMIN")` 和 `hasAuthority("ADMIN")` 不是一回事：`hasRole` 会自动给角色名补 `ROLE_` 前缀，实际匹配的是 `ROLE_ADMIN` 这个权限；`hasAuthority` 是原样比对，不补前缀。权限点存的是 `loan:approve` 这种字符串时用 `hasAuthority`，角色存的是 `ADMIN` 时用 `hasRole`，两者混用是最常见的“明明配了权限却 403”的原因。
+
+【小技巧】`permitAll()` 不等于跳过安全链：它只是“这条路不需要认证”，请求照样走完整条过滤器链，SecurityContext、异常翻译这些过滤器都在跑；`WebSecurity.ignoring()` 才是彻底跳过安全链，连过滤器都不进。静态资源、健康检查接口用 ignoring 更省事，但放行接口别图省事用它——一旦跳过链，连 CSRF、会话这些防护也一起没了。
+
+【小技巧】方法级注解不生效先查开关有没有开：`@PreAuthorize`、`@PostAuthorize` 需要 `@EnableMethodSecurity`（5.7 新注解）才会生效，忘了加它，注解就静静地躺在方法上、一点作用不起，接口照常放行。老项目升级时也别忘了换注解名：5.7 之前是 `@EnableGlobalMethodSecurity(prePostEnabled = true)`，新注解默认就开了 pre/post。
+
+【小技巧】BCrypt 的成本因子别盲目调高：`new BCryptPasswordEncoder()` 默认强度是 10（即 2 的 10 次方轮），强度每加 1，哈希耗时大约翻一倍。登录高峰期把强度从 10 调到 12，单次登录的 CPU 开销就翻两番；调之前先在登录接口上压测，确认耗时和吞吐都扛得住，别只在本地测一次就上线。
+
+【小技巧】登录成功后会话 ID 会换：默认的会话固定防护是 `migrateSession`，认证成功时生成一个新 session id、把旧 session 的属性迁移过来，旧 id 立即作废。排障时看到“登录前后 session id 变了”不是 bug，是防会话固定攻击的正常行为；只有显式配了 `sessionFixation().none()` 才会保持原 id，生产别这么配。
+
+【小技巧】想在 Controller 里直接拿当前用户，别自己去翻 SecurityContext：方法参数上写 `@AuthenticationPrincipal UserDetails user`，框架会把当前认证主体直接注入进来，比 `SecurityContextHolder.getContext().getAuthentication().getPrincipal()` 再强转干净得多。拿自定义的 User 对象时也可以这么写，注入的就是你 UserDetailsService 返回的那个类型。
+
+【小技巧】“记住我”有两种实现，安全等级不一样：默认的基于哈希的 remember-me 只靠用户名、密码和密钥算签名，密码一改所有 remember-me 令牌立刻失效；持久化令牌版（`PersistentTokenRepository`）把 series/token 存进 `persistent_logins` 表，可以单独吊销某台设备的令牌。长期登录场景用持久化版，别只在配置里打开默认的 remember-me 就交差。
+
+【小技巧】密码迁移可以“登录时自动升级”：`DelegatingPasswordEncoder` 配合 `UserDetailsPasswordService`，登录成功后如果发现库里存的是老算法密文，会自动按新编码器重算并写回库。原文第 5 节说的“登录时校验老算法、成功后重写密文逐步洗库”就是这套机制的落地形态，不用写批量洗库脚本，靠用户自然登录就能慢慢洗完。
+
+【小技巧】登出默认只接受 POST：`logout()` 默认的登出地址是 POST `/logout`，并且要带 CSRF token，GET 请求直接访问会被 405 或 403 拦掉。前端登出按钮别写成 `<a href="/logout">`，要走表单 POST 或在请求头里带 token；只在纯接口、无浏览器会话的链上才考虑放开 GET 登出。
+
+【冷知识】Spring Security 的前身叫 Acegi Security：2003 年由 Ben Alex 发起，2008 年随 2.0 版本正式改名 Spring Security 并并入 Spring 体系。所以老资料里搜 "Acegi" 能找到它最早期的过滤器链设计，思路和今天这套链式拦截一脉相承，只是名字和包名换了。
+
+【冷知识】默认登录页不是你写的页面，是框架生成的：没有配自定义登录页时，访问 `/login` 看到的那个表单是 `DefaultLoginPageGeneratingFilter` 在运行期拼出来的 HTML。想改样式要么配自己的登录页，要么接管这个过滤器；直接改它生成的页面源码是改不动的，因为它根本不在你的代码里。
+
+【冷知识】BCrypt 密文里的 `$2a$10$` 本身就是参数：`$2a$` 是算法版本，`10` 是成本因子，后面 22 个字符是盐，剩下的才是哈希值。所以只看密文开头就能知道这条密码用的是哪个版本、多大强度；`{bcrypt}$2a$10$...` 里花括号外是 DelegatingPasswordEncoder 的分发前缀，花括号内才是 BCrypt 自己的格式，两层含义别混在一起读。
 
 ## 9. 面试与自测
 

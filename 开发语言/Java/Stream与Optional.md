@@ -2,7 +2,7 @@
 知识点: Stream 与 Optional
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-10-29
+更新日期: 2026-10-31
 关联:
   - Java
 标签:
@@ -76,6 +76,32 @@ String city = Optional.ofNullable(user)
 - **排序稳定性**：对已按某字段排序的流再 `sorted` 其他字段，Stream 对有序流保证稳定排序，List 流就是有序的，这点可以依赖。
 - 性能敏感的大循环还是老 for，Stream 的可读性优先于那点性能——前提是先确认它真是热点，别凭感觉在业务代码里到处回退 for。
 
+
+## 小技巧与冷知识
+
+【小技巧】`IntStream.range(0, n)` 的结束是开区间，别写成 `rangeClosed` 的语义：`range(0, 3)` 只出 0、1、2，`rangeClosed(0, 3)` 才出 0、1、2、3。原文只给了 `range(0, n)` 替代下标 for 的例子，换下标循环时先想清楚原来 for 的结束条件是 `< n` 还是 `<= n`，写错一个方法名就是差一错误，编译器不会拦。
+
+【小技巧】`limit` 要放在 `sorted` 之前还是之后，结果完全不同：`sorted().limit(10)` 是“先排好序再取前 10”，`limit(10).sorted()` 是“先取前 10 个再排这 10 个”，后者取的是原顺序的前 10 条、不是最大的 10 条。短路操作放的位置决定了它截断的是哪一步的结果，链式顺序调换前先在纸上走一遍数据。
+
+【小技巧】`Collectors.toList()` 不保证返回哪种 List：JDK 文档明确写了不保证返回列表的类型、可变性与线程安全性，JDK 8 到 15 的实现返回的是 ArrayList、可以改，但别把这个实现细节当契约用。想要确定不可变的列表，用 JDK 16 起的 `Stream.toList()`；想要确定可变的，先 `collect` 再 `new ArrayList<>(...)` 包一层。
+
+【小技巧】`reduce` 的 identity 必须是“中性元”：求和用 `0`、求积用 `1`、拼字符串用 `""`，identity 错了并行流下结果直接错。`reduce` 不带 identity 的重载返回的是 `Optional`，空流时是 `Optional.empty()` 而不是抛异常，适合“空了就该没有结果”的聚合；原文的 `groupingBy` + `reducing` 例子用的是带 identity 的版本，两种重载按“空流怎么办”选。
+
+【小技巧】`flatMap(Optional::stream)` 是 JDK 9 起摊平 `Stream<Optional<T>>` 最干净的写法：`Optional.stream()` 把有值转成 1 个元素的流、空转成空流，`flatMap` 一接就只剩有值的元素。原文 §1 只说“把 `Stream<Optional<T>>` 摊平靠 flatMap”，这行就是具体的写法；JDK 8 项目没有 `Optional.stream()`，只能 `filter(Optional::isPresent).map(Optional::get)` 绕过去。
+
+【小技巧】`Optional.or()`（JDK 9+）是“有则用、无则换另一个 Optional”的链式兜底：`opt.or(() -> loadFromCache()).or(() -> loadFromDb())`，比 `orElseGet` 适合“备选值本身也可能没有”的场景。`orElse`/`orElseGet` 接的是普通值，`or` 接的是另一个 `Optional`，三者按“备选值会不会为空”选，别把 `or` 当成 `orElse` 的同义词。
+
+【小技巧】`Collectors.joining` 拼字符串不用自己循环加逗号：`collect(Collectors.joining(", "))` 直接拼，`joining(",", "[", "]")` 还能一次加上前后缀，空流时返回空字符串而不是 null。手写循环拼分隔符最容易在首尾多一个逗号，收集器把这点一次性包掉。
+
+【小技巧】并行流里想保序用 `forEachOrdered`：普通 `forEach` 在并行流里不保证输出顺序，日志、写文件这类“顺序有意义”的终端操作要改成 `forEachOrdered`。代价是它要协调顺序、会吃掉一部分并行收益；顺序不重要时用 `forEach`，顺序重要时别为了省这点开销丢了正确性。
+
+【小技巧】`findAny` 在并行流里比 `findFirst` 快：`findFirst` 必须尊重流的 encounter order，并行时要等前面分片确认没有更早的元素；`findAny` 哪个分片先算完就返回哪个，不用等。只要“任意一个就行”，并行流优先写 `findAny`；串行流两者没区别，写 `findFirst` 语义更直白。
+
+【冷知识】`Optional` 没有实现 `Serializable`：它从设计上就不是用来存字段、做 DTO、放缓存的容器，序列化框架遇到它要么报错要么行为各异。原文第 4 节说“实体字段、DTO 入参不要用 Optional 包”，根子就在这里——连 JDK 自己都没让它可序列化，框架更没义务替你兜底。
+
+【冷知识】并行流的公共池默认并行度是 CPU 核数减 1：`ForkJoinPool.commonPool()` 的并行度默认取 `Runtime.getRuntime().availableProcessors() - 1`，留一核给提交任务的线程。原文第 2 节只说并行流共用全局公共池，这个减 1 解释了为什么“8 核机器上并行流最多只有 7 个工作线程在跑”——不是池子坏了，是默认值就这么定的。
+
+【冷知识】`groupingBy` 默认返回的是 `HashMap`，分组结果没有顺序：想按插入顺序出结果，用 `groupingBy(key, LinkedHashMap::new, downstream)` 的三参数重载显式指定 Map 工厂；并行流场景还有 `groupingByConcurrent`，返回的是 `ConcurrentHashMap`。分组后按顺序展示报表时，先看你用的是哪个重载，别指望默认的 HashMap 按你插入的顺序出数。
 
 ## 5. 面试与自测
 

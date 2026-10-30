@@ -2,7 +2,7 @@
 知识点: Spring MVC基础
 层级: 基础
 适用版本: Spring Boot 2.7.3
-更新日期: 2026-10-27
+更新日期: 2026-10-31
 关联:
   - Spring-Boot
   - Spring-IOC与AOP
@@ -211,6 +211,34 @@ public class GlobalExceptionHandler {
 ## 7. 版本差异
 
 - Boot 2.7 线用 Spring Framework 5.3，Servlet 规范为 `javax.*`；Boot 3 线起换成 `jakarta.*`，升级时 `javax.servlet` 导入要全量改包名，见 [Spring Boot](开发语言/Java/Spring/Spring-Boot.md) 的升级路线图。
+
+## 小技巧与冷知识
+
+【小技巧】可选参数别用基本类型：`@RequestParam(required = false) int id` 缺参时会直接报错，因为 Spring 没法给 int 赋 null；改成 `Integer` 才能在缺参时拿到 null。反过来也一样——必填参数用 `int` 没问题，缺参本来就该 400；只有写了 `required = false` 或 `defaultValue` 的参数才必须用包装类型。
+
+【小技巧】同一个 URL 还能按查询参数或请求头再分流：`@GetMapping(value = "/users", params = "version=1")` 和 `params = "version=2"` 可以是两个方法，`headers = "X-Client=app"` 同理。老接口想按版本号或客户端分流时，不用在方法里写 if 判断版本，用映射条件本身分流更干净；条件冲突时 Spring 会报映射歧义，启动就暴露。
+
+【小技巧】每个请求都要的公共数据用方法级 `@ModelAttribute`：在 Controller 里写一个 `@ModelAttribute void fill(Model model)`，每次进该 Controller 的方法前它都会先跑，把当前用户、公共下拉项放进 Model，视图和后续方法都能直接用。比在每个方法开头重复查一次省事，也比拦截器里 setAttribute 再强转类型安全。
+
+【小技巧】想让某个业务异常直接带状态码，不用写异常处理器：在异常类上标 `@ResponseStatus(HttpStatus.NOT_FOUND)`，抛它就直接返回 404，`reason` 还能顺带定错误文案。只对“状态码固定、文案固定”的异常用这招；需要统一错误体格式、要记日志的还是走 `@RestControllerAdvice`，两者别混着用。
+
+【小技巧】新建资源返回 201 加 Location 头用 `ResponseEntity`：`ResponseEntity.created(URI.create("/api/users/" + id)).body(user)`，状态码、Location 头、响应体一次给齐。直接返回对象默认是 200，创建接口返回 200 虽然能用，但按 REST 约定该给 201；前端按状态码判断“是不是新建成功”时，这一行就是依据。
+
+【小技巧】日期字符串绑不上先看 `@InitBinder`：入参里的 `LocalDateTime` 传 `2026-10-31 10:00:00` 这种格式默认解析失败，在 Controller 里写 `@InitBinder` 注册一个 `DateTimeFormatter`，或在字段上标 `@DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")`。400 报错先看是不是日期格式问题，比怀疑前端传错字段快得多；全局统一格式用 `WebMvcConfigurer` 里配 `addFormatters`，别每个 Controller 各写一套。
+
+【小技巧】想让 Controller 方法直接拿到“当前用户”这类对象，用自定义参数解析器：实现 `HandlerMethodArgumentResolver`，在 `supportsParameter` 里认出标了 `@CurrentUser` 的参数，`resolveArgument` 里从请求头或 ThreadLocal 取值。比拦截器里 `request.setAttribute` 再在每个方法里强转干净，类型不对编译期就能发现，参数解析失败也走统一的 400 链路。
+
+【小技巧】`@SessionAttribute` 和 `@SessionAttributes` 是两回事，别混用：前者是读 session 里已经存在的值（`@SessionAttribute("user") User user`），没有就报异常；后者是把 Model 里的属性暂存进 session、跨多次请求用，常见于多步表单向导。只想读 session 用前者，想“这次放、几次后取”才用后者。
+
+【小技巧】上传大文件用 `transferTo` 落盘，别用 `getBytes()`：`transferTo` 是把上传内容直接写到目标文件，内存里不攒；`getBytes()` 会把整个文件读进一个 byte 数组再处理，几百 MB 的文件直接把堆顶满。原文第 3 节的上传示例用的是 `transferTo`，判断“上传接口 OOM”时先看代码里是不是有人顺手调了 `getBytes()`。
+
+【小技巧】可选的请求头用 `required = false` 或给默认值：`@RequestHeader(value = "X-Trace-Id", required = false) String traceId`，没带这个头的请求也能进方法，traceId 是 null；不写 required 默认是 true，缺头直接 400。网关透传的 traceId、客户端版本号这类“有就用、没有也行”的头，都要显式标成可选。
+
+【小技巧】同一个异常有多个 `@ExceptionHandler` 时，最具体的那个先生效：`@ExceptionHandler(BizException.class)` 和 `@ExceptionHandler(Exception.class)` 同时存在，抛 BizException 会走前者而不是兜底的后者。写全局异常处理时先把具体异常的处理方法写全，再留一个 `Exception.class` 兜底；顺序写反了也不怕，Spring 是按异常类型匹配度选的，不是按方法声明顺序。
+
+【冷知识】`@RestController` 是 Spring 4.0 才引入的：2013 年 12 月发布的 Spring 4.0 之前，写接口必须 `@Controller` 加每个方法上的 `@ResponseBody`，新注解只是把两者合二为一。看 2013 年之前的老项目或老博客时满眼都是 `@ResponseBody`，不是写法落后，是当时还没有这个组合注解。
+
+【冷知识】URL 里的分号默认会被截掉，矩阵变量开箱不可用：`/users/123;version=2` 这种写法里，分号后面的内容 Spring 默认直接丢掉（`UrlPathHelper.removeSemicolonContent` 默认 true），`@MatrixVariable` 拿不到值。想用矩阵变量要在 `WebMvcConfigurer` 里把 `configurePathMatch` 的 `setRemoveSemicolonContent(false)` 打开；不打开也别硬拼分号参数，Spring 根本不会把它当成请求的一部分。
 
 ## 8. 面试与自测
 
