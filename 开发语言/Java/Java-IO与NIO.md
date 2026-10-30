@@ -2,7 +2,7 @@
 知识点: Java IO 与 NIO
 层级: 进阶
 适用版本: JDK 8+（NIO.2 为 JDK 7 引入）
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - Java
   - 计算机网络
@@ -117,6 +117,19 @@ long sent = in.transferTo(0, in.size(), socketChannel); // 单次有上限，大
 - 误区：换上 NIO 就自动解决粘包。粘包是 TCP 字节流的本质，任何模型都要自己定协议。
 - 误区：AIO 是 NIO 的升级版、更先进就该用。JDK 的 AIO 在主流平台实现与生态都不占优，现实选型是 Netty（NIO 封装）或虚拟线程 + BIO 风格代码。
 - 新变化：虚拟线程让「一连接一线程」的阻塞写法的成本大幅下降，内部系统、低并发长连接服务可以直接用同步阻塞代码 + 虚拟线程，省掉 Selector 状态机的复杂度；高并发网关类场景仍是 Netty 的地盘。见 [虚拟线程](开发语言/Java/虚拟线程.md)。
+
+## 小技巧与冷知识
+
+- 【小技巧】`BufferedInputStream` / `BufferedReader` 的默认缓冲是 8192 字节，读大文件时可以显式调大，例如 `new BufferedInputStream(in, 64 * 1024)`，减少系统调用次数。反过来，读大量小文件时没必要盲目调大缓冲，缓冲本身也要占内存。这个默认值是 JDK 文档公开的行为，调参前先确认瓶颈确实在系统调用上。
+- 【小技巧】`Files.lines(path)` 返回的是 `Stream<String>`，它底层持有打开的文件句柄，必须用 try-with-resources 包起来，否则文件描述符不会及时释放。同样，`Files.walk`、`Files.list` 返回的流也必须关闭。很多人只记得关 `InputStream`，却忘了 NIO.2 的这些流式 API 同样要关。
+- 【小技巧】`SocketChannel` 在非阻塞模式下 `read()` 返回 0 表示“当前没数据可读”，不是连接断开；返回 -1 才是对端关闭。把 0 当成 EOF 处理是 NIO 代码里常见的误判，会导致连接被提前关闭。阻塞模式下 `read()` 才会一直等到有数据或 EOF。
+- 【小技巧】`ByteBuffer.slice()` 和 `duplicate()` 生成的新 Buffer 与原 Buffer 共享同一块底层内存，改一边另一边立刻可见。解析协议时可以用 `slice()` 切出消息头、消息体分别处理，不用额外拷贝数组。要注意的是它们各自的 position/limit 是独立的，但数据是同一份。
+- 【小技巧】读写二进制协议时先确认字节序：`ByteBuffer` 默认是大端序（`ByteOrder.BIG_ENDIAN`），网络协议通常也是大端，但解析 x86 本地程序写出的二进制文件时要用 `buf.order(ByteOrder.LITTLE_ENDIAN)`。字节序错了，读出的整数会完全变样，而且编译期不会报错，只能靠数据对不上来发现。
+- 【小技巧】`FileChannel` 支持散射读和聚集写：`read(ByteBuffer[] dsts)` 一次读满多个 Buffer，`write(ByteBuffer[] srcs)` 一次写出多个 Buffer。做协议解析时可以一个 Buffer 装定长头部、另一个装变长体，一次系统调用完成，比分两次读写少一次往返内核。
+- 【小技巧】`Files.copy(Path, OutputStream)`、`Files.copy(InputStream, Path, REPLACE_EXISTING)` 可以直接在文件与流之间搬运，不用自己写 `read/write` 循环。底层对文件到文件的情况会尽量走高效路径，代码也比手写循环短得多，复制文件、保存上传流时优先用它。
+- 【冷知识】`ByteBuffer.allocateDirect` 申请的堆外内存不是由 GC 直接回收的，而是靠与之关联的 Cleaner 对象在 Buffer 本身被 GC 后才释放。Buffer 对象如果被长期持有（比如放进静态缓存一直不释放），堆外内存就一直占着，堆内存看起来正常，但进程 RSS 会持续上涨。这就是原文第 6 节堆外泄漏的根源。
+- 【冷知识】`ObjectOutputStream` 长时间复用会越写越慢、内存越占越多，因为它内部维护了一张“已写对象”的引用表用于处理循环引用和重复引用，写过的对象都不会被 GC。解决办法是定期调用 `reset()` 清空这张表，代价是后续重复对象会重新完整写出。写日志式序列化流时这个坑很容易踩到。
+- 【冷知识】`FileChannel.lock()` 拿到的文件锁在很多操作系统上是建议锁（advisory lock），不是强制锁：它只能拦住同样调用 `lock()` 的程序，拦不住直接读写文件的普通程序。跨进程协调可以用它做互斥，但不能把它当成文件访问的强制屏障。另外，锁是与整个 JVM 关联的，同一 JVM 内两个线程对同一文件加锁不会互相阻塞。
 
 ## 8. 面试与自测
 

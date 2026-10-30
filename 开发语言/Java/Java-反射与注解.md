@@ -2,7 +2,7 @@
 知识点: Java-反射与注解
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Java
   - Spring-IOC与AOP
@@ -237,6 +237,32 @@ public class LogTimeRunner {
 - **JDK 8**：`Class#newInstance()` 尚可用（已不推荐）；`@Repeatable` 引入。
 - **JDK 9+**：`Class#newInstance()` 废弃，改用 `getDeclaredConstructor().newInstance()`；模块系统引入，`setAccessible` 受 `opens` 约束。
 - **JDK 16+**：强封装成为默认，反射访问 JDK 内部 API 必须显式 `--add-opens`。
+
+## 小技巧与冷知识
+
+【小技巧】把查到的 `Method`、`Field`、`Constructor` 缓存起来复用，不要每次调用都重新 `getDeclaredMethod`。原文已讲框架是“启动时反射一次、运行期缓存结果”，自己写工具类时也可以用一个 `ConcurrentHashMap` 按“类名 + 方法名 + 参数类型”做键，第一次查到后放进去，后面直接取，这样既省了查找开销，也避免了在热点循环里反复做反射查找。
+
+【冷知识】`Method.invoke()` 并不是每次都走同一条路：原文提到前 15 次走 native 调用，之后会生成专用的字节码来加速，所以同一个反射方法“越用越快”。这也意味着只调用一两次的冷路径最慢，压测时如果只测一次就下结论，很容易高估反射的真实成本。
+
+【小技巧】用 `Class.forName(String name, boolean initialize, ClassLoader loader)` 这个三参数重载，可以只加载类而不触发初始化。原文讲过单参数的 `Class.forName()` 会执行 static 块，如果你只是想拿到 `Class` 对象做类型判断、读注解，却不想触发类的静态初始化副作用，就把第二个参数传 `false`，需要初始化时再由首次主动使用去触发。
+
+【小技巧】在 JDK 9 及以上，判断能不能破封装时优先用 `trySetAccessible()` 而不是直接调 `setAccessible(true)`。前者是 `AccessibleObject` 上 JDK 9 引入的方法，成功返回 `true`、失败返回 `false` 而不抛异常，适合在工具代码里先探测再降级；后者在模块未 `opens` 的包上会直接抛 `InaccessibleObjectException`，原文的疑难杂症一节也提到了这个异常和 `--add-opens` 的解法。
+
+【冷知识】`getAnnotation()` 拿到的注解对象并不是一个普通实例，而是实现该注解接口的动态代理。原文原理剖析一节讲过这一点，它带来的实际影响是：注解实例的 `equals`、`hashCode`、`toString` 都是按注解规范实现的，两个从不同类上读到的、成员值相同的同种注解可以 `equals` 为真，比较注解时不要用 `==`，也不要指望它有你自己写的实现类。
+
+【小技巧】读方法上的注解时，涉及泛型方法或接口实现时不要只用裸 `getAnnotation()`，要留意桥接方法。原文在 AOP 一节提到 Spring 用 `AnnotationUtils.findAnnotation` 而不是裸 `getAnnotation`，原因就是 JDK 动态代理拿到的是接口方法、注解可能标在实现类方法上，而且泛型擦除会生成桥接方法，直接读很可能读到桥接方法而漏掉注解；自己不用 Spring 时，至少要先判断 `method.isBridge()` 并顺着桥接关系找到原始方法再读。
+
+【小技巧】取泛型父类的实际类型参数时，用 `getGenericSuperclass()` 而不是 `getSuperclass()`。原文疑难杂症一节给过例子：`class StringList extends ArrayList<String>`，`getSuperclass()` 只能拿到 `ArrayList.class`，而 `getGenericSuperclass()` 返回的 `ParameterizedType` 上用 `getActualTypeArguments()[0]` 才能拿到 `String.class`，MyBatis-Plus 的 `BaseMapper<T>` 反推实体类就是这个套路；注意只有写在类声明里的具体类型参数才能这样拿到，运行时 `new ArrayList<String>()` 的泛型信息是擦除掉的。
+
+【冷知识】`@Inherited` 只对“类继承类”生效，接口实现、方法重写、字段隐藏都不继承。原文常见误区一节明确讲过这一点，容易被忽略的是：子类继承到的其实是父类上的那一个注解实例，`getAnnotation()` 在子类上能读到它，但 `getDeclaredAnnotation()` 在子类上读不到，因为后者只看本类直接标注的注解，排查“注解怎么读不到”时先分清这两个方法。
+
+【小技巧】读可重复注解时用 `getAnnotationsByType()`，不要自己去拆容器注解。JDK 8 引入 `@Repeatable` 后，同一位置重复标注的注解在编译后会被包进一个容器注解里，直接 `getAnnotation(容器.class)` 才能看到容器，`getAnnotation(原注解.class)` 拿不到；`getAnnotationsByType()` 会自动把容器拆开返回数组，写通用注解扫描工具时用它最省事，也最不容易漏。
+
+【冷知识】注解的保留级别只有 `RUNTIME` 才能被反射读到，`CLASS` 级别的注解虽然会进 class 文件，但运行期用反射是读不到的。原文讲过保留级别是 SOURCE < CLASS < RUNTIME，框架用注解都是 RUNTIME 档；反过来，如果你只想让注解参与编译期检查或字节码分析而不想被运行期读到，用 `CLASS` 就够了，不要误以为进了 class 文件就等于反射可见。
+
+【小技巧】操作数组不要手写 `Object[]` 强转，用 `java.lang.reflect.Array` 这个专用工具类。反射拿到的数组字段可能是 `int[]`、`String[]` 等任意类型，`Array.getLength()`、`Array.get()`、`Array.newInstance(componentType, length)` 都能统一处理基本类型数组和对象数组，避免了为每种数组类型写分支，也避免了把 `int[]` 当成 `Object[]` 强转时抛 `ClassCastException`。
+
+【冷知识】类的 `getName()` 对数组返回的是 JVM 内部名而不是源码写法，例如 `String[].class.getName()` 是 `[Ljava.lang.String;`，而 `int[].class.getName()` 是 `[I`。日志、报错信息或按类名做映射时如果直接用 `getName()`，数组类型会显得很奇怪，需要给人看的名字用 `getCanonicalName()`，它返回的就是源码里写的 `java.lang.String[]` 这种形式。
 
 ## 面试与自测
 

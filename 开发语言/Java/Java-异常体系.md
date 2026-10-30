@@ -2,7 +2,7 @@
 知识点: Java 异常体系
 层级: 基础
 适用版本: JDK 8+ / Spring Boot 2.7
-更新日期: 2026-10-24
+更新日期: 2026-10-31
 关联:
   - Java
   - Spring-事务
@@ -120,6 +120,19 @@ public class GlobalExceptionHandler {
 - **日志里只有一行异常信息没有堆栈**：写了 `log.error("失败: {}", e.getMessage())`。改成把异常对象作最后一个参数：`log.error("失败", e)`。
 - **包装了三层还是看不到根源**：中间层转换异常时没传 cause。全局搜自定义异常的构造点逐个检查。
 - **finally 里 return**：会吞掉 try/catch 里的异常和返回值，编译器只警告不报错，规范上直接禁止。
+
+## 小技巧与冷知识
+
+- 【小技巧】排查“日志里只有一行异常、没有堆栈”时，先看日志调用是不是把异常拼进了占位符：`log.error("失败: {}", e.getMessage())` 只输出字符串；SLF4J 里把异常对象作为最后一个参数（`log.error("失败", e)`）才会打印完整堆栈。这个坑容易被忽略，因为代码能编译、日志也有输出，只是根源信息被悄悄丢掉了。
+- 【小技巧】多 catch 块要按“先子类后父类”排列，否则子类分支永远走不到且编译报错；JDK 7 起可以用多重 catch（`catch (IOException | SQLException e)`）把同一种处理逻辑的多个异常合并，省掉重复代码。注意多重 catch 里的异常类型不能有继承关系，否则编译器会报“替代异常已捕获”。
+- 【冷知识】`finally` 块里写 `return` 会吞掉 try/catch 里的返回值甚至正在传播的异常：方法会按 finally 的 return 返回，异常就此消失。编译器只给警告不报错，所以只能靠规范和 Code Review 拦，线上查这种问题时往往要先怀疑 finally。
+- 【小技巧】try-with-resources 的资源按声明的逆序关闭，先声明的后关闭；如果关闭时也抛异常，它不会盖掉主异常，而是挂在主异常的 `getSuppressed()` 上，堆栈里显示为 `Suppressed:` 段。排查“关流失败”时别只看主异常，suppressed 段里往往藏着真正的第二个故障点。
+- 【冷知识】`Throwable` 有四个构造器，其中 `Throwable(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace)` 可以关掉堆栈填充和压制异常。JDK 内部少数对性能敏感的异常就用它来省掉填堆栈的开销；业务代码一般不需要，但理解它能解释为什么有的异常堆栈是空的。
+- 【小技巧】自定义异常至少提供带 cause 的构造器，并在转换异常时把原异常传进去（`new BizException(code, msg, e)`），只取 `e.getMessage()` 拼新异常等于剪断 cause 链。排障时根源那一层永远看不到的案子，十有八九是某个中间层转换异常时丢了 cause。
+- 【冷知识】受检异常和非受检异常的分界只看继承关系：继承 `RuntimeException` 的是非受检，其余 `Exception` 子类是受检；`Error` 及其子类同样是非受检，但那是给 JVM 用的。`throws` 声明只能声明受检异常的检查义务——方法签名上写 `throws RuntimeException` 不起任何强制作用，编译器不会要求调用方处理。
+- 【小技巧】不要在循环里用 try-catch 做“逐条容错”时顺手把循环变量也吞掉：catch 里只记日志不记录当前处理的是哪条数据，出问题后根本定位不到是哪条记录触发的。正确做法是在日志里带上当前元素的关键标识（如主键、单号），再决定继续还是中断。
+- 【冷知识】`StackOverflowError` 是 `Error` 不是 `Exception`，而且它发生时栈往往已经满了，catch 住它再想做复杂恢复（比如记日志、调方法）本身就可能再次触发栈溢出。正确姿势是修递归的终止条件或改迭代，而不是试图捕获它兜底。
+- 【小技巧】异常的 `getMessage()` 可能返回 null：无参构造或只传 cause 的异常没有 message，日志模板里直接拼接 `e.getMessage()` 会打出 null。需要稳妥展示时用异常类名 + message 组合，或者直接把异常对象交给日志框架打印完整堆栈。
 
 ## 7. 面试与自测
 
