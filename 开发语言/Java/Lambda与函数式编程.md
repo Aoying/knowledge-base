@@ -2,7 +2,7 @@
 知识点: Lambda与函数式编程
 层级: 基础
 适用版本: 通用（Java 8+）
-更新日期: 2026-10-27
+更新日期: 2026-10-31
 关联:
   - Stream与Optional
   - Java-泛型与类型擦除
@@ -173,6 +173,32 @@ BigDecimal fee = calc.getOrDefault(type, o -> o.getAmount()).apply(order);
 
 - Lambda 与函数式接口是 Java 8 引入，Java 8 项目可全量使用本文内容。
 - Lambda 参数上写 `var`（如 `(var x, var y) -> x + y`）是 Java 11+ 才支持，且要求所有参数统一用 var 或全不用；Java 8 项目别写。
+
+## 小技巧与冷知识
+
+【小技巧】带 default 方法的接口照样能当函数式接口：`@FunctionalInterface` 只数抽象方法，default 方法和 static 方法不算。`Comparator` 就是例子——它有一堆 default 方法（`reversed`、`thenComparing`），仍是函数式接口，Lambda 照常能实现它；自定义接口时先加 default 方法做通用逻辑，不会破坏 Lambda 的可用性。
+
+【小技巧】`Comparator.comparing` 遇到 null 字段会抛 NPE，排序前先包一层 `Comparator.nullsFirst` 或 `nullsLast`：`Comparator.comparing(User::getScore, Comparator.nullsFirst(Comparator.naturalOrder()))`。空值排前还是排后由你定，别等线上 NPE 了才想起字段可能为空；原文第 2 节的 sorted 示例默认字段非空，生产数据别默认这一点。
+
+【小技巧】Java 11 起用 `Predicate.not` 写取反更干净：`filter(Predicate.not(String::isBlank))` 比 `filter(s -> !s.isBlank())` 少一层包装，读起来直接就是“不是空串”。它是 `java.util.function.Predicate` 的静态方法，Java 8 项目照抄编译不过，别在旧版本里用。
+
+【小技巧】`forEach` 里的 `return` 只退出本次 Lambda，不退出外围方法；`break` 和 `continue` 在 Lambda 体里根本写不了。从 for 循环改成 `stream().forEach` 时要小心：原来循环里 `return` 是结束整个方法，改成 forEach 后 `return` 只跳过当前元素，循环照常跑完。想提前结束整个遍历，用普通循环或 Stream 的 `findFirst`、`anyMatch` 这类短路操作。
+
+【小技巧】`orElse` 里的默认值每次都会算，`orElseGet` 只在空时才算：`Optional.ofNullable(x).orElse(expensive())` 里 `expensive()` 不管 x 空不空都会执行一次，改成 `orElseGet(() -> expensive())` 才是惰性求值。默认值只是常量时两者没差别，默认值要调方法、查库、拼字符串时，用错 `orElse` 等于每次白算一次。
+
+【小技巧】`Comparator.comparingInt` / `comparingLong` / `comparingDouble` 比 `comparing` 少一次装箱：`comparing(User::getAge)` 走的是 `Function`，int 要先装箱成 `Integer` 再比较；`comparingInt(User::getAge)` 直接按 int 比较。排序字段是基本类型时优先用这三个，代码短一截，排序量大时也少一层开销。
+
+【小技巧】方法引用遇到重载会歧义：`System.out::println` 有十几个重载，编译器按目标函数式接口的签名挑；目标类型推不出来时编译直接报错。这时改回显式 Lambda（`x -> System.out.println(x)`）或给方法引用加目标类型，歧义就消失了——方法引用不是在所有地方都比 Lambda 好写。
+
+【小技巧】用 `Function.identity()` 代替 `x -> x`：`Collectors.toMap(User::getId, Function.identity())` 比写 `u -> u` 更短，语义也更直白——“就是它自己”。它在 JDK 里就是一个返回参数本身的单例函数，Stream 链里凡是“原样返回”的地方都能用它。
+
+【冷知识】Lambda 在堆栈里没有正经名字：异常堆栈里 Lambda 显示成 `类名$$Lambda$14/0x0000000800c0000` 这种形式，数字是运行期编号，每次启动都可能变。线上按堆栈里的 Lambda 编号去定位方法行不通，要结合它所在的外围方法名和行号认——编号只是运行时的临时身份。
+
+【冷知识】Lambda 不能直接递归：它没有自己的名字，写成 `Function<Integer, Integer> f = n -> n <= 1 ? 1 : n * f.apply(n - 1)` 会编译失败，因为 f 在初始化完成前就被引用了。想递归要么抽成具名方法再用方法引用，要么用 this 上的方法，别硬在 Lambda 里自引用。
+
+【冷知识】`invokedynamic` 本来不是为 Lambda 造的：它是 Java 7 为 JRuby、Groovy 这类动态语言引入的指令，Java 8 做 Lambda 时直接复用了这套机制。所以 Lambda 底层走的是一条为动态语言准备的路——这也是原文第 3 节说它“不是匿名类”的根子，Lambda 的实现类是运行期按需生成的，不是编译期写死的。
+
+【小技巧】Lambda 参数类型推不出来时显式标注：重载的方法各接受不同函数式接口时，编译器可能分不清 Lambda 属于哪个，报错“ambiguous”。在参数上写明类型（如 `(String s) -> s.length()`）或把 Lambda 赋给一个明确类型的变量再传，就能帮编译器定下来；这招在重载的 API 上尤其常用。
 
 ## 7. 面试与自测
 

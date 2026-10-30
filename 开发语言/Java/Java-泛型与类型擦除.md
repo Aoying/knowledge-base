@@ -2,7 +2,7 @@
 知识点: Java-泛型与类型擦除
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - Java
   - MyBatis-Plus
@@ -250,6 +250,28 @@ Integer i = ints.get(0);             // ClassCastException 抛在这里！
 - **JDK 5**：泛型引入；擦除实现（为兼容 1.4 字节码）。
 - **JDK 7**：菱形操作符 `<>`，`Map<String, List<String>> map = new HashMap<>();`，右侧类型由左侧推断。
 - **JDK 8**：目标类型推断增强——`List<String> list = Collections.emptyList();` 不再需要写 `Collections.<String>emptyList()`。
+
+## 小技巧与冷知识
+
+【小技巧】`List<String>.class` 这种写法编译不过：类字面量只能写原生类型 `List.class`，因为运行期根本没有 `List<String>` 这个 Class。需要“带类型信息的 Class”时，用原文的 `TypeToken` / `TypeReference` 那一招，或者传 `Class<T>` 当类型令牌，别在类字面量上较劲。
+
+【小技巧】重载时别拿泛型参数区分：`void foo(List<String> a)` 和 `void foo(List<Integer> a)` 不能同时存在，两者擦除后签名一模一样，编译器报“两者具有相同擦除”。想区分只能改方法名或加别的参数，泛型擦除是方法签名的“盲区”。
+
+【小技巧】`instanceof` 判不了 `List<String>`，但能判 `List<?>`：`obj instanceof List<?>` 是合法的，因为 `?` 不带具体类型信息，擦除后就是 `List`。排查“这个对象是不是个 List”时用无界通配符写判断，带具体类型参数的写法编译直接拦。
+
+【小技巧】`@SuppressWarnings("unchecked")` 只能压住警告，不能修掉问题：它告诉编译器“我担保安全”，但运行期该抛的 `ClassCastException` 照样抛。只在最小范围加（方法或局部变量上），并且只在你能证明安全的地方加；全类压警告等于把原文“堆污染”一节的排查线索全埋了。
+
+【小技巧】`new T[10]` 不合法，但 `(T[]) new Object[10]` 是常见变通：数组创建必须知道运行期组件类型，T 擦除后不知道，所以直接 `new T[]` 编译不过。框架里常见 `(T[]) new Object[n]` 再配 `@SuppressWarnings("unchecked")`，代价是数组里混进错类型时 `ArrayStoreException` 拦不住，取出来才在强转处炸——用之前先确认写入路径是收敛的。
+
+【小技巧】Java 9 起 `@SafeVarargs` 也能标在 private 实例方法上：原文只写了 static/final 方法和构造器，那是 Java 8 的口径；Java 9 把适用范围扩到了 private 实例方法（因为 private 方法不会被重写，同样安全）。public/protected 的实例方法还是不能标——子类重写可能破坏安全性担保。
+
+【小技巧】想在运行期给泛型集合加一道检查，用 `Collections.checkedList`：`List<String> checked = Collections.checkedList(new ArrayList<>(), String.class)`，往里塞错类型会在 `add` 当场抛 `ClassCastException`，而不是等到 `get` 时才炸。原生类型混用、堆污染嫌疑大的边界处包一层它，污染点立刻现形。
+
+【冷知识】泛型签名并没有被擦除干净：`javap -v` 看 class 文件能看到 `Signature` 属性，`List<String>` 这种信息以字符串形式留在 class 文件里，原文的 `getGeneric*` 系列 API 读的就是它。擦除擦掉的是“运行期的类型检查”，不是“声明里的类型记录”——这也是框架能反推 T 的前提。
+
+【冷知识】Java 选擦除是为了兼容 1.4 的字节码：JDK 5 引入泛型时，老代码编译出的 class 文件要能直接跑在新 JVM 上、老 JVM 也要能加载不带泛型的新类库，所以类型参数只能编译期存在。C# 泛型是运行期真实存在的（具现化），代价是 1.0 的程序集不能直接混用新泛型类型——两种设计是兼容性与表达力的取舍。
+
+【冷知识】菱形操作符 `<>` 在 Java 9 之前不能配匿名类：`new ArrayList<>() {}` 在 Java 8 编译不过，因为匿名类需要明确的父类类型参数来推断；Java 9 放开了这个限制，`<>` 也能用在匿名类上。JDK 8 的老项目照抄这段代码会编译失败，先看目标版本再写。
 
 ## 面试与自测
 
