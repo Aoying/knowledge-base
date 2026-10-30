@@ -2,7 +2,7 @@
 知识点: Windows 常用命令
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - 工程实践知识点地图
   - Linux与Shell
@@ -274,6 +274,24 @@ Test-NetConnection host -Port 3306               # 测某端口通不通（替�
 - 管理员终端里映射的网络盘符在普通终端看不到：盘符映射按权限令牌隔离，同一路径换终端要重新映射。
 - 复制命令时带了中文标点：中文逗号、中文引号粘进终端多半直接语法错误，粘贴后先检查引号和括号是半角。
 - `cd` 切了目录却还在原盘：在 cmd 里忘了 `/d` 是最常见的一个，切完用 `cd` 单独回车看当前路径确认。
+
+## 小技巧与冷知识
+
+【小技巧】`where python` 在 cmd 里没问题，在 PowerShell 里直接粘贴会报错：PS 里 `where` 是 `Where-Object` 的别名，不是找程序的命令，`where python` 会被当成过滤条件解析。PS 里找可执行文件用 `Get-Command python` 或 `where.exe python`，原文系统信息一节的 `where python` 只在 cmd 里成立，跨 Shell 复制命令先认清它在哪个 Shell 下。
+
+【小技巧】普通终端里想提权跑一条命令，不用关掉重开管理员终端：`Start-Process powershell -Verb RunAs` 另开一个管理员窗口；只想提权跑单个程序就 `Start-Process notepad -Verb RunAs`。弹出的 UAC 确认点一次即可，比“右键以管理员身份运行”再切回原目录省事，尤其当前目录已经 cd 到深层路径时。
+
+【小技巧】排障时想把整个会话原样留档，用 `Start-Transcript`：`Start-Transcript -Path .\session.log` 之后，输入的每条命令和输出都会写进日志，跑完 `Stop-Transcript` 结束。比事后凭记忆复述“刚才那条命令到底报了什么”可靠，远程协助时把日志文件一发，对方就不用再问你敲了什么。
+
+【小技巧】重装系统后批量装回软件，别一个个 `winget install`：先 `winget export -o apps.json` 把已装软件导出成清单，新系统上 `winget import -i apps.json` 一键装回。原文只讲了 search/install/upgrade 单机操作，export/import 是换机、重装时的成套用法，清单文件本身也可以进版本库留档。
+
+【小技巧】`$PROFILE` 是 PowerShell 的启动配置文件：`notepad $PROFILE` 打开它，里面放常用别名、函数、提示符定制，每次开终端自动加载。文件不存在时先 `New-Item -Type File -Path $PROFILE -Force` 创建；改完新开一个终端即生效，配一次、以后每个终端都带着你的配置走。
+
+【小技巧】Tab 补全不够用时按 `Ctrl+Space`：PSReadLine 会弹出可选补全列表，用方向键挑，比反复按 Tab 猜下一个候选快得多；`Ctrl+R` 是反向搜索历史命令，敲几个关键字就能找回上周跑过的那条长命令。原文只讲了 `Get-History` 看历史，Ctrl+R 是“找历史”比“看历史”更快的入口。
+
+【冷知识】PowerShell 最初的代号叫 Monad，2006 年 11 月才以 Windows PowerShell 1.0 的名字发布。它的管道传对象而不是文本，就是 Monad 时期的设计：命令输出的对象自带属性，后一个命令按属性名取值，不用切字符串。理解这点就明白，为什么 PS 里 `Sort-Object CPU` 不用像 Linux 那样先切字段——两种 Shell 的管道从根上就不是一回事。
+
+【冷知识】`con`、`prn`、`nul`、`aux` 这些名字在 Windows 里建不了文件：它们是 DOS 时代留下的保留设备名，`echo hi > con.txt` 会直接报错。命令行里遇到“文件名看着合法却写不进去”，先看是不是撞了保留名；同样，新建文件夹叫 `con` 在资源管理器里也会被拒绝，这不是权限问题，是名字本身被系统占了。
 
 ## 面试与自测
 
