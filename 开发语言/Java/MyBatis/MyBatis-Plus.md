@@ -2,7 +2,7 @@
 知识点: MyBatis-Plus
 层级: 进阶
 适用版本: MyBatis-Plus 3.5.3.2
-更新日期: 2026-10-23
+更新日期: 2026-10-30
 关联:
   - Java
   - Spring-Boot
@@ -83,6 +83,18 @@ orderService.page(page, Wrappers.<Order>lambdaQuery().eq(Order::getStatus, statu
 
 - [解抵押平台](项目沉淀/解抵押平台.md)：MyBatis-Plus 与 MySQL → Oracle SQL 迁移
 - [神农-e贷-法人版](项目沉淀/神农-e贷-法人版.md)：企业级数据访问实战
+
+## 面试与自测
+
+1. PageHelper 和 MyBatis-Plus 分页插件为什么不能混用？神农项目里的落点是什么？
+2. `updateById` 默认会忽略 null 字段，想把某个字段置 null 有哪几种办法？
+3. 乐观锁生效需要哪两个条件？更新行数为 0 说明什么，应该怎么处理？
+
+### 参考答案
+
+1. 混用会在同一条查询链路上出两套 limit。神农项目栈里 PageHelper 1.4.3 与 MP 并存，落点是：存量 XML 查询走 PageHelper，新代码走 MP 分页插件，同一条查询链路上只能出现一种，别叠加。
+2. 默认字段策略下 null 字段不更新，这是为防误清空。想置 null 可以用 `update(entity, wrapper)` 做全量更新，或调整字段策略，或用 lambdaUpdate 的 `set` 显式赋值（含置 null）。
+3. 两个条件缺一不可：实体加 `@Version`，且注册了乐观锁拦截器。更新行数为 0 表示版本冲突，要给业务一个明确的冲突提示与重试策略，而不是笼统报“更新失败”。
 
 ## 关联知识
 

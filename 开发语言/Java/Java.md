@@ -2,7 +2,7 @@
 知识点: Java
 层级: 基础
 适用版本: JDK 8+ / Spring Boot 2.7
-更新日期: 2026-10-29
+更新日期: 2026-10-30
 关联:
   - Java知识点地图
   - Java-并发编程
@@ -204,3 +204,15 @@ sender.send("hi");
 - **构造器里调可重写方法**：对象还没初始化完，子类重写方法可能读到未赋值的字段。
 - **整数溢出不报错**：`int` 超过约 21 亿会绕回负数，金额、计数可能为负时用 `long`。
 - **import 同名类冲突**：两个包都有同名类时，只能 import 一个，另一个写全限定名。
+
+## 面试与自测
+
+1. `@Transactional` 方法里内层 try-catch 吃掉异常后，外层事务为什么不回滚？两种解决办法是什么？
+2. OceanBase 下大事务超时回滚、MySQL 上正常，原因是什么？怎么解决？
+3. Java 只有值传递，传对象时“方法内改属性”和“方法内重新赋值”各有什么效果？
+
+### 参考答案
+
+1. 因为 Spring 靠异常触发回滚，异常被 catch 后事务拦截器认为“正常返回”直接提交。解决办法：catch 后 `throw new RuntimeException(e)` 重新抛出，或手动 `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()`。
+2. 原因是 OceanBase 对大事务限制更严（undo 保留、超时阈值），默认超时参数和 MySQL 不同。解决办法：大批量拆小批次提交；调大 `ob_trx_timeout`；能异步就别放事务里。
+3. 传对象是复制引用值：方法内改属性会影响原对象，重新赋值不会影响原对象。传基本类型则是复制值本身。

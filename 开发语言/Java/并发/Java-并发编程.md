@@ -2,7 +2,7 @@
 知识点: Java 并发编程
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-30
 关联:
   - Java知识点地图
   - Java
@@ -81,6 +81,18 @@
 ## 异步编排的位置
 
 `CompletableFuture` 的编排 API（thenApply/thenCompose/thenCombine/exceptionally）与 Spring `@Async` 的用法在 [Async-异步](开发语言/Java/Async-异步.md) 篇展开；本系列只强调一条：异步任务必须显式指定业务线程池，默认 commonPool 只配跑纯计算短任务。并行调多个下游接口再聚合结果，是它的典型落点。
+
+## 面试与自测
+
+1. 用普通 boolean 做跨线程停止开关为什么必翻车？正确做法是什么？
+2. `sleep` 和 `wait` 在锁方面的区别是什么？`wait` 的使用有什么前提？
+3. 本篇三条生产红线中，关于线程池和 ThreadLocal 的要求各是什么？
+
+### 参考答案
+
+1. 必翻车在可见性上：线程各有缓存，普通 boolean 的修改可能别的线程看不见。开关要声明为 volatile，或用中断机制。
+2. `sleep` 不释放锁，`wait` 释放锁；`wait` 必须在 synchronized 里使用，并配 notify 使用。中断是协作式的：`interrupt()` 只置标志并让阻塞方法抛 `InterruptedException`，catch 后要么恢复标志要么退出，吞掉等于线程停不下来。
+3. 线程池：禁止无界队列的快捷线程池工厂，参数手写、线程命名、拒绝策略按业务选。ThreadLocal：凡 set 必 finally remove，尤其在线程池环境，否则会串数据与泄漏。
 
 ## 关联知识
 
