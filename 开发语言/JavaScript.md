@@ -2,7 +2,7 @@
 知识点: JavaScript
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-24
+更新日期: 2026-10-30
 关联:
   - 总览
   - 前端开发
@@ -301,3 +301,15 @@ const obj = JSON.parse(text);            // 字符串 -> 对象，非法 JSON �
 - **return 后自动分号**：`return` 单独一行、值写在下一行，会被自动补分号变成返回 undefined；值跟 return 写同行。
 - **在条件里写单个等号**：`if (a = 1)` 是赋值不是比较，还恒为真；比较永远写两个或三个等号并配合 lint。
 - **定时器里的 this 与参数**：`setTimeout(obj.method, 100)` 会丢 this，包一层箭头函数 `() => obj.method()` 再传。
+
+## 面试与自测
+
+1. 并行调 10 个接口，1 个失败、9 个成功的结果也拿不到，原因是什么？原文给了哪两种解法？
+2. `arr.forEach(async x => await fetch(x))` 后面代码先跑了、请求还没完，原因是什么？原文给了哪两种改法？
+3. `sort` 和 `toSorted` 有什么区别？原文为什么说这个坑很多人踩过？
+
+### 参考答案
+
+1. 原因：`Promise.all` 遇到第一个 reject 就整体 reject。解法一：用 `Promise.allSettled` 拿全部结果再过滤；解法二：给每个 promise 包 `.catch` 兜底。反过来，如果“都要结果”才用 allSettled，只关心“任一失败全失败”才用 all。
+2. 原因：forEach 不管回调返回的 Promise，async 回调只是“启动了”而已。改法一：换 `for...of` + await（串行）；改法二：`await Promise.all(arr.map(...))`（并行）。
+3. `sort` 是原地改原数组，`toSorted`（以及 `toReversed`、`toSpliced`）是不改变原数组的版本。坑就在于用 `sort` 时以为拿到了新数组，实际上原数组已经被改了。
