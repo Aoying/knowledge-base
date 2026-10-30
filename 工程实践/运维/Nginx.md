@@ -2,7 +2,7 @@
 知识点: Nginx
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-30
+更新日期: 2026-10-31
 关联:
   - 工程实践知识点地图
   - Docker
@@ -288,6 +288,28 @@ error_page 500 502 503 504 /50x.html;
 - **把后端端口暴露的锅扣给 Nginx**：请求绕过 Nginx 直连后端端口能通，是后端监听和防火墙的问题，Nginx 配置里没有能拦这个的指令。
 - **server_name 写了域名但用 IP 测试**：按域名选 server 靠的是请求里的 Host 头，浏览器输 IP 时 Host 就是 IP，自然落到默认 server。用域名测试，或手动带 Host 头验证。
 - **日志不看 error_log 只盯 access_log**：access_log 记录请求结果，error_log 才记录为什么出错（文件找不到、后端连不上、配置问题）。排障先看 error_log 的最后几行。
+
+## 小技巧与冷知识
+
+【小技巧】`proxy_pass` 尾巴的斜杠决定 URI 怎么拼，别靠猜：`location /api/ { proxy_pass http://backend/; }` 带斜杠时，location 匹配到的 `/api/` 部分会被替换掉，请求 `/api/user` 转给后端的是 `/user`；不带斜杠 `proxy_pass http://backend;` 时，完整原始 URI 原样转发，后端收到的是 `/api/user`。原文只说了“拼接规则不一样”，落到实处就是“带斜杠替换匹配段、不带斜杠全量转发”，复制配置先看斜杠在不在。
+
+【小技巧】`add_header` 在 location 里一写，server 层的同名配置就全丢了：Nginx 的 `add_header` 是按层级整体继承的，location 里只要写了一条 `add_header`，server 层写的所有 `add_header` 都不再生效，不会逐条合并。静态资源 location 里加了 `Cache-Control`，结果安全头 `X-Frame-Options` 悄悄没了，多半就是这个原因；要么在 location 里把需要的头全写一遍，要么改用 `more_set_headers` 这类第三方模块。
+
+【小技巧】location 里的 `if` 尽量别用，改用 `map`：`if` 在 location 上下文里行为特殊，官方文档明确说明只有 `return` 和 `rewrite` 在 `if` 里是安全的，写 `proxy_pass`、`add_header` 这类指令可能出现预期外的结果。需要按条件分流时，先在 http 层用 `map $http_user_agent $backend { ... }` 把条件算成一个变量，再在 location 里按变量值正常写指令；条件判断和转发逻辑分开，配置才不会时灵时不灵。
+
+【小技巧】`proxy_pass` 写死域名时，IP 是启动那一刻解析一次的：`proxy_pass http://api-service:8080;` 里域名只在 Nginx 启动或 reload 时解析，后端容器 IP 变了（比如 Docker 里容器重建）Nginx 还会往旧 IP 发。改成带变量的写法 `set $upstream api-service:8080; proxy_pass http://$upstream;`，并配 `resolver 127.0.0.11 valid=30s;`，Nginx 才会在每次请求时重新解析；容器化部署里后端地址常变，这一行是刚需。
+
+【小技巧】想让 Nginx 到上游的连接复用，别只写 `keepalive`：upstream 块里写 `keepalive 32;` 只是开了连接池，还要配 `proxy_http_version 1.1;` 和 `proxy_set_header Connection "";`，否则 Nginx 默认用 HTTP/1.0 回源、每次请求都新建连接。原文的 WebSocket 一节用了 1.1 和 Upgrade 头，那是升级协议；普通回源复用连接要的是把 Connection 头清空，三行缺一不可，少一行连接池就形同虚设。
+
+【小技巧】后端挂了先别急着 502，用 `proxy_cache_use_stale` 顶一会儿：`proxy_cache_use_stale error timeout updating;` 让后端报错、超时或正在更新缓存时，Nginx 先把缓存里过期的旧内容顶上去，用户看到的是几分钟前的数据而不是错误页。再配 `proxy_cache_background_update on;`，过期后由 Nginx 在后台悄悄回源刷新，前台请求全程不被拖慢；原文的 proxy_cache 只讲了命中与否，这两行是“缓存当降级兜底”的用法。
+
+【小技巧】写重定向和日志时分清 `$uri` 和 `$request_uri`：`$uri` 是经过解码和规范化后的路径（`%20` 变回空格、`/../` 被折叠掉），`$request_uri` 是客户端发来的原始完整 URI（带查询串、原样不动）。`return 301 https://$host$request_uri;` 用后者才能原样保留查询参数；用 `$uri` 拼跳转，带中文或特殊字符的地址会被改写一次，排障时先看你用的是哪一个变量。
+
+【小技巧】鉴权别在每个 location 里重复写逻辑，用 `auth_request`：`location /api/ { auth_request /auth; proxy_pass http://backend; }` 配一个 `location = /auth { internal; proxy_pass http://auth-service/verify; }`，Nginx 会先发一个子请求问鉴权服务，返回 2xx 才放行、401/403 直接拦。鉴权逻辑集中在一个服务里，业务接口不用再各自校验 token；原文的限流和缓存都是 Nginx 自带能力，这招是把“先问一嘴再放行”也收进 Nginx。
+
+【冷知识】Nginx 的名字读作 engine-x，作者是俄罗斯工程师 Igor Sysoev：他 2002 年开始写 Nginx，第一个公开版本在 2004 年 10 月发布，最初是为了解决 C10K 问题——一台服务器同时撑住一万个并发连接。名字里的 X 就是“未知数 / 扩展”的意思，读法不是字母 N-G-I-N-X，而是 engine 加 x。
+
+【小技巧】怀疑某个模块没编译进去，先跑 `nginx -V`：大写的 `-V` 会打印编译参数，包括 `--with-http_ssl_module`、`--with-stream` 这类模块开关。配 `stream` 做四层代理或配 `http2` 报错“未知指令”，先看 `-V` 输出里有没有对应模块，没有就说明是编译时没加、不是配置写错了；小写的 `-v` 只打印版本号，查模块必须用大写。
 
 ## 面试与自测
 

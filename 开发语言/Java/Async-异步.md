@@ -2,7 +2,7 @@
 知识点: "@Async 异步"
 层级: 进阶
 适用版本: Spring Boot 2.7
-更新日期: 2026-10-29
+更新日期: 2026-10-31
 关联:
   - Java
   - Java-并发编程
@@ -90,6 +90,26 @@ Result r = f1.thenCombine(f2, (u, os) -> new Result(u, os))
 - 优雅停机已在配置里开了 `waitForTasksToCompleteOnShutdown`：发布重启时在途异步任务有机会跑完，但超过 `awaitTerminationSeconds` 仍会被中断；发短信这类任务要按「可能执行一半被杀」设计幂等。
 - 线程名前缀必须有意义（`biz-async-`），日志里一眼能分清是哪个池的线程；再配合对队列长度、活跃线程数的监控告警，池打满在用户感知前就能发现。
 
+
+## 小技巧与冷知识
+
+【小技巧】线程池 Bean 叫 taskExecutor 会被 Spring 自动当成默认异步执行器：@Async 不指定池名时，Spring 会先找一个名字叫 taskExecutor 的 TaskExecutor Bean，找到了就用它，找不到才回落到 SimpleAsyncTaskExecutor。项目里只有一个异步池时，把 Bean 名定成 taskExecutor，@Async 上就不用每个方法都写池名；有多个池再显式指定，默认池只留给最通用的那个。
+
+【小技巧】@Async 方法返回 CompletableFuture 时，方法里抛的异常不会进 AsyncUncaughtExceptionHandler：异常会被包进 future 里，handler 只管返回 void 的方法。调用方必须在编排里处理（exceptionally、handle 或 get 时捕获），否则异常悄悄躺在 future 里没人看；想让 handler 生效就别返回 future，两者是互斥的异常通道。
+
+【小技巧】thenApply 和 thenApplyAsync 跑的线程不一样：不带 Async 的回调直接跑在让上游 future 完成的那个线程上，可能是调用方线程、也可能是上游任务的线程；带 Async 的回调才会被提交到指定执行器。想把回调也隔离到业务池，必须写 thenApplyAsync(fn, bizExecutor)，只写 thenApply 等于把回调偷偷塞回了别人的线程。
+
+【小技巧】join 和 get 的异常类型不一样：join 抛 unchecked 的 CompletionException，get 抛 checked 的 ExecutionException 和 InterruptedException。编排链里用 join 写起来顺手，但拿根因要一层层剥 CompletionException.getCause()；日志里只打外层异常，真正的下游报错会被藏一层，排障先剥到 cause 再看。
+
+【小技巧】orTimeout 和 completeOnTimeout 是两种超时策略：orTimeout 超时后抛 TimeoutException，整条链直接失败；completeOnTimeout 超时后用你给的默认值继续往下走。想“超时就降级”用后者，想“超时就报错”用前者；两者都是 Java 9 才加进 CompletableFuture 的，Java 8 的项目照抄会编译不过。
+
+【小技巧】用 TaskDecorator 复制 MDC 时，任务跑完要清掉：装饰器在提交时把调用方的 traceId 拷进异步线程，任务结束时必须在 finally 里 MDC.clear()，否则线程回池后，旧 traceId 会被下一个复用该线程的任务带上，日志里出现“一个 traceId 串了两件不相干的事”。复制和清理是一对，装饰器里只写复制不写清理等于埋了串号的坑。
+
+【冷知识】@Async 是 Spring 3.0 才引入的：2009 年发布的 Spring Framework 3.0 首次带来 @Async 和 @Scheduled 这一对声明式注解，之前想异步只能自己 new Thread 或往 Executor 里 submit。理解这点就明白为什么它和 @Transactional 共享同一套 AOP 代理机制——两者都是 3.0 时代“用注解声明横切关注点”这个思路的产物。
+
+【冷知识】ForkJoinPool 公共池的大小默认是 CPU 核数减 1：CompletableFuture 不传执行器走的就是这个池，机器 8 核它只有 7 个线程。阻塞 IO 的任务一旦占满这 7 个线程，并行流、别的 supplyAsync 全都会被拖住；原文说“阻塞 IO 别放公共池”，根子就是这个池子小到经不起任何一个阻塞任务。
+
+【冷知识】优雅停机只等“已经提交的”任务：setWaitForTasksToCompleteOnShutdown(true) 让容器关闭时等在途任务跑完，但关机流程一旦开始，往池里新提交的任务会被直接拒绝。发布窗口里“最后一批通知还没发完”时，先停掉新任务的入口、再让容器关机，顺序反了就会丢任务；停机保护的是已提交的任务，不是还没提交的。
 
 ## 6. 面试与自测
 
