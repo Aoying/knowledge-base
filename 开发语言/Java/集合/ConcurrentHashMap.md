@@ -2,7 +2,7 @@
 知识点: ConcurrentHashMap
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-22
+更新日期: 2026-10-31
 关联:
   - HashMap
   - Java-并发编程
@@ -229,6 +229,32 @@ map.put("count", v == null ? 1 : v + 1); // 两线程读到同一旧值，计数
 | 扩容 | 单段扩容 | 全表扩容，多线程协助 transfer |
 | 计数 | 分段统计后汇总 | baseCount + CounterCell 分散计数 |
 | 新增 API | 无 | compute / merge / forEach / search / newKeySet |
+
+## 小技巧与冷知识
+
+【小技巧】`compute` 的重映射函数返回 null 会直接删掉这个 key：`map.compute(k, (key, val) -> null)` 等价于一次原子的 remove。想“满足条件才删”时别写先 get 再 remove 的两步，用 compute 一步完成“读-判断-删”，判断和删除之间别的线程插不进来；返回 null 不是“算出个空值”，而是明确的删除语义。
+
+【小技巧】`computeIfAbsent` 的映射函数返回 null 时不建立任何映射：函数算出 null，map 里什么都不放，下次再调同一个 key 还会重新算一次。别拿“返回 null”当“已经算过、结果是空”的标记——缓存场景里这意味着缓存永远不命中，函数会被反复调用；需要缓存“空结果”时用一个专门的哨兵对象当 value。
+
+【小技巧】需要“并发 Set 但又要随时查 key 对应的值”时，用带默认值的 `keySet` 视图：`map.keySet(defaultValue)` 返回的 Set 里每 add 一个 key，就等于往 map 里放 `key -> defaultValue`。`newKeySet()` 丢掉了 value 这一侧，带默认值的 keySet 两边都保住了，Set 的 add/remove 和 Map 的读写是同一份数据。
+
+【小技巧】别拿 `containsValue` 做高频判断：它是 O(n) 全表扫描，元素一多就慢；而且结果是弱一致的——扫描中途别的线程改了值，返回的结果可能既不是扫描开始前的值，也不是扫描结束后的值。业务里需要“按值反查 key”时，另外建一个反向索引 Map，列表式扫描只适合偶尔一次的排查。
+
+【小技巧】并行 `search` 会短路，但返回的是“先算出来的那个”，不是“遇到的第一个”：`search(threshold, (k, v) -> 匹配 ? v : null)` 一旦某个线程找到非 null 结果就尽早返回，不用等全表扫完。哪个线程先找到是不确定的，多个匹配时别指望它按 key 顺序返回第一个；要确定性顺序就先把候选集收拢再在单线程里挑。
+
+【小技巧】别在 ConcurrentHashMap 实例上加 `synchronized` 指望复合操作变原子：它的内部方法根本不在 map 对象上同步，锁只落在单个桶头节点上，外部 `synchronized(map)` 锁不住 put/compute 的内部路径。复合操作要么用 compute/merge 系方法一步完成，要么自己另加一把读写锁把整个复合操作包起来，锁 map 对象本身是白锁。
+
+【小技巧】把它当缓存用必须自己管上限：ConcurrentHashMap 没有任何淘汰机制，只进不出，key 一直涨下去最后就是 OOM。需要容量上限、过期、LRU 淘汰时直接用 Caffeine 或 Guava Cache，别手写定时任务扫全表删——定时清理本身又是一次全表扫描，还会在清理瞬间和读写抢桶锁。
+
+【小技巧】超大表别用 `size()` 拿元素数：`size()` 返回 int，元素数超过 `Integer.MAX_VALUE` 时直接封顶返回它，不会告诉你真实值。`mappingCount()` 返回 long，同样是近似值但不会被 int 上限截断；需要精确计数时这俩都不行，得自己用 LongAdder 另维护一份计数。
+
+【小技巧】`putAll` 整体不是原子的：它只保证每一次 put 各自原子，批量放一半时别的线程已经能看到前一半数据。需要“批量初始化一次可见”时，先在本地 HashMap 里把数据装好，再把整个 map 引用通过 `volatile` 字段或 `AtomicReference` 一次性发布出去；或者把整批数据包成一个整体对象，用 `computeIfAbsent` 占位一个 key。
+
+【冷知识】ConcurrentHashMap 是 Java 5 随 JSR 166 一起进 JDK 的：它是 `java.util.concurrent` 首批类之一，由 Doug Lea 主导设计，2004 年随 JDK 5 发布。也就是说它比 JDK 8 的 CAS + 桶头锁重写早了整整十年，最初的版本是 JDK 7 那套 Segment 分段锁结构。
+
+【冷知识】源码里桶头节点的 hash 有三个特殊负值，正常 hash 永远是非负数：`MOVED = -1`（ForwardingNode，桶已迁移）、`TREEBIN = -2`（红黑树根节点）、`RESERVED = -3`（computeIfAbsent 占位节点）。`spread` 扰动函数会把 key 的 hashCode 最高位置 0，保证正常节点的 hash 都是正数；读源码时看到负 hash，一眼就能认出这是特殊节点而不是真实数据。
+
+【冷知识】JDK 自己也在用 ConcurrentHashMap：`java.lang.ClassLoader` 的并行类加载锁表 `parallelLockMap` 就是一个 ConcurrentHashMap，按类名给每个正在加载的类配一把锁。类加载是典型的高并发读场景——同一个类可能被多个线程同时请求加载，JDK 没另写一套并发结构，直接复用了它。
 
 ## 10. 面试与自测
 

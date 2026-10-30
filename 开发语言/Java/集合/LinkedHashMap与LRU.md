@@ -2,7 +2,7 @@
 知识点: LinkedHashMap与LRU
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-23
+更新日期: 2026-10-31
 关联:
   - HashMap
   - TreeMap与红黑树
@@ -112,6 +112,34 @@ class LruCache<K, V> extends LinkedHashMap<K, V> {
 ## 9. 版本差异
 
 - 机制自 JDK 1.4 引入后基本稳定，无显著版本差异；JDK 8 起可直接用 HashMap 的函数式 API（`computeIfAbsent` 等），访问顺序模式下它们同样触发节点移位。
+
+## 小技巧与冷知识
+
+【小技巧】想“摸一下”某个 key 让它变新，别用 `containsKey` 或 `getOrDefault`：访问顺序下只有 `get()` 会把节点挪到链尾，`containsKey` 和 `getOrDefault` 内部直接调 `getNode`、不经过刷新顺序的钩子，查了等于没查。判断“有没有”用 `containsKey`、想“刷新访问时间”用 `get`，两个意图别用同一个方法混着办，缓存里“查一下在不在”顺手把热度刷掉是最常见的误用。
+
+【小技巧】`put` 已有 key 也算一次访问：访问顺序模式下更新已有 key 的值，节点同样会被挪到链尾——`putVal` 里找到旧节点后会调刷新顺序的钩子。想显式“touch”某个 key 又不想读它的值时，`put(key, 同样的值)` 就能把它变新；反过来，别以为“只改值不算访问”，覆盖写一样会打乱淘汰顺序。
+
+【小技巧】淘汰只在插入新 key 时触发，更新已有 key 不会淘汰：`removeEldestEntry` 只在 `afterNodeInsertion` 里被调用，`put` 已有 key、哪怕 size 早已超容，也不会触发任何淘汰。超容状态只能由“插入一个新 key”终结——一次插入最多淘汰一个，所以批量 `putAll` 插 10 个新 key 可能连续淘汰 10 个，别指望一次 put 把账算清。
+
+【小技巧】想拿“最久未访问的那一项”，直接取迭代器的第一个元素：访问顺序下链头就是最久未访问的，`map.entrySet().iterator().next()` 拿到的就是它，不用自己再维护时间戳。取的时候用 `entry.getValue()` 读值，别用 `map.get(key)`——后者会把这个刚要淘汰的节点又挪到链尾，查一次就把它“救活”了。
+
+【小技巧】`removeEldestEntry` 里可以顺手做淘汰的收尾工作：参数 `eldest` 就是即将被删的那个节点，需要关连接、记淘汰日志、回写脏数据时，在返回 true 之前用它把事办了，别等事后去日志里反推“刚才删了谁”。但别在里面再 `put`/`get` 同一个 map——淘汰钩子正跑在插入流程中间，重入会把链表和 `modCount` 搅乱。
+
+【小技巧】容量为 0 的 LRU 缓存永远是空的：`removeEldestEntry` 的判断是 `size() > capacity`，capacity 传 0 时每插入一个新节点、size 变成 1 就立即触发淘汰，刚插进去的那个就是链头、马上被删掉。容量至少从 1 开始才有意义；想表达“禁用缓存”就直接别建这个对象，别拿 capacity=0 当开关。
+
+【小技巧】给 LRU 加过期时间时，从链头开始扫最便宜：访问顺序下链头是最旧的，过期项一定集中在链头一侧。定时清理时从 `iterator().next()` 开始往后删，遇到第一个未过期的就停——不用全表扫描。`removeEldestEntry` 只看 size 不看时间，过期逻辑要自己补，这条“从最旧端扫、见新即停”是手写过期缓存最省的写法。
+
+【小技巧】`accessOrder` 只能在构造时定，之后改不了：构造参数第三个 `true/false` 一旦传进去，这张表的顺序模式就定死了，没有 setter 能切换。想把一张插入顺序的表改成 LRU，只能新建一张访问顺序的表再 `putAll` 拷过去；建表之前先问一句“以后要不要按访问时间淘汰”，省得上线后再返工。
+
+【小技巧】`get` 返回 null 时分不清“键不存在”还是“值就是 null”：LinkedHashMap 允许 null 值，缓存里 `get` 到 null 可能是没命中、也可能是命中了一个 null 值。区分要用 `containsKey`，但注意它不刷新访问顺序——“先 containsKey 判存在、再 get 取值”会查两次桶，热 key 上这点开销可以接受，别为了省一次查找把 null 值和缺失混成一回事。
+
+【小技巧】访问顺序模式下 `get` 是写操作，别把它当纯读用：`get` 命中会改链表、递增 `modCount`，`Collections.synchronizedMap` 包一层后，读多写少的场景锁竞争比 HashMap 更重。并发量一上来就别硬扛手写 LRU，直接上 Caffeine；单机小缓存也要注意，遍历时同样要手动加同步块，包装器只锁单个方法调用。
+
+【冷知识】Android 的 `LruCache` 就是基于 LinkedHashMap 实现的：`android.util.LruCache` 内部用 `LinkedHashMap(0, 0.75f, true)`，重写 `removeEldestEntry`、按 `sizeOf()` 统计的字节数而不是条数来淘汰。手机端图片缓存这套写法用了十几年——手写 LRU 不是玩具，Android 官方缓存就是这么搭出来的。
+
+【冷知识】Guava Cache、Caffeine 的淘汰是近似 LRU，不是精确 LRU：它们用采样加访问频率加权来挑淘汰对象，换取高并发下的性能；手写 LinkedHashMap 的淘汰是精确的——链头一定是全局最久未访问的那一个。数据量小、单机、要求淘汰结果可预测时，精确 LRU 反而更简单可控；上了规模再换近似算法，是“先精确后近似”，不是“手写不如库”。
+
+【冷知识】LinkedHashMap 是 JDK 里唯一内置“访问即重排”的 Map：HashMap、TreeMap、EnumMap、ConcurrentHashMap 都没有 accessOrder 这个概念，顺序要么是哈希桶顺序、要么是 key 的值排序、要么干脆无序。想用标准库实现“最近最少使用”，LinkedHashMap 是唯一不用自己维护链表的选择——这也是它在 JDK 集合里不可替代的一点。
 
 ## 10. 面试与自测
 
