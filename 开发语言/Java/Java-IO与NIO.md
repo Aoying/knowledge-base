@@ -2,7 +2,7 @@
 知识点: Java IO 与 NIO
 层级: 进阶
 适用版本: JDK 8+（NIO.2 为 JDK 7 引入）
-更新日期: 2026-10-31
+更新日期: 2026-11-02
 关联:
   - Java
   - 计算机网络
@@ -52,6 +52,7 @@
 
 - `FileChannel`、`SocketChannel`、`ServerSocketChannel`，可配置非阻塞模式；数据永远在 Channel 与 Buffer 之间流转，不直接操作数组。
 - `FileChannel` 独有 `transferTo` / `transferFrom`（零拷贝，见第 5 节）与 `map`（内存映射文件）。
+- `map()` 单次映射有硬上限：size 不得超过 `Integer.MAX_VALUE`（约 2GB），超限抛 `IllegalArgumentException: Size exceeds Integer.MAX_VALUE`（JDK 源码限制，至 JDK 20 仍如此）；超大文件要分段映射，每段 < 2GB。根源是 `MappedByteBuffer` 用 int 下标索引，不是操作系统限制。
 
 ### 3.3 Selector：多路复用的入口
 
@@ -89,6 +90,11 @@ while (true) {
 
 - 骨架的两个留白就是实战重点：`write` 一次写不完要注册 `OP_WRITE` 等可写再续写；读到的字节流**没有消息边界**，粘包拆包必须由应用层协议（长度前缀、分隔符）解决。
 
+### 3.4 OP_WRITE 只在写不完时注册
+
+- Socket 绝大多数时间都是「可写」的，`OP_WRITE` 一直挂着，`select()` 会立刻返回、空转烧 CPU。正确做法：平时只关心 `OP_READ`，`write()` 返回 0 或没写完时才把 `OP_WRITE` 加进 interestOps，等可写事件触发把剩余数据写完，立即取消 `OP_WRITE`。
+- 与之对称的坑：写不完却不注册 `OP_WRITE`、而是原地循环重试写，等于把非阻塞写又退化成忙等；写完了不取消 `OP_WRITE`，等于把 Selector 变成空转循环。两个方向错都会烧 CPU，只是烧法不同。
+
 ## 4. NIO.2 与 AIO
 
 - `Path` / `Files` 取代 `File`：`Files.readAllBytes`、`Files.lines`（流式读大文件）、`Files.walk` 遍历目录，日常文件操作优先用这套。
@@ -100,8 +106,16 @@ while (true) {
 - `FileChannel.transferTo(position, count, socketChannel)` 解决它：数据在内核内部从文件缓冲直达 socket 缓冲（底层 sendfile），不经过用户态。文件下载、静态资源、消息中间件落盘转发都吃这个红利。
 
 ```java
-long sent = in.transferTo(0, in.size(), socketChannel); // 单次有上限，大文件要循环累加 position
+long position = 0, size = in.size();
+while (position < size) {
+    long n = in.transferTo(position, size - position, socketChannel);
+    if (n <= 0) break; // 返回 0 说明对端背压/暂不可写，交给 OP_WRITE 续传，不要空转
+    position += n;
+}
 ```
+
+- `transferTo` 的契约只保证「至多传 count 字节」，实际传多少由内核与对端接收窗口决定，返回 0 或不足量都正常，必须循环累加 position；单次调用传完整个大文件是指望不上的。
+- 零拷贝的前提是数据不经过用户态——需要加密、压缩、改写内容的场景用不上它，数据必须进用户态加工时，零拷贝的收益就不存在了。
 
 - Netty 的零拷贝是另一个层面（`CompositeByteBuf` 逻辑合并、堆外内存池化），与 sendfile 不是一回事，面试常混为一谈。
 
@@ -138,6 +152,7 @@ long sent = in.transferTo(0, in.size(), socketChannel); // 单次有上限，大
 - Selector 的工作原理？为什么能单线程管万级连接？
 - 零拷贝解决的是哪一趟拷贝？`transferTo` 为什么可能要循环调用？
 - 粘包的根本原因与三种常用拆包方式？
+- `FileChannel.map()` 的单次映射上限与 `transferTo` 必须循环的原因？`OP_WRITE` 常驻注册会怎样？
 
 ### 参考答案
 
@@ -146,10 +161,12 @@ long sent = in.transferTo(0, in.size(), socketChannel); // 单次有上限，大
 3. 一个 Selector 注册多个 Channel，关心 OP_ACCEPT、OP_CONNECT、OP_READ、OP_WRITE 四种事件；`select()` 阻塞到至少一个事件就绪，再逐个处理就绪集合，处理完必须移除已处理 key，否则重复触发。它能单线程管万级连接，是因为线程不再为每个连接阻塞等待，而是靠操作系统 epoll/kqueue 多路复用、只在有事件时才处理；但实战仍需处理写不完续写（注册 OP_WRITE）和粘包拆包。
 4. 零拷贝省掉的是「内核缓冲 → 用户缓冲」这一趟拷贝：只转发不加工的场景下，数据不必经过用户态。`FileChannel.transferTo()` 让数据在内核内部从文件缓冲直达 socket 缓冲（底层 sendfile），不经过用户态。单次调用有上限，大文件要循环累加 position，直到累计发送量等于文件大小。
 5. 根本原因是 TCP 是字节流，没有消息边界，发送端与接收端的分段、合并方式不受应用控制，多个应用消息可能粘在一起或被拆开。常用拆包方式有三种：一是长度前缀，先读定长头部得到消息长度再按长度取体；二是分隔符，用特定字符或字节序列分隔消息；三是定长报文，每条消息固定长度，按长度切分（前两种为正文明确给出，定长为标准补充）。
+6. `map()` 单次映射上限是 `Integer.MAX_VALUE`（约 2GB），超限抛 `IllegalArgumentException: Size exceeds Integer.MAX_VALUE`，根源是 `MappedByteBuffer` 用 int 下标索引（JDK 源码限制，至 JDK 20 仍如此），超大文件要分段映射。`transferTo` 的契约只保证至多传 count 字节，实际量由内核与对端接收窗口决定，返回 0 或不足量都正常，必须循环累加 position 并处理返回 0（交给 `OP_WRITE` 续传）。`OP_WRITE` 常驻注册时 socket 几乎一直可写，`select()` 会立刻返回、空转烧 CPU；正确做法是只在写不完时注册，写完立即取消。
 
 ## 9. 关联知识
 
 - [计算机网络](计算机基础/计算机网络.md)：TCP 字节流语义是粘包、多路复用（epoll）的前置知识。
 - [虚拟线程](开发语言/Java/虚拟线程.md)：改变阻塞 IO 的成本模型，影响 NIO 选型。
 - [JVM 故障排查](开发语言/Java/JVM/JVM-故障排查.md)：堆外内存与句柄泄漏的排查工具链。
+- [Netty](开发语言/Java/Netty.md)：本篇原理的工程落地（EventLoop、ByteBuf、编解码器）。
 - Netty 是本篇的工程落地：实际项目写网络层直接学 Netty 的 EventLoop、ByteBuf 与编解码器，本篇是其原理底座。
