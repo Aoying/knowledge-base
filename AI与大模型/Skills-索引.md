@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-31
+更新日期: 2026-11-03
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -176,3 +176,12 @@
 - **热度/更新**：106k+ stars（2026-10-31 核验 GitHub API），2026-10-30 仍在更新。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；skill 本身是设计指令，另有浏览器检查步骤——引入前通读 SKILL.md，确认浏览器检查只读本地页面、不上传截图与源码到外部服务。
+
+### 18. Agent-Skills-for-Context-Engineering（muratcankoylan/Agent-Skills-for-Context-Engineering）上下文工程与多 Agent 技能集
+
+- **功能**：17 个 Agent skills 的合集，围绕上下文工程：context-fundamentals（上下文基础）、context-compression（上下文压缩）、context-optimization（上下文优化）、context-degradation（上下文退化）、memory-systems（记忆系统）、multi-agent-patterns（多智能体模式）、harness-engineering（Agent 骨架工程）、evaluation（评测）、self-managed-context（自管理上下文）、tool-design（工具设计）等；另有 researcher、template、examples 与治理文档。
+- **适用场景**：ao 的小说引擎长篇连贯性痛点直接对口——多章上下文组织/压缩/裁剪、记忆系统、长程任务的上下文退化，都是这套 skills 的主题；与知识库已有的《上下文工程》篇、《Agent-记忆系统》篇互补，可作下一步深化那两篇的参考。
+- **来源**：https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering（公开仓库）
+- **热度/更新**：18k+ stars（2026-11-03 核验 GitHub API），2026-11-03 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；合集以指令 Markdown 为主，另有 researcher 与 template 目录——引入单个 skill 前通读其 SKILL.md，确认无敏感信息读取、网络上传、危险命令；harness 类 skill 涉及 Agent 脚手架时尤其注意权限范围。
