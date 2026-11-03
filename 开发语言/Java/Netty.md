@@ -2,7 +2,7 @@
 知识点: Netty
 层级: 进阶
 适用版本: Netty 4.1.x
-更新日期: 2026-10-31
+更新日期: 2026-11-03
 关联:
   - Java-IO与NIO
   - 计算机网络
@@ -108,14 +108,27 @@ class EchoHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
 粘包在这个示例里由长度域编解码器解决，handler 拿到的永远是完整一帧。
 
-## 8. 疑难杂症
+## 8. 背压与水位线：下游慢时别把内存写爆
+
+- **问题**：`writeAndFlush` 是异步的，下游读得慢时 Netty 不会替你挡——写请求照单全收，攒在 `ChannelOutboundBuffer` 里等 socket 可写。生产者（上游读得快）持续写，待发缓冲会无界增长，直到 OOM。这是长连接网关、代理转发最常见的内存事故形态。
+- **水位线机制**：每个 Channel 有一对水位线，`ChannelOption.WRITE_BUFFER_WATER_MARK`，默认值低水位 32KB、高水位 64KB。待发字节超过高水位，`channel.isWritable()` 变 false；排空回落到低水位以下，变回 true 并触发 `channelWritabilityChanged` 事件到 pipeline。
+- **标准用法**：在 handler 里写之前先查 `isWritable()`，不可写时 `config().setAutoRead(false)` 暂停读上游（停止从 socket 拿新数据，也就停止产生新写请求）；`channelWritabilityChanged` 里可写恢复时再 `setAutoRead(true)`。转发代理场景同理：出站 Channel 不可写时，停掉入站 Channel 的 AUTO_READ，可写恢复后再开——背压就沿着链路反向传回了源头。
+- **三个边界条件**：
+  - 水位线只管「通知」，不管「拦截」：不可写时继续 `writeAndFlush` 依然会入队，内存照涨；必须业务层自己停手，框架不会替你丢数据。
+  - 水位线按待发字节数算，不是按消息条数：一条 10MB 的大消息一次就能冲过高水位；大文件下发要分片写，每片写完查一次可写性。
+  - 默认值偏保守：64KB 高水位对高吞吐转发偏小，调大前先想清楚——水位越高，单连接能积压的内存越大，连接数 × 高水位就是最坏情况下的待发内存上限，乘完再定。
+- **与流量控制的关系**：这是应用层背压，与 TCP 滑动窗口（内核层，见 [计算机网络](计算机基础/计算机网络.md)）是两层机制：TCP 窗口挡的是对端发来的数据，Netty 水位线挡的是本进程攒着没发出去的数据；两层都要管，只管一层另一层照样爆。
+
+（来源：Netty 4.1 官方 API 文档 `io.netty.channel.ChannelConfig` / `WriteBufferWaterMark`，`ChannelOption.WRITE_BUFFER_WATER_MARK` 默认低 32KB、高 64KB；核验日期 2026-11-03）
+
+## 9. 疑难杂症
 
 - **内存只涨不降**：九成是 ByteBuf 引用计数漏放。开启 `-Dio.netty.leakDetection.level=PARANOID`（或 ResourceLeakDetector 的 SIMPLE/ADVANCED 级别）在测试环境定位漏放的分配栈，生产用 SIMPLE 抽样即可，全量 PARANOID 开销大。
 - **连接处理莫名卡顿、全员延迟**：某个 handler 里做了阻塞调用堵住 EventLoop。排查思路：看业务线程与 EventLoop 线程的命名（`nioEventLoopGroup-x-y`）和线程栈，确认耗时逻辑跑在哪条线程上。
 - **收到半包就业务报错**：拆包器没挂或参数配错，handler 直接按完整报文解析。先打印原始字节核对帧边界，不要先怀疑业务代码。
 - **客户端断开服务端不感知**：没配读空闲也没开 TCP keepalive，或 keepalive 的系统默认探测间隔以小时计。长连接一律应用层心跳自己管。
 
-## 9. 常见误区
+## 10. 常见误区
 
 - 误区：Netty 是异步的，所以 handler 里可以随便阻塞。不行，EventLoop 的串行模型决定了阻塞一节、卡死一片。
 - 误区：writeAndFlush 返回了就是对方收到了。它只表示数据进了内核发送缓冲，送达确认要靠应用层 ack。
@@ -147,13 +160,15 @@ class EchoHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
 【冷知识】Epoll 传输是 Linux 下的另一条路：`EpollEventLoopGroup` + `EpollServerSocketChannel` 走 Linux 原生 epoll，比 NIO 实现少一层 Java 层的 Selector 封装，连接量大的服务端常用它。代码层面只换 group 和 channel 类，Pipeline 与 handler 不用动；但它只在 Linux 上能跑，跨平台部署时要按系统选实现，别写死。
 
-## 10. 面试与自测
+## 11. 面试与自测
 
 - 一个 EventLoop 管理多条 Channel 时，线程安全靠什么保证？
 - ChannelPipeline 里入站与出站的传播方向为什么相反？
 - LengthFieldBasedFrameDecoder 五个参数分别解决什么问题？
 - ByteBuf 引用计数漏放会怎样？怎么检测？
 - 心跳应该由哪一端发、哪一端判定？阈值怎么配合？
+
+- 下游读得慢时，Netty 的 writeAndFlush 会发生什么？水位线机制怎么用？
 
 ### 参考答案
 
@@ -163,7 +178,9 @@ class EchoHandler extends SimpleChannelInboundHandler<ByteBuf> {
 4. 漏放会造成内存只涨不降：池化的堆外 ByteBuf 没被回收复用，久了会把内存耗尽。检测方法是开启泄漏检测，如测试环境用 -Dio.netty.leakDetection.level=PARANOID 定位漏放的分配栈，生产用 SIMPLE 抽样即可，全量 PARANOID 开销大。另外注意 SimpleChannelInboundHandler 会自动 release 入站消息，转发给异步线程时要先 retain、用完再 release。
 5. 一般由客户端发、服务端判定：客户端用写空闲在空闲时主动发心跳包保活，服务端用读空闲在超过 N 秒没收到任何数据（含心跳）时判定对端已死、直接关连接。阈值要错开、留出网络抖动余量，如客户端 10 秒发一次、服务端 30 秒无数据才关，一发一判设成同值会大面积误杀；心跳包要与业务包在协议上可区分。
 
-## 11. 关联知识
+6. writeAndFlush 是异步的：下游慢时写请求照单全收、攒在 ChannelOutboundBuffer 里等 socket 可写，生产者持续写会让待发缓冲无界增长直至 OOM。水位线机制的做法是：每个 Channel 有一对水位线（ChannelOption.WRITE_BUFFER_WATER_MARK，默认低 32KB、高 64KB），待发字节超高水位时 channel.isWritable() 变 false、排空回落到低水位以下变回 true 并触发 channelWritabilityChanged；标准用法是写前查 isWritable()，不可写时 config().setAutoRead(false) 暂停读上游、可写恢复时再 setAutoRead(true)，转发代理场景把背压沿链路反向传回源头。注意水位线只通知、不拦截：不可写时继续 writeAndFlush 依然入队，必须业务层自己停手；水位线按字节数算，一条 10MB 大消息一次就能冲过高水位，大文件下发要分片写、每片查一次可写性；调大高水位前要按“连接数 × 高水位”算最坏待发内存。
+
+## 12. 关联知识
 
 - [Java IO 与 NIO](开发语言/Java/Java-IO与NIO.md)：本篇的原理底座，Buffer/Selector/零拷贝都在那里。
 - [计算机网络](计算机基础/计算机网络.md)：TCP 字节流与粘包的根源。
