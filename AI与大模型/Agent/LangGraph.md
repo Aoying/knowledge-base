@@ -2,7 +2,7 @@
 知识点: LangGraph
 层级: 进阶
 适用版本: LangGraph 1.x（Python）
-更新日期: 2026-10-31
+更新日期: 2026-11-04
 关联:
   - Agent
   - Tool-Calling
@@ -101,6 +101,49 @@ app.invoke(Command(resume="yes"), config)
 
 **流式输出**：`app.stream(..., stream_mode="updates")` 按节点产出增量结果，长任务（如多章批处理）可以用它做进度展示和早期失败发现。
 
+**Send 动态扇出：运行时才知道要并行几路**：静态边只能表达编译时就确定的分支；章节数、检索命中数这类「运行前不知道有几份」的并行，靠路由函数返回一串 `Send` 对象——每个 `Send("worker", {...})` 启动一次目标节点，各自带一份私有输入，跑完由 reducer 收结果、再由汇总节点合并（即 Map-Reduce）。小说引擎批量章节分析就是这个形态：
+
+```python
+import operator
+from typing import Annotated, TypedDict
+from langgraph.graph import StateGraph, START, END
+from langgraph.types import Send
+
+class Overall(TypedDict):
+    chapter_ids: list[int]
+    findings: Annotated[list[dict], operator.add]  # 追加型 reducer,收各 worker 结果
+    report: str
+
+class Worker(TypedDict):  # worker 的输入 State 可以与图 State 不同
+    chapter_id: int
+
+def fan_out(state: Overall):
+    return [Send("analyse", {"chapter_id": cid}) for cid in state["chapter_ids"]]
+
+def analyse(state: Worker) -> dict:  # 每章一个并行副本:抽取 + 矛盾候选
+    return {"findings": [{"chapter_id": state["chapter_id"], "...": "..."}]}
+
+def combine(state: Overall) -> dict:
+    return {"report": f"共 {len(state['findings'])} 条候选"}
+
+b = StateGraph(Overall)
+b.add_node("analyse", analyse)
+b.add_node("combine", combine)
+b.add_conditional_edges(START, fan_out, ["analyse"])
+b.add_edge("analyse", "combine")
+b.add_edge("combine", END)
+app = b.compile()
+```
+
+四条边界，写之前先记牢：
+
+- **并行写同一字段必须配 reducer**：没有追加型 reducer，同一轮超步里多个 worker 写 `findings` 会直接报 `INVALID_CONCURRENT_GRAPH_UPDATE`，而不是悄悄覆盖（见「冷知识」一节）。各 worker 也可以写各自的字段，再由汇总节点合并。
+- **节流在调用配置里**：框架本身没有硬性扇出上限，瓶颈在宿主资源与模型供应商限流——600 章全量扇出会同时打 600 次模型调用。调用时在配置里设 `max_concurrency` 限并发（LangChain 论坛并行节点最佳实践口径），本地 Ollama 场景先按显存/内存能并行的路数设，再按需放开。
+- **超步预算要留足**：fan-out 占一轮超步、汇总再占一轮；深层嵌套扇出（汇总节点里再扇出）会快速吃掉 `recursion_limit` 默认 25 步的预算，层数一多就要显式调高。
+- **不要在节点里循环调用子图**：一个节点内多次命令式调用子图会碰到子图命名与命名空间限制（`MULTIPLE_SUBGRAPHS`），`Send` 才是为这种形态准备的写法；子图复用走 `Send` 扇出，检查点与恢复语义才完整。
+
+来源：LangChain 官方文档 Graph API 概览（Send / Command 节）与 LangChain 论坛并行节点最佳实践，核验日期 2026-11-04。
+
 ## 4. 原理剖析
 
 - **执行模型是超步（super-step）**：借鉴 Pregel/BSP 模型，一轮里所有「被激活」的节点并行执行，轮末统一把更新合并进 State 再进入下一轮。没有被边指向的节点不会跑；同一字段在同一轮被多个节点写、又没有 reducer，会直接报错而不是悄悄覆盖。
@@ -166,6 +209,7 @@ app.invoke(Command(resume="yes"), config)
 3. 图里出现环时，你靠哪三层机制保证它一定停得下来？
 4. 检查点恢复时节点会被重跑，这个事实对节点实现提出了什么要求？（答：幂等）
 5. 子图共享 State 和独立 State 两种接法，各适合什么场景？
+6. 静态边不够用时，Send 解决什么问题？并行 worker 写同一字段时必须满足什么条件？
 
 ### 参考答案
 
@@ -178,6 +222,8 @@ app.invoke(Command(resume="yes"), config)
 4. 节点必须幂等：恢复时会重跑当前步，写库类节点若不做去重，恢复一次就会多写一份数据。做法是写前按业务键查重，如章节 ID + 版本，同一版本已落库就不再重复写入。
 
 5. 共享 State：子图直接读写父图 State，简单直观，适合规模小、耦合紧的子任务；独立 State：子图定义自己的 State 再做映射，隔离更好，适合 Supervisor 模式下多个专职 Agent（抽取、矛盾检测、文风检查）并行分工，代价是调试成本更高。
+
+6. 静态边只能表达编译时确定的分支；Send 解决「运行前不知道要并行几路」的问题——路由函数返回一串 `Send("worker", {...})`，每份输入启动一次目标节点并行跑，跑完由 reducer 收结果、汇总节点合并（Map-Reduce）。并行 worker 写同一字段时，该字段必须配追加型 reducer（如 `Annotated[list, operator.add]`），否则报 `INVALID_CONCURRENT_GRAPH_UPDATE`；worker 的输入 State 可以与图 State 不同 schema；节流靠调用配置里的 `max_concurrency`，不要在节点里循环调用子图。
 
 ## 11. 关联知识
 
