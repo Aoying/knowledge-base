@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-03
+更新日期: 2026-11-04
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -21,7 +21,7 @@
 
 ## 分类索引
 
-- [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow
+- [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
 - [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
@@ -185,3 +185,12 @@
 - **热度/更新**：18k+ stars（2026-11-03 核验 GitHub API），2026-11-03 仍在更新。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；合集以指令 Markdown 为主，另有 researcher 与 template 目录——引入单个 skill 前通读其 SKILL.md，确认无敏感信息读取、网络上传、危险命令；harness 类 skill 涉及 Agent 脚手架时尤其注意权限范围。
+
+### 19. awesome-llm-apps（Shubhamsaboo/awesome-llm-apps）100+ AI Agent、Agent Skills 与 RAG 应用合集
+
+- **功能**：100+ 开源 AI Agent、Agent Skills 与 RAG 应用：agent_skills 目录含 9 个 skill（advisor-orchestrator-worker、commit-archaeologist、dependency-doctor、evals、first-reader、project-graveyard、scope-creep-detector、self-improving-agent-skills、thinking-out-loud），另有 100+ RAG/Agent 应用模板（Agentic RAG、知识图谱 RAG、EmbeddingGemma 本地 Agentic RAG 等）；每个 skill 带真实代码并过安全 + 评测 CI 门禁。
+- **适用场景**：ao 的转型线直接对口——LangGraph Agentic RAG、混合检索 + Rerank 落地、Agent 评测（evals skill 与 RAGAS 思路对照）；本地 Agentic RAG（EmbeddingGemma）与 Ollama 路线一致；小说引擎沙盒推演可参考其多 Agent 编排模板。
+- **来源**：https://github.com/Shubhamsaboo/awesome-llm-apps（公开仓库）
+- **热度/更新**：143k+ stars（2026-11-04 核验 GitHub API），2026-11-04 仍在更新。
+- **许可证**：Apache-2.0。
+- **安全注意**：只收集不安装；合集含可执行代码与应用模板，引入单个 skill/模板前通读其代码，确认无敏感信息读取、网络上传、危险命令；`npx skills add` 只装挑中的单个 skill，不整库装。
