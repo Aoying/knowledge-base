@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-04
+更新日期: 2026-11-05
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -194,3 +194,12 @@
 - **热度/更新**：143k+ stars（2026-11-04 核验 GitHub API），2026-11-04 仍在更新。
 - **许可证**：Apache-2.0。
 - **安全注意**：只收集不安装；合集含可执行代码与应用模板，引入单个 skill/模板前通读其代码，确认无敏感信息读取、网络上传、危险命令；`npx skills add` 只装挑中的单个 skill，不整库装。
+
+### 20. security-audit-skill（cloudflare/security-audit-skill）多阶段安全审计 skill
+
+- **功能**：编码 Agent 用的安全审计 skill：多阶段对抗式审计流程，审计结论经独立核验、以机器可读格式输出（报告含证据链而非笼统定性）；与子 Agent 分工做审计、发现问题与复核结论分离。
+- **适用场景**：ao 的 Java 后端代码审计与 Agent 安全方向直接对口——神农 e 贷这类金融项目做代码安全自查、审计结论可机读进后续修复流程；与知识库已有的《提示注入与Agent安全》篇、《限流熔断与降级》篇互补，可作安全审计方法论的参考；已收录的第 14 项 trailofbits/skills 偏审计方法合集，本项是 Cloudflare 官方的单一聚焦 skill。
+- **来源**：https://github.com/cloudflare/security-audit-skill（公开仓库）
+- **热度/更新**：60k+ stars（2026-11-05 核验 GitHub API），2026-06 创建，2026-11-05 仍在更新。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；审计类 skill 会要求读取代码并可能调用外部工具，引入前通读其 SKILL.md，确认读取范围、网络上传与命令权限；审计结论须人工复核，不能直接当修复依据。
