@@ -2,12 +2,13 @@
 知识点: Spring 事务
 层级: 进阶
 适用版本: Spring Boot 2.7.3 / Spring Framework 5.3
-更新日期: 2026-10-31
+更新日期: 2026-11-06
 关联:
   - Spring-Boot
   - Spring-IOC与AOP
   - Flowable
   - 多数据源
+  - MySQL-事务与MVCC
 标签:
   - Java
   - 数据库
@@ -135,6 +136,47 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 - 缩小事务范围：参数组装、校验、查字典等只读前置动作移出事务方法；`timeout` 给批量任务设上限，避免失控长事务堵住连接池。
 - OceanBase 下关注长事务对 undo 的压力，批处理分片提交（每 N 条一事务）。
 
+## 9. 超时与大事务定量
+
+三层超时不是一回事，排障时先分清撞的是哪一层：
+
+| 超时 | 管什么 | 默认值 | 超时后发生什么 |
+|---|---|---|---|
+| `@Transactional(timeout)` | 整个事务从开启到提交的总时长（秒） | -1（不限） | 只把事务标记为 rollback-only，方法体不会被中途打断，走到提交时直接回滚 |
+| JDBC `queryTimeout` | 单条 SQL 的执行上限 | 驱动默认（多为不限） | 当前语句抛 `SQLTimeoutException`，事务本身还在，可继续或回滚 |
+| `innodb_lock_wait_timeout` | 等一行锁的最长等待（秒） | 50 秒（MySQL 官方文档） | 只回滚当前语句，不回滚整个事务；除非开了 `innodb_rollback_on_timeout=1` |
+| OceanBase `ob_trx_timeout` | 整个事务总时长（微秒） | 因租户模板而异，上线前 `SHOW VARIABLES LIKE 'ob_trx_timeout'` 实测 | 超时事务被回滚；另有 `ob_query_timeout`（单条语句，默认 10 秒）是另一层 |
+
+关键纠正：`innodb_lock_wait_timeout` 超时只回滚当前语句，事务还在——很多“锁超时后数据一半提交一半没提交”的怪现象，根源是代码捕获异常后继续执行、又把事务提交了，而不是数据库“回滚了一半”。
+
+### 连接池占用定量
+
+事务持连接时长决定池子的吞吐上限（Little's law：吞吐上限 ≈ 池大小 / 平均持连接时间）。Spring Boot 2.7 默认 HikariCP，`maximumPoolSize` 默认 10：
+
+| 事务平均持连接 | 10 连接池的理论 TPS 上限 |
+|---|---|
+| 50ms（纯本地写） | 200 |
+| 200ms（几次查询 + 写） | 50 |
+| 3.2s（含一次 3s 外部调用） | 3.1 |
+
+结论：事务里调一次 3 秒外部接口，池子吞吐直接从 50 TPS 跌到 3 TPS——这就是第 5 节“事务方法里禁止远程调用”的定量依据。池子不是越大越好：连接数超过数据库能并行处理的量，只会让更多事务在库内排队等锁。
+
+### 大事务分批定量
+
+10 万条批量导入：一个事务全包 vs 每 1000 条一事务（共 100 个事务）：
+
+- 单事务：锁持有时间 = 全程；失败一次全部重做；长事务期间该事务的快照让 OceanBase/MySQL 的旧版本无法回收，undo 持续膨胀；还可能撞上 `ob_trx_timeout` 或 Spring 的 `timeout` 被整批回滚。
+- 分批：单批失败只重做本批；每批提交释放锁与连接；失败清单可落表重试（见第 5 节 NESTED 方案）。
+- 批大小取舍：每批 1000 条是常用经验值（非官方数字）；批太小（<100 条）则事务开销占比上升、总耗时拉长；批太大则回到大事务的老路。按“单批执行时间控制在 1 秒内”反推批大小，比死记数字可靠。
+
+三条边界：
+
+- `timeout` 设了不等于事务会准时停：它只标记回滚，方法体跑完才回滚；死循环里的方法体 timeout 也救不了。
+- OceanBase 的 `ob_trx_timeout` 与 MySQL 的 `innodb_lock_wait_timeout` 是两层：前者管事务总时长，后者管等锁；OceanBase MySQL 模式下两者都可能生效，调参前先确认当前租户的实际值。
+- 读已提交下长事务的快照成本：事务开着期间，MVCC 旧版本不能回收，别的事务的更新会不断产生新版本；长事务越长，undo 链越长，读性能越差（详见 [MySQL 事务与 MVCC](数据库/MySQL/MySQL-事务与MVCC.md)）。
+
+来源：MySQL 官方文档 `innodb_lock_wait_timeout`（默认 50 秒，语句级回滚）；OceanBase 官方文档 `ob_query_timeout` 默认 10000000 微秒（10 秒）、`ob_trx_timeout` 控制事务总时长；核验日期 2026-11-06。
+
 ## 小技巧与冷知识
 
 【小技巧】排障时先确认当前到底有没有事务：`TransactionSynchronizationManager.isActualTransactionActive()` 返回 true 才说明当前线程真的开着事务。方法上明明标了 `@Transactional` 却怀疑没生效时，在方法里打一行这个判断，比翻代理类、翻日志快得多；返回 false 就按原文第 6 节的失效表逐项排查，别先去调传播行为。
@@ -159,13 +201,14 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 
 【冷知识】`TransactionStatus.isNewTransaction()` 能告诉你当前事务是不是新建的：加入外层事务时返回 false，新建时返回 true。调试传播行为时在方法里打这个值，比猜“到底是加入还是新建”可靠；配合 `isActualTransactionActive()` 一起用，REQUIRED、REQUIRES_NEW、NESTED 的实际行为一眼就能分清。
 
-## 9. 面试与自测
+## 10. 面试与自测
 
 1. 七种传播行为分别什么语义？`REQUIRES_NEW` 与 `NESTED` 的本质区别是什么？
 2. `@Transactional` 失效的场景你能列几个？分别为什么？
 3. Spring 事务为什么绑线程？异步方法里事务为什么没有？
 4. Flowable 与业务表同事务提交是怎么做到的？异步执行器为什么不在这个事务里？
 5. 一个事务方法里调了耗时 3 秒的外部接口，会带来什么连锁反应？
+6. `innodb_lock_wait_timeout` 超时后，事务还在吗？三层超时（Spring timeout / JDBC queryTimeout / innodb_lock_wait_timeout）各管什么？
 
 ### 参考答案
 
@@ -173,9 +216,10 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 2. 常见失效场景及原因：同类自调用绕过代理；方法非 public，代理默认拦截不到；类或方法 final，CGLIB 无法生成子类代理；异常被 catch 吞掉，拦截器以为成功而提交；抛 checked 异常未配 rollbackFor，默认只回滚 RuntimeException 与 Error；对象是自己 new 的、不是 Spring Bean，没有代理；@Async 或新线程里的方法，事务上下文不在该线程；多数据源未指定 transactionManager，用错了管理器；表引擎如 MyISAM 本身不支持事务。
 3. 因为 DataSourceTransactionManager 把连接关掉自动提交后绑定到当前线程的 ThreadLocal（TransactionSynchronizationManager），MyBatis 的 SqlSessionTemplate 每步都从线程绑定取同一连接，才能同事务。异步方法换了线程，原线程的绑定跟不过去，所以没有事务；异步段要自己开新事务，并明确它与主事务相互独立。
 4. Flowable 在 Spring 环境下用 SpringTransactionInterceptor 把流程命令绑到当前 Spring 事务，前提是 ProcessEngineConfiguration 注入与业务同一个 PlatformTransactionManager。这样业务方法 @Transactional 范围内，流程 ACT_* 表写入与业务表写入同事务提交、同事务回滚。但事务只覆盖一次命令执行，到等待状态即提交；异步执行器在独立线程、独立事务中跑，不在该事务里，异步失败不会回滚已提交的业务数据，靠失败重试与业务补偿处理。
+6. 还在。`innodb_lock_wait_timeout` 超时默认只回滚当前语句、不回滚整个事务（除非 `innodb_rollback_on_timeout=1`）；代码捕获异常后继续执行又提交，才会出现“回滚一半”的假象。Spring `timeout` 管整个事务总时长、超时只标记 rollback-only 不中断方法体；JDBC `queryTimeout` 管单条 SQL；`innodb_lock_wait_timeout` 管等行锁的等待时长。
 5. 会把事务拖长：长事务一直占着数据库连接和行锁，高并发下先爆的是连接池，后续请求排队等待连接，延迟放大、甚至互相等连接卡死；同时长事务还会给 OceanBase 的 undo 带来压力。因此事务方法里禁止远程调用、发 MQ 等慢操作，应把耗时操作移出事务，或缩小事务范围、给批量任务设 timeout 上限。
 
-## 10. 关联知识
+## 11. 关联知识
 
 - 前置：[Spring Boot](开发语言/Java/Spring/Spring-Boot.md)（注解与数据源配置）
 - 相关：[Spring IOC 与 AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)（代理机制）、[多数据源](开发语言/Java/多数据源.md)、[Flowable](工程实践/Flowable.md)（流程引擎事务整合）
