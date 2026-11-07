@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-05
+更新日期: 2026-11-08
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -203,3 +203,12 @@
 - **热度/更新**：60k+ stars（2026-11-05 核验 GitHub API），2026-06 创建，2026-11-05 仍在更新。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；审计类 skill 会要求读取代码并可能调用外部工具，引入前通读其 SKILL.md，确认读取范围、网络上传与命令权限；审计结论须人工复核，不能直接当修复依据。
+
+### 21. skills（google/skills）Google 官方 192 个 Agent Skills 合集
+
+- **功能**：Google 官方 Agent Skills 仓库，共 192 个 SKILL.md（skills/ 下 187 个、plugins/ 下 5 个，2026-11-08 核验），分 ads、analytics、cloud、developers、identity 五类；cloud 类占大头：Gemini API、Gemini Agents API、Agent Platform（部署/推理/评测/提示管理/RAG 引擎/技能注册）、BigQuery、GKE、Genkit（Dart/Go/JS/Python）、Cloud Run、Spanner 等；developers 类含 finding-google-skills（检索本仓库 skill 的入口 skill）。
+- **适用场景**：ao 的 AI Agent 转型线对口——Gemini API / Agent Platform / Genkit 的官方操作指引，可作 LangGraph 之外另一条 Agent 落地路线的参考；与知识库已有的《Agent-开发-Skills》篇互补。注意本仓库以 GCP 云服务为主，ao 的本地/Ollama 路线用不上其中多数云 skill，挑 Gemini API 与 Agent Platform 相关条目参考即可。
+- **来源**：https://github.com/google/skills（公开仓库）
+- **热度/更新**：23k+ stars（2026-11-08 核验 GitHub API），2026-03-31 创建，最近推送 2026-11-07。
+- **许可证**：Apache-2.0。
+- **安全注意**：只收集不安装；仓库以指令 Markdown 为主，引入单个 skill 前通读其 SKILL.md，确认无敏感信息读取、网络上传、危险命令；GCP 相关 skill 涉及云上资源操作，勿直接照抄命令到生产账号。
