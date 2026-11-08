@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -221,3 +221,12 @@
 - **热度/更新**：34,319 stars（2026-11-08 核验 GitHub API），2025-03-04 创建，最近推送 2026-11-06。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；MCP 服务器会拿 token 操作 GitHub，引入前确认 token 作用域只给需要的仓库与权限，写/admin 权限按需授予；远程端点用 OAuth 登录，勿把 PAT 写进客户端配置文件明文。
+
+### 23. skills（mattpocock/skills）“给真正工程师的”工程 Skills 合集
+
+- **功能**：Matt Pocock（TypeScript 教育者）个人 .agents 目录里的工程 skills，39 个 SKILL.md（2026-11-08 核验），全是工程方法论：code-review、tdd、implement-spec、to-spec、diagnosing-bugs、grill-with-docs（Agent 先访谈你、把需求问清再动手）、codebase-design、improve-codebase-architecture、research、retro、triage、pr 等；不讲花活，只讲规划、测试、评审、排障的硬流程。
+- **适用场景**：ao 的小说引擎长期迭代与 Java 后端开发纪律直接对口——“先出 spec 再实现”（implement-spec/to-spec）、TDD、code-review、排障（diagnosing-bugs）这套流程可直接套到小说引擎的开发节奏上；与已收录的第 4 项 obra/superpowers（同样是 TDD 方法论）互补：superpowers 偏流程框架，本项偏“工程师个人实战动作”，grill-with-docs 的“先访谈再动手”尤其适合需求不清时先问清再写代码。
+- **来源**：https://github.com/mattpocock/skills（公开仓库）
+- **热度/更新**：318,041 stars（2026-11-08 核验 GitHub API），2026-02-03 创建，最近推送 2026-11-05；截至 2026 年 11 月初是 GitHub 上星数最高的 Agent Skills 仓库。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；方法论类 skill 只含流程指令，风险低；引入单个 skill 前通读其 SKILL.md，确认无敏感信息读取、网络上传、危险命令。
