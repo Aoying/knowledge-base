@@ -2,7 +2,7 @@
 知识点: JVM 字节码与 JIT
 层级: 进阶
 适用版本: JDK 8+（分层编译 JDK 7 引入、JDK 8 默认开启）
-更新日期: 2026-10-31
+更新日期: 2026-11-08
 关联:
   - JVM-内存模型
   - JVM-类加载
@@ -92,19 +92,125 @@ public int add(int a, int b) { return a + b; }
 
 - **去优化（Deoptimization）**：投机假设被打破时（如新加载了子类实现、分支走向突变），已编译代码作废、退回解释执行重新剖析。偶发正常，高频会造成性能抖动，看 `PrintCompilation` 里是否反复出现 `made not entrant`。
 
-## 6. 实战应用
+## 6. JIT 编译阈值与内联预算定量
+
+本节把 §5 的“热点→编译”讲成数字。版本口径：默认 64 位 HotSpot、JDK 8–21，分层编译开启（JDK 8 起默认开启）；凡是写了“JDK 8 / JDK 11+ / JDK 17 / JDK 21”的地方，按那个版本理解，其余数字在 JDK 8 到 JDK 21 间未变。所有默认值均以 `java -XX:+PrintFlagsFinal` 在目标 JDK 上实测为准，本节数字核验日期 2026-11-08，来源见每表下方。
+
+### 6.1 分层编译阈值：调用次数 + 回边次数
+
+分层编译不看时间、只看计数器：方法调用次数 `i` 与循环回边次数 `b`（见 §5.1）。从解释执行升到 Tier 3（C1 带剖析）、再升到 Tier 4（C2），判定谓词是同一个（`s` 是编译队列长度带来的放大系数，队列空时 `s = 1`）：
+
+```text
+i > TierXInvocationThreshold × s
+  或 (i > TierXMinInvocationThreshold × s 且 i + b > TierXCompileThreshold × s)
+```
+
+| 参数 | Tier 3（0 → 3） | Tier 4（3 → 4） | 含义 |
+| --- | --- | --- | --- |
+| `TierXInvocationThreshold` | 200 | 5000 | 光靠调用次数就升层 |
+| `TierXMinInvocationThreshold` | 100 | 600 | 走“调用 + 回边”混合口径时调用次数的下限 |
+| `TierXCompileThreshold` | 2000 | 15000 | 混合口径里 `调用次数 + 回边次数` 的门槛 |
+| `TierXBackEdgeThreshold` | 60000 | 40000 | OSR 口径，见 6.2 |
+
+来源：OpenJDK 源码 `src/hotspot/share/runtime/globals.hpp`（Tier3/Tier4 四项默认值）；判定谓词见 `src/hotspot/share/compiler/tieredThresholdPolicy.hpp`；数值与公式另见微软 OpenJDK 团队《How Tiered Compilation works in OpenJDK》。
+
+手算例（Tier 3 混合口径）：某方法每次调用跑 20 次循环回边。调用 150 次时 `i = 150`、`b = 150 × 20 = 3000`，`i + b = 3150`。`100 < 150 < 200`，调用次数没到 200，但 `150 > 100 且 3150 > 2000`，混合口径成立，升到 Tier 3。纯调用、无循环的方法则要攒满 200 次调用才升 Tier 3。
+
+手算例（Tier 4 混合口径）：同一方法升到 Tier 3 后继续跑，在 Tier 3 代码里累计 `i' = 700` 次调用、`b' = 15000` 次回边，`700 > 600 且 700 + 15000 = 15700 > 15000`，升到 Tier 4。没有循环的方法要攒满 5000 次 Tier 3 调用才升 Tier 4。还有一条捷径：C1 剖析后发现方法里没有任何值得剖析的东西（无分支、无调用），会直接从 Tier 3 升到 Tier 4，不等阈值。
+
+### 6.2 OSR 触发口径：回边计数器说了算
+
+只被调用一次、但内部循环跑很久的方法（如 `main` 里的长循环）等不到“下一次调用”，靠 OSR（栈上替换，见 §5.1）在循环跑到一半时直接换上编译版本。口径只有回边次数 `b`：
+
+| 场景 | OSR 阈值 | 说明 |
+| --- | --- | --- |
+| 分层编译，OSR 到 Tier 3 | `b > 60000`（`Tier3BackEdgeThreshold`） | 循环回边满 60000 次 |
+| 分层编译，OSR 到 Tier 4 | `b' > 40000`（`Tier4BackEdgeThreshold`） | 在 Tier 3 代码里回边再满 40000 次 |
+| 关掉分层编译（`-XX:-TieredCompilation`） | `b > 14000` | 见下式，非分层模式才用这个口径 |
+
+非分层模式的 OSR 阈值是算出来的，不是直接配的：`CompileThreshold × OnStackReplacePercentage / 100 = 10000 × 140 / 100 = 14000`。其中 `CompileThreshold` 默认 10000（仅分层关闭时起作用，分层开启时方法升层不看它），`OnStackReplacePercentage` 默认 140。分层开启时这两个参数不参与 OSR 判定，别拿 14000 去套分层编译的 JVM。
+
+来源：`TierXBackEdgeThreshold` 默认值见 `globals.hpp`；`CompileThreshold = 10000`、`OnStackReplacePercentage = 140` 见 OpenJDK 源码 `src/hotspot/share/runtime/globals.hpp` 与平台相关 `c2_globals_*.hpp`；分层下 OSR 口径另见 JDK 17.0.16 / JDK 21.0.8 实测验证的可视化分析。
+
+### 6.3 内联预算：字节码论大小，机器码论“已编译”
+
+内联的预算分两套尺子：一套量被调方法的**字节码**大小，一套量它**已编译成的机器码**大小。超过预算的调用点不内联，但方法本身照常被 JIT 编译——丢的只是跨方法边界的优化（逃逸分析、常量传播等），不是编译本身。
+
+| 参数 | 默认值 | 含义 |
+| --- | --- | --- |
+| `MaxInlineSize` | 35（字节码字节数） | 冷调用点：被调方法字节码超过 35 字节就不内联 |
+| `FreqInlineSize` | 325（字节码字节数，x86_64） | 热调用点：上限放宽到 325 字节 |
+| `MaxTrivialSize` | 6（字节码字节数） | ≤ 6 字节的极小方法（如简单 getter）无条件优先内联 |
+| `MaxInlineLevel` | 9（JDK 8）；15（2020 年后源码） | 嵌套内联最多几层，见 6.5 的版本说明 |
+| `MaxRecursiveInlineLevel` | 1 | 递归调用最多内联 1 层 |
+| `InlineSmallCode` | 2000（x86）；2500（SPARC / AArch64），单位是已编译机器码字节数 | 被调方法已有编译版本且机器码小于该值时才内联；大于该值判 "already compiled into a big method"，中等的按 `InlineSmallCode / 4`（x86 即 500）判 |
+| `DesiredMethodLimit` | 8000（字节码字节数） | 内联后调用方方法体超过 8000 字节码就停止继续内联 |
+| `MinInliningThreshold` | 250（JDK 17） | JDK 17 要求被调方法至少跑过 250 次才考虑内联；JDK 21 已取消这条限制 |
+
+来源：`MaxInlineSize = 35`、`MaxTrivialSize = 6`、`MaxRecursiveInlineLevel = 1` 见 OpenJDK 源码 `src/hotspot/share/opto/c2_globals.hpp`；`MaxInlineLevel` 见同文件（2020 年源码为 15）与 JDK 8 实测 `PrintFlagsFinal`（2016 年 JITWatch 讲义，值为 9）；`FreqInlineSize = 325`（x86_64 平台相关值）与 `InlineSmallCode` 的 2000 / 2500 见 `src/hotspot/share/runtime/tieredThresholdPolicy.cpp`（分层策略启动时按平台改写，x86 取 2000，SPARC / AArch64 取 2500）；`DesiredMethodLimit = 8000` 见 `c2_globals.hpp`；`MinInliningThreshold = 250`（JDK 17 有、JDK 21 已取消）见 JDK 17.0.16 / JDK 21.0.8 实测验证的可视化分析。
+
+手算例（与小技巧节呼应）：某方法字节码 40 字节。冷调用时 `40 > 35`，超过 `MaxInlineSize`，判 "too big"，不内联——只差 5 字节也进不去。跑热后调用点变热，改按 `FreqInlineSize` 算：`40 ≤ 325`，还剩 `325 − 40 = 285` 字节余量，可以内联；热门槛是冷门槛的 `325 / 35 ≈ 9.29` 倍。但“可以”不等于“一定”：还得同时满足内联深度 ≤ `MaxInlineLevel`、内联后方法体 ≤ `DesiredMethodLimit = 8000` 字节码、JDK 17 下被调方法已跑满 `MinInliningThreshold = 250` 次。`javap -c` 看到的就是这个字节数，先量大小再谈为什么没内联。
+
+### 6.4 CodeCache：240MB 与三段划分
+
+编译产物存在 CodeCache（非堆独立区域，见 §8）。默认大小分两种情况：
+
+| 情况 | `ReservedCodeCacheSize` 默认值 |
+| --- | --- |
+| 分层编译开启（默认，JDK 8 起） | 240MB（即 48MB × 5，`240 × 1024 × 1024 = 251658240` 字节 = 245760KB） |
+| 分层编译关闭（`-XX:-TieredCompilation`） | 48MB（Server VM；Client VM 为 32MB） |
+
+来源：Oracle《Codecache Tuning》（JDK 8 文档，`ReservedCodeCacheSize` 默认 32M / 48M）；分层开启时 240MB 见 JEP 197 与 `src/hotspot/share/code/codeCache.hpp` 注释（分段默认开启条件：分层编译开启且 `ReservedCodeCacheSize ≥ 240MB`）。
+
+JDK 9 起（JEP 197）CodeCache 默认分段成三个堆，大小按“非方法段先取固定值、剩余两段对半分”算出：
+
+| 段 | 放什么 | 默认大小（按 240MB 算） |
+| --- | --- | --- |
+| non-nmethods（`NonNMethodCodeHeapSize`） | 解释器、适配器、运行时桩等非方法代码 | 约 5MB（另加编译器缓冲，实际略大） |
+| profiled nmethods（`ProfiledCodeHeapSize`） | C1 编译的带剖析代码，生命周期短 | 约 117.5MB |
+| non-profiled nmethods（`NonProfiledCodeHeapSize`） | C2 编译的完全优化代码，生命周期长 | 约 117.5MB |
+
+换算：`240 − 5 = 235`MB 剩余，对半分得 `235 / 2 = 117.5`MB，即每段 `117.5 × 1024 = 120320`KB。实测佐证：某 JDK 构建的 `CodeHeap` 保留大小为 119168KB（约 116MB），与 117.5MB 的量级一致。
+
+换算例（假设，非实测）：假设平均每个已编译方法（含方法头、重定位与元数据）占 2KB 机器码，则 non-profiled 段约能装 `120320 / 2 = 60160` 个 C2 方法，全堆约能装 `245760 / 2 = 122880` 个方法；若平均 1KB，则分别为约 120320 个与约 245760 个；若平均 4KB，则分别为约 30080 个与约 61440 个。只能这样估，不能当实测数：真实 nmethod 从几百字节到几十 KB 不等，一个方法还可能同时占 Tier 3、Tier 4 与 OSR 三个版本，适配器与桩代码另占 non-nmethods 段。
+
+满了之后的行为见 §8：JIT 停止编译并打印 `CodeCache is full`，应用不崩、退回解释执行。`UseCodeCacheFlushing` 默认开启，清道夫会先把 `made zombie` 的旧编译产物扫出去腾地方；清不出来才会停编。只调大 `ReservedCodeCacheSize` 不查编译量，等于把问题推迟。
+
+### 6.5 边界条件
+
+- **阈值是计数器口径，不是时间口径**：方法 1 秒跑 200 次与 1 小时跑 200 次没有区别，攒够调用/回边次数才升层；调用频率低的方法永远到不了 C2。计数器还会随时间衰减（§5.1），偶发高频不会误判。
+- **阈值是“检查点”，不是“精确触发点”**：解释器不是每次调用都查表，而是每满 128 次调用（`Tier0InvokeNotifyFreqLog = 7`，即 2⁷）或 1024 次回边（`Tier0BackedgeNotifyFreqLog = 10`，即 2¹⁰）才通知一次策略；Tier 3 代码每 1024 次调用、8192 次回边检查一次。所以名义阈值 200 次调用的方法，实际在第 256 次调用（128 × 2）时才被排队编译。
+- **阈值会被编译队列长度放大**：6.1 谓词里的 `s` 由队列长度决定（`TierXLoadFeedback`），队列越长、有效阈值越高；编译高峰期方法升层更慢。调参时看到的阈值不是常量。
+- **Tier4 阈值的版本差异不在数值、在实现**：Tier4 的 5000 / 600 / 15000 / 40000 从 JDK 8 到 JDK 21 没变过；变的是策略实现——JDK 8 用 `AdvancedThresholdPolicy`（`CompilationPolicyChoice = 3`），JDK 10 起 JDK-8202711 把两个策略合并为 `SimpleThresholdPolicy`（`CompilationPolicyChoice = 2`）。配套规则也在变：`MaxInlineLevel` 在 JDK 8 是 9，2020 年后的 OpenJDK 源码 `c2_globals.hpp` 里是 15；`MinInliningThreshold = 250` 在 JDK 17 及更早版本存在，JDK 21 已取消。抄数字先对版本，以目标 JDK 的 `PrintFlagsFinal` 为准。
+- **内联预算可调，但调大不等于更好**：`-XX:MaxInlineSize`、`FreqInlineSize`、`InlineSmallCode` 都能改，但内联后方法体受 `DesiredMethodLimit = 8000` 与 IR 节点数上限（`NodeCountInliningCutoff`、`MaxNodeLimit`）约束；过度内联会让编译变慢、编译失败回退、CodeCache 膨胀。调之前先看 `PrintInlining` 的真实判定（"too big"、"hot method too big"、"inlining too deep"），不要凭感觉加数字。
+- **CodeCache 满了不是 OOM**：应用不崩、只是 JIT 停编、退回解释执行（§8）；`UseCodeCacheFlushing` 默认开着，先清 `made zombie` 再停编。动态代理、脚本引擎大量生成类时，调大只是推迟打满，根因在编译量。
+- **字节码超 8000 的方法根本不编译**：`DontCompileHugeMethods` / `HugeMethodLimit` 默认 8000 字节码，比内联预算更硬——这种方法全程解释执行，拆方法是唯一解法；64KB（65535 字节）则是 class 文件的方法体上限，编译直接报错，见小技巧节。
+
+### 来源
+
+- OpenJDK 源码 `src/hotspot/share/runtime/globals.hpp`（Tier3/Tier4 阈值、`CompileThreshold`、`OnStackReplacePercentage` 默认值），核验日期 2026-11-08。
+- OpenJDK 源码 `src/hotspot/share/compiler/tieredThresholdPolicy.hpp`（升层判定谓词与 OSR 谓词），核验日期 2026-11-08。
+- OpenJDK 源码 `src/hotspot/share/opto/c2_globals.hpp`（`MaxInlineSize = 35`、`MaxTrivialSize = 6`、`MaxRecursiveInlineLevel = 1`、`DesiredMethodLimit = 8000`；`MaxInlineLevel = 15` 为 2020 年源码值），核验日期 2026-11-08。
+- OpenJDK 源码 `src/hotspot/share/runtime/tieredThresholdPolicy.cpp` 与 `simpleThresholdPolicy.cpp`（`InlineSmallCode`：x86 取 2000，SPARC / AArch64 取 2500；JDK-8202711 策略合并），核验日期 2026-11-08。
+- 微软 OpenJDK 团队《How Tiered Compilation works in OpenJDK》（阈值公式与数值），核验日期 2026-11-08。
+- OpenJDK Wiki《Server Compiler Inlining Messages》（内联判定语义：too big / hot method too big / inlining too deep / DesiredMethodLimit），核验日期 2026-11-08。
+- JEP 197 Segmented Code Cache（JDK 9 起三段划分）与 OpenJDK 源码 `src/hotspot/share/code/codeCache.cpp`（剩余空间对半分）及 `codeCache.hpp`（分段默认开启条件），核验日期 2026-11-08。
+- Oracle《Codecache Tuning》（JDK 8 文档，`ReservedCodeCacheSize` 默认 32M / 48M），核验日期 2026-11-08。
+- OpenJDK jdk-21-ga 源码 `src/hotspot/share/opto/c2_globals.hpp`（`MaxInlineLevel = 15`；全文无 `MinInliningThreshold`，即 JDK 21 已取消该限制），核验日期 2026-11-08。
+
+## 7. 实战应用
 
 - **应用预热**：服务刚启动时解释执行 + 逐步编译，首批请求延迟显著高于稳态。压测和性能结论必须在预热后取；SLA 敏感的服务可在发布后先跑一轮核心链路自调用预热，再放真实流量。
 - **基准测试必须用 JMH**：手写 `main` 计时会被 JIT 干扰得毫无意义——死代码消除（结果没人用，整段计算被删）、常量折叠、预热不足都会给出假数。JMH 的预热轮次 + `Blackhole` 消费结果就是为绕开这些坑设计的。
 - **观察 JIT 行为**：`-XX:+PrintCompilation` 打印每次编译事件；`-XX:+UnlockDiagnosticVMOptions -XX:+PrintInlining` 看内联决策；`-XX:+LogCompilation` 输出日志配合 JITWatch 图形化分析。
 - **方法体大小**：超大方法（几千行）难以内联也难以整体优化，拆分首先是可读性问题，其次可能让 JIT 更好处理——但先测量再动手。
 
-## 7. 疑难杂症
+## 8. 疑难杂症
 
 - **CodeCache 满，JIT 停摆**：编译产物放在 CodeCache（非堆独立区域），打满后 JIT 停止编译并打印 `CodeCache is full`，应用不崩但退回解释执行、性能塌方。处理：调大 `-XX:ReservedCodeCacheSize`，并查编译量为何异常（动态代理 / 脚本引擎大量生成类是常见源头），与 [JVM 故障排查](开发语言/Java/JVM/JVM-故障排查.md) 一起看。
 - **跑一会儿变慢**：优先怀疑去优化抖动，或容器 CPU limit 让编译线程排不上队；先开 `PrintCompilation` 看编译/失效事件是否异常密集。
 
-## 8. 常见误区
+## 9. 常见误区
 
 - `javac` 会做深度优化：实际它基本只做语法层面的事，性能优化的主战场在 JIT。
 - 加 `final` 就能保证内联：是否内联由热点与体积决定；private / static 天然不可重写，无需靠 final。
@@ -133,7 +239,7 @@ public int add(int a, int b) { return a + b; }
 
 【冷知识】单个方法的字节码有 64KB 上限：Code 属性的长度字段是 4 字节，但规范另有限制，方法体超过 65535 字节编译就报 `code too large`。自动生成代码（比如模板引擎、动态代理手写巨型方法）最容易撞这条线，解法不是调参数，而是把方法拆小——上限写在规范里，任何参数都绕不过去。
 
-## 9. 面试与自测
+## 10. 面试与自测
 
 - class 文件由哪几部分组成？常量池存什么？
 - 五种方法调用指令分别用于什么场景？Lambda 为什么用 `invokedynamic`？
@@ -141,6 +247,7 @@ public int add(int a, int b) { return a + b; }
 - 逃逸分析能带来哪三项优化？标量替换和栈上分配什么关系？
 - 什么是去优化？什么情况会触发？
 - 为什么手写计时基准不准？JMH 解决了哪几个问题？
+- 一个 40 字节的方法冷调用时为什么内联不上？它要满足什么条件才能在跑热后被内联，方法本身又要先经过哪两级编译？
 
 ### 参考答案
 
@@ -155,8 +262,9 @@ public int add(int a, int b) { return a + b; }
 5. 去优化是指投机假设被打破时，已编译代码作废、退回解释执行重新剖析。触发情形如：新加载了子类实现（打破单态去虚化假设）、分支走向突变。偶发正常，高频会造成性能抖动，排查看 `PrintCompilation` 里是否反复出现 `made not entrant`。
 
 6. 手写计时不准，因为会被 JIT 干扰：死代码消除（结果没人用，整段计算被删）、常量折叠、预热不足都会给出假数。JMH 针对性解决这些问题：用预热轮次让 JIT 达到稳态，再用 `Blackhole` 消费计算结果防止死代码消除，从而得到可信的基准。
+7. 40 > MaxInlineSize = 35，冷调用判 "too big" 不内联；跑热后调用点变热，40 ≤ FreqInlineSize = 325 可以内联，还需内联深度 ≤ MaxInlineLevel、内联后方法体 ≤ DesiredMethodLimit = 8000 字节码（JDK 17 下被调方法还须跑满 MinInliningThreshold = 250 次）；方法本身先在调用 200 次（或调用 100 次以上且调用 + 回边 > 2000）时升到 Tier 3（C1 带剖析），再在 Tier 3 下调用 5000 次（或 600 次以上且调用 + 回边 > 15000）时升到 Tier 4（C2）。
 
-## 10. 关联知识
+## 11. 关联知识
 
 - [JVM 类加载](开发语言/Java/JVM/JVM-类加载.md)：字节码从哪来、验证阶段校验什么，与 class 结构对应。
 - [JVM 内存模型](开发语言/Java/JVM/JVM-内存模型.md)：运行时数据区与 CodeCache 的位置。
