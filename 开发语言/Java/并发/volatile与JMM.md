@@ -2,7 +2,7 @@
 知识点: volatile与JMM
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-31
+更新日期: 2026-11-08
 关联:
   - Java-并发编程
   - JVM-内存模型
@@ -96,6 +96,138 @@ public class AppConfig {
 - 以为加了 volatile 数组元素也可见：volatile 修饰的是数组引用本身，元素读写不带 volatile 语义，需用 `AtomicIntegerArray` 或对单个元素单独处理。
 - 靠 sleep 解决可见性：睡一觉「应该刷新了吧」是时序赌博，与语义保证无关。
 
+## 7. 可见性延迟与屏障成本定量
+
+本节所有数字均为手算，Python 3 本地复算（见节末“### 复算口径”）。【官方】指 JSR-133 / JLS / JDK 官方文档事实，已用浏览器核实并注明来源链接与核验日期 2026-11-08；【估算】指简化假设下的经验量级，不是官方数字、不是实测值，不许当作基准测试结果引用。原文已有 DCL 三步重排、happens-before 八条、volatile vs synchronized 对比，本节不重复，只往定量方向延伸。
+
+### 7.1 伪共享：同一缓存行里的两个 volatile long
+
+【估算】主流 x86 / ARM 服务器缓存行取 64 字节一行（不是规范数字，是硬件常见值；见边界条件）。一个 `long` 占 8 字节：
+
+- 一行能装 `64 / 8 = 8` 个 `long`。
+- 两个相邻的 `volatile long a, b` 若都落在同一行：A 核写 `a` 会使 B 核手里整行失效，B 核再写 `b` 又反过来使 A 核整行失效——变量互不相干，缓存行却互相拖累，这就是伪共享。最坏情况下每次写都触发一次行失效与重取：写 `N` 次 ≈ `N` 次行失效，行流量 ≈ `N × 64` 字节（`N = 1_000_000` 时 ≈ 64 MB 行流量，手算见复算口径）。
+- 成本量级【估算】：一次跨核行失效 + 重取约几十到几百个周期，约 10–100 纳秒量级；跨 NUMA 节点 / 跨插槽时可到数百纳秒到微秒级。伪共享的害处不在单次写，而在热循环里每写一次就付一次这个价：每秒百万次写就是百万次失效。
+
+手动填充换算（只算对齐后的理想情形，见边界条件）：
+
+- 想让 `b` 从下一行开始：`a` 占 8 字节，需在中间垫 `64 - 8 = 56` 字节，即 `56 / 8 = 7` 个 `long`。`a`（8 字节）+ 7 个填充 `long`（56 字节）= 64 字节，`b` 恰好落在偏移 64 处。
+- 两个各自独占一行的 `long`，最小占 `2 × 64 = 128` 字节；若 `b` 后面还有热字段，还要在 `b` 后面再垫 7 个 `long`，否则下一个字段又会挤进 `b` 的行。
+
+`@Contended` 的换算【官方】：JDK 8 由 JEP 142 引入，Java 9 起位于 `jdk.internal.vm.annotation.Contended`（Java 8 为 `sun.misc.Contended`）。HotSpot 默认 `ContendedPaddingWidth = 128` 字节，即默认垫 2 行（`128 / 64 = 2` 行，`128 / 8 = 16` 个 `long` 当量），多垫的 64 字节是为抵消相邻行预取把伪共享扩到两行的情形；可用 `-XX:ContendedPaddingWidth=64` 改为 1 行。注意它默认只对 JDK 内部类生效，用户代码要用需加 `-XX:-RestrictContended`，且它只是“JVM 自行决定是否加填充”的提示，不是强制保证。
+
+```java
+// 手动填充：7 个 long = 56 字节，b 从偏移 64 处起（前提：a 已行对齐，见边界条件）
+class Padded {
+    volatile long a;
+    long p1, p2, p3, p4, p5, p6, p7; // 56 字节填充
+    volatile long b;                 // 与 a 不在同一行
+}
+
+// 首选写法：让 JVM 垫（用户代码需 -XX:-RestrictContended）
+class ContendedCounters {
+    @jdk.internal.vm.annotation.Contended
+    volatile long a;
+    @jdk.internal.vm.annotation.Contended
+    volatile long b;
+}
+```
+
+### 7.2 volatile 读写 vs 普通读写的成本量级
+
+【估算】以下全部是 x86-64、3 GHz、无竞争 / 低竞争热路径下的经验区间，不是官方数字、不是实测值；换 CPU、换 JDK、换竞争程度都会变。换算基准：3 GHz 下 1 周期 ≈ 0.33 纳秒，30 周期 ≈ 10 纳秒，300 周期 ≈ 100 纳秒，3000 周期 ≈ 1 微秒。
+
+| 操作 | 成本量级【估算】 | 为什么 |
+|---|---|---|
+| 普通读（L1 命中） | 约 1–3 周期，约 0.3–1 纳秒 | 就是一次缓存读 |
+| volatile 读 | 约 2–10 周期，约 1–3 纳秒 | 接近普通读；x86 上 volatile 读主要是禁止重排 + 不走寄存器缓存，不额外发锁总线 |
+| 普通写（进 store buffer 即返回） | 约 1–3 周期 | 写先入 store buffer，不等刷到缓存 |
+| volatile 写（无竞争） | 约 20–100 周期，约 7–33 纳秒 | 约等于一次带 lock 前缀的操作（如 `lock addl`），要等 store buffer 排空 / 拿到行独占权 |
+| volatile 写（多核争同一行，即伪共享） | 约 100–300+ 周期，约 33–100+ 纳秒，跨插槽可到微秒级 | 每次写都要等其他核的行失效确认 + 行转移，见 7.1 |
+
+三个定量结论：
+
+1. volatile 读便宜、volatile 写贵：读接近普通读，写比普通写贵约 1 个数量级（20–100 周期 vs 1–3 周期）。读多写少的标志位、配置发布用 volatile 很划算；热循环里每轮都 volatile 写（如计数器）是错的，那是 `AtomicLong` / `LongAdder` 的活。
+2. 单次 volatile 写再贵也是纳秒级：每秒写 1 万次，额外开销约 `10_000 × 30 纳秒 = 0.3 毫秒`，可忽略；每秒写 1 千万次，约 `10_000_000 × 30 纳秒 = 0.3 秒`，才值得优化。先算频率再决定要不要优化，别一上来就垫缓存行。
+3. volatile 的贵不在“每次都去主内存”：原文冷知识已讲过，它靠屏障 + 缓存一致性协议工作，读仍可命中缓存；贵的是屏障禁掉的优化与一致性流量，不是内存往返本身。
+
+### 7.3 happens-before 传递性链：三线程手算
+
+只用原文第 2 节的规则（程序顺序、volatile 规则、传递性）手算，不引入新规则。场景：
+
+```java
+int data = 0;                 // 普通变量
+volatile boolean ready = false;
+volatile boolean done = false;
+
+// 线程 T1：data = 42; ready = true;
+// 线程 T2：if (ready) { int x = data; done = true; }
+// 线程 T3：if (done) { int y = data; }
+```
+
+逐条推导（hb = happens-before）：
+
+1. T1 内程序顺序：`data = 42` hb `ready = true`（写 volatile 之前）。
+2. volatile 规则：T1 的 `ready = true` hb T2 的 `ready` 读（T2 读到 true 的那次）。
+3. 传递性：`data = 42` hb T2 的 `ready` 读；T2 内程序顺序又使该读 hb `done = true`，所以 `data = 42` hb T2 的 `done = true`。
+4. 再接一段 volatile 规则 + 传递性：T2 的 `done = true` hb T3 的 `done` 读，T3 内该读 hb `data` 读，所以 `data = 42` hb T3 的 `data` 读。
+5. 结论：T3 读到 `done == true` 时，保证读到 `data == 42`；T2 读到 `ready == true` 时，也保证读到 `data == 42`。
+
+哪些读不保证：
+
+- T3 不读 `done`、直接读 `data`：与 T1 的写之间没有任何 hb 链，可能读到 0，也可能读到 42——无保证，不是“大概率 42”。
+- T2 读到 `ready == true`，但 T3 只读了 T2 写的一个普通 `boolean finished`（非 volatile、无锁）：`finished` 的写读之间没有 hb 边，链在 T2 → T3 处断了，T3 读 `data` 不保证是 42。发布通道和读取通道必须配对，链上任何一环换成普通变量，整条链就断了。
+- T2 读到 `ready == false` 就直接读 `data`：这次读发生在 hb 链建立之前，同样无保证。
+
+### 7.4 store buffer / invalidate queue：可见性延迟量级
+
+【估算】以下延迟是“写已发出、其他核何时能读到”的经验区间，不是 JMM 的保证——JMM 只保证有 hb 关系时读到，不保证多快读到；没有 hb 关系时，规范不给任何可见性时限。
+
+- 同核 / 同插槽、无竞争：store buffer 排空 + 行状态转移约几十个周期，约 10–100 纳秒。
+- 跨核争用同一行（伪共享场景）：等 invalidate 确认 + 行转移，约 100–300 周期，约 33–100 纳秒。
+- 跨插槽 / 跨 NUMA 节点、队列已积压：约 1000–3000+ 周期，约 0.3–1+ 微秒；极端积压下可到数微秒。
+- 换算口径：延迟（纳秒）≈ 周期数 / 3（3 GHz 下，见复算口径）。
+
+所以“另一个线程 1 微秒后还没看到”在规范上完全合法，靠 `sleep` 等可见性是赌时序；要保证可见性只能建 hb 边（volatile / 锁 / start-join / 线程安全队列），不能靠“等一会儿”。
+
+### 7.5 边界条件
+
+1. 缓存行不是 64 字节放之四海而皆准【估算 + 官方背景】：x86-64 常见 64 字节，但部分 ARM / Apple Silicon 为 128 字节，个别 Power 机器也是 128 字节。按 64 字节垫 7 个 `long`，在 128 字节行上两个变量仍可能同行；`@Contended` 默认垫 128 字节正是为此留了余量，跨平台代码优先用它而不是手算 7 个 `long`。
+2. 手动填充的 7 个 `long` 只有在 `a` 行对齐时才成立：对象头（压缩指针下约 12 字节，按 8 字节对齐后占 16 字节）会让第一个字段的偏移不是 64 的倍数，HotSpot 还可能重排字段顺序、把填充字段优化掉（未被读写的 `long` 可能被 JIT 判定为死代码消除）。手动填充是“希望如此”，不是保证；要验证只能用 JOL 看实际布局。
+3. 只有“多核同时高频写不同变量”才配谈伪共享：两个变量只读不写不会互相 invalidate；写频率很低（如每秒几次的配置计数）时，失效成本摊薄到可忽略；单核跑、或两个变量总被同一线程写，也不存在伪共享。先确认是多核热写，再垫。
+4. `@Contended` 不是免费午餐：默认每字段多占 128 字节，数组 / 大量小对象上用它会把内存撑大数倍，且默认不对用户代码生效（需 `-XX:-RestrictContended`）；冷字段、只读字段不要加，只给实测确认的热竞争字段加。
+5. 本节所有周期数、纳秒数都是【估算】：不同 CPU 型号、频率、NUMA 拓扑、JDK 版本下都会变；要精确数字只能在目标机器上用 JMH 实测，本节数字只用于“哪个操作贵一个数量级、该不该优化”的量级判断。
+
+### 复算口径
+
+手算过程用 Python 3 本地复算，输出如下（`python3` 直接运行，无第三方依赖）：
+
+```python
+cache_line = 64      # 字节，主流 x86 / ARM 常见值【估算】
+long_bytes = 8       # long 占 8 字节
+print("longs_per_line =", cache_line // long_bytes)          # 8
+print("pad_longs_between =", cache_line // long_bytes - 1)   # 7
+print("pad_bytes =", 7 * long_bytes)                         # 56
+print("second_long_offset =", long_bytes + 56)               # 64，恰为下一行起点
+print("two_padded_longs =", 2 * cache_line)                  # 128 字节
+print("contended_default_lines =", 128 // 64)                # 2 行
+print("contended_default_longs =", 128 // 8)                 # 16 个 long 当量
+for c in [1, 3, 10, 30, 100, 300, 1000, 3000]:
+    print(c, "cycles @3GHz =", round(c / 3, 1), "ns")
+# 复算输出：longs_per_line = 8；pad_longs_between = 7；pad_bytes = 56；
+# second_long_offset = 64；two_padded_longs = 128；
+# contended_default_lines = 2；contended_default_longs = 16；
+# 1 / 3 / 10 / 30 / 100 / 300 / 1000 / 3000 周期 @3GHz
+# = 0.3 / 1.0 / 3.3 / 10.0 / 33.3 / 100.0 / 333.3 / 1000.0 纳秒
+# 伪共享行流量：N = 1_000_000 次写 -> N * 64 字节 = 64_000_000 字节 ≈ 64 MB
+```
+
+来源（核验日期 2026-11-08）：
+
+- 【官方】JLS 17.4.5 happens-before 规则、volatile 写 hb 随后读同一变量：`java.util.concurrent` 包文档（JDK 17，引用 JLS 17.4.5）——https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/package-summary.html
+- 【官方】JLS 17.7 非 volatile long / double 单次写按两次 32 位写处理、volatile long / double 读写恒原子：https://docs.oracle.com/javase/specs/jls/se17/html/jls-17.html#jls-17.7（主代理实读核验）
+- 【官方】JEP 142 引入 `@Contended`、默认 128 字节填充、为抵消相邻行预取而取两倍行宽、需 `-XX:-RestrictContended` 才对用户代码生效：OpenJDK hotspot-dev 邮件（JEP 142 实现说明）——https://mail.openjdk.org/pipermail/hotspot-dev/2012-November/007309.html ；另见 https://www.baeldung.com/java-false-sharing-contended 与 https://jenkov.com/tutorials/java-concurrency/false-sharing.html
+- 【估算】本节全部周期数、纳秒数、延迟区间均为经验量级估算，不是官方数字、不是实测值；缓存行 64 字节为 x86 / ARM 常见值，128 字节行见边界条件第 1 条。
+
 ## 小技巧与冷知识
 
 【小技巧】停止标志用 volatile 只是第一步，循环体里别空转：`while (running) {}` 这种忙等会把一个核烧满，正确做法是在循环里加 `Thread.sleep()` 或 `LockSupport.parkNanos()`，让出 CPU 再去查标志。volatile 解决的是“能不能看到新值”，不是“等的时候省不省资源”，停表标志和等待策略要分开想。
@@ -122,11 +254,13 @@ public class AppConfig {
 
 【冷知识】volatile 的保证不是靠“每次读写都绕过缓存”实现的：底层是内存屏障约束重排序、配合缓存一致性协议让修改对其他核可见，而不是每次读写都去主内存搬数据。把 volatile 理解成“禁止用缓存”会误判性能——它的开销来自屏障禁止的优化和一致性流量，不是“每次都走内存”，读 volatile 在现代 CPU 上仍然可以命中缓存。
 
-## 7. 面试与自测
+## 8. 面试与自测
 
 - happens-before 八条规则说出常用的五条，并用它解释 DCL 为什么需要 volatile。
 - volatile 与 synchronized 在可见性实现上的差别是什么？
 - 为什么不可变对象不需要同步也能安全发布？
+
+- 两个 `volatile long` 落在同一 64 字节缓存行里会有什么问题？要把它们分到不同行，中间垫几个 `long`？`@Contended` 默认垫多少字节、用户代码使用时还缺什么启动参数？
 
 ### 参考答案
 
@@ -134,7 +268,9 @@ public class AppConfig {
 2. volatile 只解决可见性与有序性（内存屏障），不互斥、不保证原子性；synchronized 通过监视器进入/退出同时解决互斥、可见性、有序性，解锁 happens-before 后续对同一把锁的加锁。所以 volatile 不是“轻量级锁”，临界区该加锁还得加锁。
 3. 不可变对象状态全 final，且构造器里 this 不逸出：正确构造的对象，其 final 字段对其他线程可见时保证已初始化完成。发布后任意线程读到的都是完整一致的快照，不需要额外同步；这也是设计并发数据结构时优先“不可变 + AtomicReference 整体替换”，而不是给可变对象层层加锁的原因。
 
-## 8. 关联知识
+4. 会伪共享：两核写不同变量却共享同一缓存行，每次写都使对方整行失效并重取，热循环下每次写都付几十到几百周期的跨核失效成本。分行换算：64 字节一行装 8 个 `long`，第一个占 8 字节，中间垫 `64 - 8 = 56` 字节即 7 个 `long`，第二个恰好落在偏移 64 处；两个独占一行的 `long` 最少占 128 字节。`@Contended`（JEP 142，JDK 8 引入，Java 9 起在 `jdk.internal.vm.annotation`）默认垫 128 字节（2 行，防相邻行预取），可用 `-XX:ContendedPaddingWidth` 改；默认只对 JDK 内部类生效，用户代码需加 `-XX:-RestrictContended`。注意手动垫 7 个 `long` 只有在首字段行对齐且未被 JIT 消除时才成立，跨平台优先用 `@Contended`。
+
+## 9. 关联知识
 
 - 汇总与全景：[Java-并发编程](开发语言/Java/并发/Java-并发编程.md)
 - 锁语义：[synchronized与锁](开发语言/Java/并发/synchronized与锁.md)
