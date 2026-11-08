@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -248,3 +248,12 @@
 - **热度/更新**：36,967 stars（2026-11-08 核验 GitHub API），2025-10-28 创建，最近推送 2026-11-05。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；索引里的 skill 来自多方、质量与权限要求各不相同，引入前通读其 SKILL.md，确认无敏感信息读取、网络上传、危险命令；不要整批拉取。
+
+### 26. awesome-copilot（github/awesome-copilot）GitHub 官方 Copilot 指令/Agent/Skill 库
+
+- **功能**：GitHub 官方组织下的社区共建库：Copilot 用 instructions（232 个）、agents（249 个）、skills（475 个 SKILL.md，2026-11-08 核验），另有 cookbook、extensions 与 hooks；覆盖开发、测试、文档、评审等场景的现成提示词与工作流。
+- **适用场景**：ao 在 VS Code / GitHub Copilot 里干活时直接取用——instructions 放 `.github/instructions/`、agents 与 skills 按需取单个文件；与第 1 项 anthropic/skills（Claude Code 官方）、第 24 项 wshobson/agents（多工具大库）、第 25 项 VoltAgent 索引（发现目录）互补：本项是 Copilot 一侧的官方入口，补上了索引里 Copilot 专项的缺口。
+- **来源**：https://github.com/github/awesome-copilot（公开仓库）
+- **热度/更新**：40,913 stars（2026-11-08 核验 GitHub API），2025-06-11 创建，最近推送 2026-11-06。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；社区共建内容质量参差不齐，引入前通读单个 instruction/skill 文件，确认无敏感信息读取、网络上传、危险命令；不要整库装，按任务取单个文件。
