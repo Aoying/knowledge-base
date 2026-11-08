@@ -2,7 +2,7 @@
 知识点: Kafka 生产者可靠性
 层级: 进阶
 适用版本: Kafka 4.x
-更新日期: 2026-10-31
+更新日期: 2026-11-08
 关联:
   - Kafka-消息队列
   - Kafka-消费者组与Rebalance
@@ -100,6 +100,94 @@ producer.close();   // 退出前必须 close/flush，没发完就关进程会丢
 - **原因**：`unclean.leader.election.enable=true` 时，非 ISR 副本也能当选 leader，它没同步到的数据就丢了。
 - **解决**：生产设 `unclean.leader.election.enable=false`，宁可短暂不可用也不丢数据；`min.insync.replicas` 至少 2，与 `acks=all` 配套。
 
+## 8. 可靠性三件套的代价定量
+
+本节所有数字均为手算，Python 3 本地复算（见节末“### 复算口径”）。【官方】指 Apache Kafka 官方文档事实，附来源链接与核验日期 2026-11-08；【估算】指按简化假设手算的结果，不是官方数字、不是实测值，换一组假设数字会变、结论方向不变。
+
+### 8.1 acks=all 比 acks=1 贵多少：多一轮 follower 往返
+
+【估算】假设：同机房单向网络时延 0.5 ms，leader 落盘 1 ms，follower 落盘 1 ms，两个 follower 并行复制、取最慢者；不计序列化与排队。
+
+- `acks=1`：发 0.5 + leader 写 1 + 回确认 0.5 = **2.0 ms**。
+- `acks=all`（RF=3、ISR=3）：发 0.5 + leader 写 1 + follower 复制往返（0.5 + 写 1 + 回 leader 0.5 = 2.0）+ 回生产者 0.5 = **4.0 ms**，是 `acks=1` 的 **2.0 倍**。多出来的正好是一轮 follower 复制往返。
+- 但单条总延迟里还有 `linger.ms`：Kafka 4.x 默认 `linger.ms=5`【官方】，含攒批等待后是 7.0 ms 对 9.0 ms，比值只剩 **1.29 倍**——延迟大头不在 acks，而在攒批等待。
+- 吞吐方向：同一条连接、单批在途时，每秒请求上限 = 1000 / 单批延迟，`acks=1` 约 500 次/秒，`acks=all` 约 250 次/秒；`max.in.flight.requests.per.connection=5`【官方】默认值时，流水线后上限各乘 5，即 2500 对 1250 次/秒。`acks=all` 在相同在途数下吞吐大约减半，补救靠攒批和在途数，而不是降 acks：每批 16 条时 `acks=all` 的上限是 20000 条/秒/连接。
+
+### 8.2 min.insync.replicas=2（3 副本）下的可用性换算
+
+【官方】`min.insync.replicas` 默认值是 1；官方典型场景就是 RF=3、`min.insync.replicas=2`、`acks=all`；ISR 少于该数时生产者报 `NotEnoughReplicas` 或 `NotEnoughReplicasAfterAppend`。
+
+- 允许坏几台：可写条件是 ISR ≥ 2，即 RF − min = **1 台**。0 台坏（ISR=3）可写，1 台坏（ISR=2）可写，2 台坏（ISR=1）**写直接被拒绝**，不是降级成 `acks=1`、不是悄悄少写一份。
+- 【估算】若每台 broker 独立宕机概率 p=1%，写被拒概率 = P(3 副本中 ≥2 台同时坏) = 3p²(1−p) + p³ ≈ **0.0298%**；对照组 `min.insync.replicas=1` 时只有 3 台全坏才拒写，概率约 0.0001%。`min=2` 换来的是一次“宁可拒写也不假成功”的底线，代价是可用性从 99.9999% 量级降到约 99.97% 量级（仍按独立宕机假设，真实机房里同机架/同批次故障会让相关性推高这个数）。
+- 与 `unclean.leader.election.enable=false` 的组合：【官方】该项默认 false，非 ISR 副本不许当选 leader。组合后的语义是分层的——ISR ≥ 2 时可写；ISR=1 时拒写但数据还在；若连最后一个 ISR 成员也宕机，分区暂时无 leader、不可写，但已确认的数据不会被一个落后的副本“复活”后截断丢掉。把该项改成 true 能恢复可用性，代价是落后副本当选后会丢掉它没同步到的已确认数据。
+
+### 8.3 幂等生产者的开销与约束定量
+
+【官方】`enable.idempotence=true` 要求 `acks=all`、`retries > 0`、`max.in.flight.requests.per.connection ≤ 5`；显式配了冲突值会抛 `ConfigException`，没显式开则幂等会被静默关掉；4.1 版 `enable.idempotence` 默认 true、`acks` 默认 all。去重机制是 broker 给每个生产者分配 PID、按（PID、分区）维护序列号，重试带同一序列号的批次直接丢弃。
+
+- 开销不在多一次往返：幂等去重是 broker 侧按批次查序列号，不增加复制轮次，延迟代价约等于 0（【估算】，一次哈希/查表相对毫秒级网络可忽略）；真正的开销是 broker 侧的状态——【官方】broker 对每个生产者至多保留 5 个批次，这正是 `max.in.flight ≤ 5` 的硬约束来源。按默认 `batch.size=16384` 字节【官方】换算，单个（生产者、分区）去重窗口的保留上限是 5 × 16384 = **81920 字节（80 KB）**。
+- 重试预算：`retries` 默认 2147483647【官方】，但它几乎不起约束作用，真正起作用的是 `delivery.timeout.ms` 默认 120000 ms【官方】。`delivery.timeout.ms` 应 ≥ `request.timeout.ms` + `linger.ms`【官方】，默认值下 120000 ≥ 30000 + 5，余量 89995 ms。
+- 【估算】按单次请求超时 30000 ms、`retry.backoff.ms=100` ms 计，120 秒预算内最多容纳 **3 次完整 30 秒超时尝试**（3 × 30100 = 90300 ms），第 4 次尝试只剩 29700 ms 预算；反过来每次尝试若只花 `acks=all` 的 4 ms，预算内可尝试约 120000 / (4 + 100) ≈ **1153 次**。所以“重试次数”这个参数名是误导：调 `retries` 不如调 `delivery.timeout.ms`，后者才是总预算。
+
+### 8.4 batch.size / linger.ms：攒批的账
+
+【官方】`batch.size` 默认 16384 字节，是单批上限、攒满立即发；`linger.ms` 默认 5 ms（4.0 起由 0 改为 5），是攒批等待上限。【估算】设单条消息 1 KB，则一批最多 16 条；到达率 λ（条/秒）决定攒满要多久：
+
+| 到达率 λ | 攒满 16 条需 | linger=5 ms 时实际每批 | 每秒请求数 | 相对 linger=0 |
+|---|---|---|---|---|
+| 100 条/秒 | 160 ms | 约 1 条 | 100 次/秒 | 1 倍（没省） |
+| 1000 条/秒 | 16 ms | 约 5 条 | 200 次/秒 | 5 倍 |
+| 10000 条/秒 | 1.6 ms | 16 条（满） | 625 次/秒 | 16 倍 |
+
+- 读法：`linger.ms` 只在到达率够高时才换来请求数下降；低到达率下 5 ms 等了个寂寞，每批仍是 1 条，请求数一点没省，白加 5 ms 延迟。把 `linger.ms` 从 5 ms 调到 50 ms，低到达率链路的单条延迟上限直接 +45 ms、吞吐不变；高到达率链路请求数已触顶（16 条/批），同样只加延迟不加吞吐——只有中等到达率（本例约 1000 条/秒附近）调大 `linger.ms` 才能继续把每批从 5 条推向 16 条。
+- 与 8.1 节连起来看：低到达率下单条延迟 = linger 5 ms + acks=all 4 ms = 9 ms，其中 linger 占 56%，是最大头；高到达率下攒批摊薄了 linger，acks 的 2 ms 差值才重新变得可见。
+
+### 8.5 边界条件
+
+- ISR 掉到 1 时写被拒绝，而不是静默降级：`min.insync.replicas=2` 下 ISR=1 的分区对 `acks=all` 生产者直接报 `NotEnoughReplicas`，调用方必须按失败处理（记失败表/告警），不能当成“已发送”继续走流程。
+- 单条消息大于 `batch.size` 时不攒批：`batch.size` 是上限不是目标，超大单条直接单独成批发出，`linger.ms` 对它无效；想发更大消息要同步调 `max.request.size`（默认 1048576 字节【官方】）与 broker 侧上限，只调 `batch.size` 不够。
+- `batch.size=0` 等于禁用攒批：【官方】批大小为 0 时不做 batching，每条消息单独一个请求，请求数与到达率 1:1，是吞吐下限；排障时可临时用它隔离“攒批导致的问题”，别留在生产配置里。
+- `max.in.flight.requests.per.connection > 5` 时去重窗口会被顶掉：【官方】broker 每个生产者至多保留 5 个批次，超过 5 个在途批次时旧批次可能在 broker 侧被移除，幂等去重就可能漏网——这就是 5 这个上限的物理含义，不是拍脑袋的数字。
+- 本节的毫秒数只在“同机房、低延迟”假设下成立：跨机房/跨地域复制时单向时延从 0.5 ms 变成几十毫秒，`acks=all` 的 2.0 倍关系不变，但绝对延迟会从 4 ms 量级变成几十毫秒量级，`linger.ms=5` 的占比随之缩到可以忽略——选型时先量自己环境的 RTT 再套公式。
+
+### 复算口径
+
+```python
+# Python 3 本地复算（与正文数字一一对应；假设见各节，均非官方、非实测）
+one_way, leader_write, follower_write, linger = 0.5, 1.0, 1.0, 5.0  # ms
+t_acks1 = one_way + leader_write + one_way          # 2.0 ms
+t_acks_all = one_way + leader_write + (one_way + follower_write + one_way) + one_way  # 4.0 ms
+assert (t_acks1, t_acks_all, t_acks_all / t_acks1) == (2.0, 4.0, 2.0)
+assert round((t_acks_all + linger) / (t_acks1 + linger), 3) == 1.286  # 含 linger: 9.0 / 7.0
+assert (round(1000 / t_acks1), round(1000 / t_acks_all)) == (500, 250)  # 单在途请求上限/秒
+assert (5 * round(1000 / t_acks1), 5 * round(1000 / t_acks_all)) == (2500, 1250)
+assert round(5 * 1000 / t_acks_all * 16) == 20000  # 16 条/批, acks=all, 条/秒/连接
+
+RF, MIN = 3, 2
+assert RF - MIN == 1  # 允许坏 1 台 broker 仍可写
+from math import comb
+p = 0.01
+p_reject = sum(comb(RF, k) * p**k * (1 - p)**(RF - k) for k in range(RF - MIN + 1, RF + 1))
+assert abs(p_reject - 0.000298) < 1e-9  # 0.0298%
+assert 120000 >= 30000 + 5 and 120000 - 30000 - 5 == 89995  # delivery 余量 ms
+assert 120000 // (30000 + 100) == 3 and 120000 - 3 * (30000 + 100) == 29700  # 完整 30s 尝试数
+assert 120000 // (4 + 100) == 1153  # 每次 4ms+100ms backoff 时的尝试数上限
+assert 5 * 16384 == 81920  # 幂等保留上限字节数 = 80 KB
+
+batch_size, rec = 16384, 1024
+per_batch = batch_size // rec  # 16 条/批
+for lam, fill_ms, eff in ((100, 160.0, 1), (1000, 16.0, 5), (10000, 1.6, 16)):
+    assert abs(per_batch / lam * 1000 - fill_ms) < 1e-9
+    assert min(per_batch, max(1, -(-lam * 5 // 1000))) == eff  # linger=5ms 内到达数向上取整
+    assert round(lam / eff) in (100, 200, 625)  # 每秒请求数
+print("复算全部通过")
+```
+
+来源（Apache Kafka 官方文档，核验日期 2026-11-08）：
+
+- 生产者配置（`acks`、`enable.idempotence`、`max.in.flight.requests.per.connection`、`retries`、`delivery.timeout.ms`、`request.timeout.ms`、`linger.ms`、`batch.size`、`max.request.size` 的语义与默认值，Kafka 4.1）：https://kafka.apache.org/41/generated/producer_config.html
+- Broker / Topic 配置（`min.insync.replicas` 默认 1、典型 RF=3/min=2/`acks=all` 场景、`unclean.leader.election.enable` 默认 false，Kafka 4.1）：https://kafka.apache.org/41/configuration/broker-configs/
+
 ## 小技巧与冷知识
 
 - 【冷知识】Kafka 3.0 起（KIP-679），新生产者的默认值已经是“安全组合”：`enable.idempotence=true`、`acks=all`、`retries=Integer.MAX_VALUE`、`max.in.flight.requests.per.connection=5`。原文第 2、3 节逐项配的那些参数，在 4.x 上很多只是把默认值写明。但显式写仍有价值：一旦配了冲突参数（比如 `acks=1`）而又没显式开启幂等，幂等会被静默关掉，不会报错提醒你。
@@ -121,13 +209,17 @@ producer.close();   // 退出前必须 close/flush，没发完就关进程会丢
 2. 幂等生产者解决什么重复、管不了什么重复？开启后对配置有什么硬约束？
 3. Kafka 事务消息和 RocketMQ 事务消息解决的是同一个问题吗？消费者侧要配什么才看不到回滚的消息？
 
+4. 在 `acks=all`、`min.insync.replicas=2`、RF=3 的配置下，坏 1 台 broker 还能写吗？坏 2 台呢？如果把 `linger.ms` 从 5 ms 调到 50 ms，单条消息延迟与吞吐会怎么变？用本节的数字说明。
+
 ### 参考答案
 
 1. 还不够，必须和 broker 侧参数配套：`min.insync.replicas`（≥2），ISR 少于这个数时直接拒绝写入，宁可失败也不假成功；再加 `unclean.leader.election.enable=false`，非 ISR 副本不许当选 leader；三件套齐了才叫“不丢”。代价是延迟，等多个副本确认必然比 `acks=1` 慢。
 2. 解决的是单生产者、单会话内的重试重复：broker 给每个生产者分配 PID，并对每个分区维护发送序列号，重试携带同一序列号，broker 识别出重复批次直接丢弃。生产者重启换了新 PID，序列号体系重来，跨会话的重复它管不了，只能靠事务或业务幂等兜底。硬约束：开启后要求 `acks=all`、`retries>0`、`max.in.flight.requests.per.connection ≤ 5`，配置不满足直接报错。
 3. 不是同一个问题：Kafka 事务解决跨分区原子写 + 消费位点与产出消息的原子性（consume-transform-produce 链路的 exactly-once 就靠它）；RocketMQ 是 half message + 事务回查，解决“本地事务与发消息一致”，别混着选型。消费者侧要配 `isolation.level=read_committed` 才看不到已回滚的事务消息，默认 `read_uncommitted` 等于没隔离。
 
-## 8. 关联知识
+4. 坏 1 台还能写：ISR 从 3 掉到 2，仍满足 `min.insync.replicas=2`，写继续成功；坏 2 台不能写：ISR 只剩 1，小于 2，生产者直接报 `NotEnoughReplicas` 被拒绝，不是降级写。`linger.ms` 从 5 ms 调到 50 ms：低到达率（如 100 条/秒）下每批本来就只有约 1 条，请求数不变，单条延迟上限白加 45 ms；高到达率（如 10000 条/秒）下每批早已攒满 16 条，请求数也不变，同样只加延迟；只有中等到达率（如 1000 条/秒）附近，每批能从约 5 条推向 16 条、请求数从 200 次/秒降到约 63 次/秒，才算拿延迟换到了吞吐。
+
+## 9. 关联知识
 
 - 总览与选型：[Kafka 消息队列](消息队列/Kafka-消息队列.md)
 - 消费端配套：[Kafka 消费者组与 Rebalance](消息队列/Kafka-消费者组与Rebalance.md)
