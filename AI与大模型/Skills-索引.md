@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -212,3 +212,12 @@
 - **热度/更新**：23k+ stars（2026-11-08 核验 GitHub API），2026-03-31 创建，最近推送 2026-11-07。
 - **许可证**：Apache-2.0。
 - **安全注意**：只收集不安装；仓库以指令 Markdown 为主，引入单个 skill 前通读其 SKILL.md，确认无敏感信息读取、网络上传、危险命令；GCP 相关 skill 涉及云上资源操作，勿直接照抄命令到生产账号。
+
+### 22. github-mcp-server（github/github-mcp-server）GitHub 官方 MCP Server
+
+- **功能**：GitHub 官方的 Model Context Protocol 服务器，让 Agent 直接读写 GitHub：仓库、Issue、PR、Actions、代码与安全扫描等约 80 个工具、20 个工具集；提供 GitHub 托管的远程端点（https://api.githubcopilot.com/mcp/，OAuth/PAT 登录、零本地进程）与本地 Docker/Go 二进制两种用法。
+- **适用场景**：ao 的知识库就在 GitHub 上、又在学 MCP：Agent 接上它就能读仓库、提 PR、查 Actions 日志、做代码扫描；与知识库已有的《MCP》篇、《Agent-开发-Skills》篇互补。注意写操作要走有作用域的 token，只读先行、写权限按需给。
+- **来源**：https://github.com/github/github-mcp-server（公开仓库）
+- **热度/更新**：34,319 stars（2026-11-08 核验 GitHub API），2025-03-04 创建，最近推送 2026-11-06。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；MCP 服务器会拿 token 操作 GitHub，引入前确认 token 作用域只给需要的仓库与权限，写/admin 权限按需授予；远程端点用 OAuth 登录，勿把 PAT 写进客户端配置文件明文。
