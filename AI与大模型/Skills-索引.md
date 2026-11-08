@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -230,3 +230,12 @@
 - **热度/更新**：318,041 stars（2026-11-08 核验 GitHub API），2026-02-03 创建，最近推送 2026-11-05；截至 2026 年 11 月初是 GitHub 上星数最高的 Agent Skills 仓库。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；方法论类 skill 只含流程指令，风险低；引入单个 skill 前通读其 SKILL.md，确认无敏感信息读取、网络上传、危险命令。
+
+### 24. agents（wshobson/agents）多工具通用的插件/Agent/Skill 大库
+
+- **功能**：Claude Code、Codex CLI、Cursor、OpenCode、Antigravity CLI、GitHub Copilot、Pi 七个工具通用的插件、Agent、Skill 与命令库，一次用 Markdown 写成、再由生成器适配各工具（带校验与评测）；185 个 SKILL.md（2026-11-08 核验），按插件分领域组织，覆盖开发、测试、文档、运维等常见任务。
+- **适用场景**：ao 若换 Agent 工具（Claude Code / Cursor / Copilot）不用重写 skill——同一套 Markdown 靠生成器适配多端；与已收录的第 1 项 anthropic/skills（官方 19 个生产级 skill）、第 23 项 mattpocock/skills（39 个工程方法论）互补：本项胜在“量大 + 跨工具”，挑单个插件按需取用，不要整库装。
+- **来源**：https://github.com/wshobson/agents（公开仓库）
+- **热度/更新**：42,295 stars（2026-11-08 核验 GitHub API），2025-07-24 创建，最近推送 2026-11-05。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；大库里单个 skill/plugin 的质量参差不齐，引入前通读其 SKILL.md 与插件清单，确认无敏感信息读取、网络上传、危险命令；生成器产物要核对生成结果再用。
