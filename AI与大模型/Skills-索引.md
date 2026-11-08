@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -239,3 +239,12 @@
 - **热度/更新**：42,295 stars（2026-11-08 核验 GitHub API），2025-07-24 创建，最近推送 2026-11-05。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；大库里单个 skill/plugin 的质量参差不齐，引入前通读其 SKILL.md 与插件清单，确认无敏感信息读取、网络上传、危险命令；生成器产物要核对生成结果再用。
+
+### 25. awesome-agent-skills（VoltAgent/awesome-agent-skills）1000+ Agent Skills 索引
+
+- **功能**：收录 1000+ 个 Agent Skill 的索引清单（README 式索引，本身不含 SKILL.md 文件）：来源包括官方开发团队与社区，覆盖 Claude Code、Codex、Gemini CLI、Cursor 等多个工具；按场景分类，可当作“找 skill 先查的目录”。
+- **适用场景**：ao 要给某个具体任务找现成 skill 时，先查这份索引定位候选、再去源仓库通读 SKILL.md；与第 24 项 wshobson/agents（可直接取用的大库，185 个 SKILL.md）互补：本项是“目录”、24 项是“仓库”，一个用来发现、一个用来取用；与第 1 项 anthropic/skills（官方 19 个）对照：官方的先看，社区的按需挑。
+- **来源**：https://github.com/VoltAgent/awesome-agent-skills（公开仓库）
+- **热度/更新**：36,967 stars（2026-11-08 核验 GitHub API），2025-10-28 创建，最近推送 2026-11-05。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；索引里的 skill 来自多方、质量与权限要求各不相同，引入前通读其 SKILL.md，确认无敏感信息读取、网络上传、危险命令；不要整批拉取。
