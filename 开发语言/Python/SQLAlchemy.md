@@ -2,7 +2,7 @@
 知识点: SQLAlchemy
 层级: 进阶
 适用版本: SQLAlchemy 2.x
-更新日期: 2026-10-31
+更新日期: 2026-11-09
 关联:
   - Python
   - pydantic
@@ -127,6 +127,76 @@ session.execute(text("SELECT * FROM entity WHERE name = :name"), {"name": name})
 - **ORM 对象当 DTO 跨层乱传**：出了 Session 作用域再访问懒加载属性就炸；服务层出口转 dict / dataclass 再传。
 - **cascade 删除图省事**：状态历史、快照大多只追加不删除，cascade 误配会删掉一片历史且不可恢复；删除策略按表逐个定，默认不配。
 
+## 批量与连接池定量：N+1、批量落库与连接池算一算
+
+口径先说清：本节只算条数、倍数与等待时间，不重复第 4 节的加载策略定性结论与第 5 节的事务口径。所有耗时数字均为估算——单条 SQL 的往返时延、每次 commit 的 fsync 成本因磁盘、网络与后端而异，生产值以实测为准；条数、倍数与连接数是确定的换算，可以直接拿去对账。
+
+### N+1：先数条数，再谈策略
+
+懒加载的条数公式是 `1 + N`：1 条主查询，N 个父对象各触发 1 条。预加载把 N 压成常数：`selectinload` 是 1 条主查询 + 每个集合 1 条 IN 查询；`joinedload` 是 1 条，但行数会膨胀。
+
+【算例 1】聚合 50 个人物及各自的状态，每人平均 4 条状态：
+
+- 懒加载：1 + 50 = 51 条 SQL。
+- `selectinload(Entity.states)`：1 条主查询 + 1 条 `WHERE id IN (...)` = 2 条，省下 49 条，约为原来的 1/25（51 ÷ 2 ≈ 25.5 倍）。
+- `joinedload`：1 条 SQL，但返回 50 × 4 = 200 行，行数是父行数的 4 倍——父对象列被重复了 4 遍，内存与传输量跟着涨 4 倍，还要 `.unique()` 去重。
+- 再加一个集合（如 relations，每人平均 3 条）：懒加载变成 1 + 50 + 50 = 101 条；`selectinload` 两个集合是 1 + 2 = 3 条；`joinedload` 两层集合是 50 × 4 × 3 = 600 行，膨胀 12 倍。
+
+换算口诀：集合数每加 1，`selectinload` 只加 1 条；`joinedload` 的行数按每层平均子行数连乘。ChapterContextService 这类一次聚合多个集合的入口，条数预算直接按 `1 + 集合数` 算。
+
+### 批量落库：提交次数才是大头
+
+逐条 `add()` + 逐条 `commit()` 的成本不在 INSERT 本身，而在提交次数：N 行就是 N 次 commit，每次 commit 至少一次往返 + 一次 fsync。一次事务收口（第 5 节口径）把提交次数压到 1 次；再走 Core `insert()` 的 executemany，还能把 N 次 INSERT 调用合并成少量往返。
+
+【算例 2】一章解析出 1000 条 EntityState，假设每次 commit 的 fsync 约 5 毫秒（本地 SSD 估算值）：
+
+- 逐条 commit：1000 次提交 × 5 毫秒 = 5000 毫秒 ≈ 5 秒，只算提交，不含 INSERT 本身。
+- 一次事务 + Core 批量 insert：1 次提交 × 5 毫秒 = 5 毫秒，提交成本降为 1/1000。
+- 需要主键回填时，2.0 的 `insertmanyvalues` 默认每页 1000 行：1000 行 = 1 页、1 次往返取回主键；10000 行 = 10 页、10 次往返（`ceil(10000 ÷ 1000) = 10`）。
+
+【算例 3】flush 频率：`flush` 只发 SQL、不提交，成本是 SQL 往返而非 fsync。10000 行每 1000 行 `flush()` 一次是 10 次 flush；攒满再 flush 比每行 flush 少 9990 次往返。注意 `autoflush` 默认开启，批量组装中途查一次库就会提前触发 flush（见小技巧节），大批量组装时先关掉再手动 flush。
+
+调用次数也要换算：逐条 `add()` + `flush()` 是 1000 次 execute 调用，每次都要走一次 ORM 的状态跟踪与 SQL 编译；Core `insert()` 配 executemany 是一次调用带 1000 行参数，驱动层面分批发出，Python 侧的调用次数从 1000 降到 1。10000 行同理：逐条是 10000 次调用，executemany 是 1 次调用（驱动内部再按批次发）。
+
+批量路径的代价要记清：`bulk_save_objects` 与 Core insert 跳过 ORM 的状态跟踪与部分事件，对象不进 identity map；`bulk_save_objects(return_defaults=True)` 会逐行取回主键，性能大跌，需要主键时优先用带 RETURNING 的 `insertmanyvalues`（SQLite ≥ 3.35 支持 RETURNING）。
+
+### 连接池：最大连接数是一道算术题
+
+QueuePool 的默认值（官方文档）：`pool_size = 5`，`max_overflow = 10`，`pool_timeout = 30` 秒。最大并发连接数 = 5 + 10 = 15；第 16 个并发请求起排队等连接，超过 30 秒拿不到就报超时。溢出连接用完即断开丢弃，只有 `pool_size` 的 5 个会常驻池中。
+
+【算例 4】20 个并发请求同时到达，每请求持有连接 200 毫秒：
+
+- 前 15 个立即拿到连接，剩下 5 个排队；按每批 15 个、每批 200 毫秒算，2 批约 0.4 秒消化完，无人超时。
+- 同样 20 个并发，若每请求持有连接 5 秒：第 16–20 个要等约 5 秒才能拿到连接（仍在 30 秒超时内）；持有时间涨到 30 秒以上（如 40 秒）才会有人排队超 30 秒报超时——排队等待约等于一个持有时长。
+- 池够不够用 Little 定律估：并发连接数 ≈ 到达率 × 平均持有时间。50 请求/秒 × 0.2 秒 = 10 个连接，15 的上限够用；50 请求/秒 × 0.5 秒 = 25 个，超了 15，要么调大池，要么缩短持有时间（Session 用完即关，别让连接空挂在事务里）。
+
+### 池子要调多大：按峰值倒推
+
+默认值 15 个并发连接是起点，不是推荐值。倒推公式：目标最大并发连接数 ≈ 峰值同时到达的请求数（突发场景）或到达率 × 平均持有时间（平稳场景），再留 20% 余量。
+
+- 平稳场景：到达率 50 请求/秒、持有 0.2 秒，并发连接约 10 个，留余量后 10 × 1.2 = 12 个，默认 15 够用。
+- 突发场景：同一秒涌入 40 个请求、每请求持有 0.2 秒，峰值需要 40 个连接，默认 15 不够：可设 `pool_size=30, max_overflow=10`，上限 30 + 10 = 40，刚好兜住；再多就排队。
+- 别只调 `max_overflow`：溢出连接用完即弃，高峰一过就断开重建；常态并发超过 5 个，优先调大 `pool_size`，让连接常驻复用。
+
+### Session 生命周期：给一次业务动作定查询预算
+
+一个 Session 对应一个业务动作（第 2 节），先给它定条数预算，超了就开 `echo=True` 数 SQL、再补 `selectinload`。ChapterContextService 聚合一章上下文的参考预算：实体 1 条 + states、relations、events、rules 各 1 条 = 5 条；再加一层嵌套集合（如每条 relation 的端点状态）预算加 1 条。
+
+| 业务动作 | 预算 | 算法 |
+|---|---|---|
+| 写一章分析结果（落库） | 1 次提交 | N 行 INSERT + 1 次 commit |
+| 聚合一章上下文 | 5 条 SQL | 1 条主查询 + 4 个集合各 1 条 |
+| 查单个实体及全部状态 | 2 条 SQL | 1 条主查询 + 1 条 IN |
+
+预算不是硬上限，是对账工具：实测 51 条、预算 5 条，差出来的 46 条就是 N+1。
+
+### 边界条件
+
+- SQLite 不走这套池算式：小说引擎用 SQLite，方言默认是 SingletonThreadPool / NullPool，没有 `pool_size + max_overflow = 15` 这道题；上面连接池的换算只在换 MySQL / PostgreSQL 后才适用，且 SQLite 是单写模型，并发写先看第 5 节。
+- `selectinload` 的 IN 列表随父集线性变长：父集上万时第二条 SQL 的参数列表本身就很长，先分页取父集、再分批预加载，别一次把全表主键塞进一个 IN。
+- `joinedload` 的膨胀只发生在集合侧（一对多/多对多）：多对一、一对一每父行只多 1 行，不膨胀；判断膨不膨胀先看关系基数，别一刀切。
+- 本节所有毫秒数都是估算口径：fsync 约 5 毫秒、持有 200 毫秒都是假设值，换磁盘、换网络、换后端都要重测；条数、倍数与连接数三类换算不受时延假设影响，可以直接用。
+
 ## 小技巧与冷知识
 
 【小技巧】按主键取一行用 `session.get(Entity, id)`，别写 `select(...).where(id == ...)`：`get` 会先查 Session 的 identity map，对象已在内存里就直接返回、不发 SQL；查不到才发一条主键查询。循环里反复取同一批实体时，这个“先看内存再查库”的顺序能省掉大量重复 SQL；按非主键字段查才用 `select`。
@@ -171,11 +241,15 @@ session.execute(text("SELECT * FROM entity WHERE name = :name"), {"name": name})
 2. flush 和 commit 有什么区别？什么时候需要手动 flush？
 3. Session 已关闭后，再访问提交过的对象属性为什么会抛 DetachedInstanceError？怎么避？
 
+4. 一章要落 1000 条状态、聚合 50 个人物及各自的状态：批量落库与查询各要几条 SQL、连接池 pool_size=5、max_overflow=10 时 20 个并发请求会怎样？
+
 ### 参考答案
 
 1. 因为 relationship 默认懒加载：访问 entity.states 时才单独发一条查询，遍历 50 个人物就是 1 + 50 条，这就是经典 N+1。批量场景改预加载，如 .options(selectinload(Entity.states))，用一条额外 IN 查询把集合批量带出；joinedload 是 JOIN 一次带出，适合多对一/一对一，一对多会行膨胀，别滥用。排查手段是开 echo=True 数 SQL 条数，N+1 是一排同构 SQL；raiseload 可让懒加载访问直接报错，排查期好用。
 2. flush 只是把变更发到数据库（拿到自增主键、触发约束检查）但未提交，commit 才落定。先拿 id 再建关联时手动 flush()，别为了拿 id 提前 commit 把业务动作拆成两个事务；批量落库也要一次事务收口，不能循环里逐个 commit。
 3. 因为默认 expire_on_commit=True，提交后对象属性过期，下次访问触发懒加载刷新，而 Session 已关闭就抛 DetachedInstanceError。避法是显式设置 expire_on_commit=False（代价是对象可能是旧快照），或按第 8 节的做法：服务层出口转 dict / dataclass 再传，不要把 ORM 对象当 DTO 跨层乱传。
+
+4. 懒加载 51 条，selectinload 2 条；joinedload 1 条但 200 行、膨胀 4 倍。逐条 commit 1000 次，一次事务+Core insert 仅 1 次，5 秒降至 5ms。池上限 15，20 并发 5 个排队，持有 200ms 等 0.2s，超 30s 报超时。
 
 ## 9. 关联知识
 
