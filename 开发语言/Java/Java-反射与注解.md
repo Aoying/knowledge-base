@@ -2,7 +2,7 @@
 知识点: Java-反射与注解
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-31
+更新日期: 2026-11-09
 关联:
   - Java
   - Spring-IOC与AOP
@@ -238,6 +238,96 @@ public class LogTimeRunner {
 - **JDK 9+**：`Class#newInstance()` 废弃，改用 `getDeclaredConstructor().newInstance()`；模块系统引入，`setAccessible` 受 `opens` 约束。
 - **JDK 16+**：强封装成为默认，反射访问 JDK 内部 API 必须显式 `--add-opens`。
 
+## 反射调用开销定量：invoke 慢多少、缓存省多少
+先给结论：热路径下一次 `Method.invoke()` 是纳秒级，约 5–7 ns，约为直接调用的 2–16 倍；
+冷路径（含查找、安全检查、未膨胀）可慢 1–2 个数量级。单次调用差几纳秒可以忽略，
+一旦进入每秒百万次的热点循环，差值就放大到毫秒级，这才是框架要缓存的原因。
+### 四种调用方式的数量级对比
+下表是两组公开 JMH 基准的热路径结果（充分预热后，空方法 / 简单 getter，单位 ns/次）。
+两组绝对值不同，但相对顺序一致：直接调用最快，`LambdaMetafactory` 最接近直接调用，
+`MethodHandle.invokeExact` 次之，`Method.invoke` 最慢。
+| 调用方式 | DZone：JDK 8 简单 getter | Hazelcast：原始类型 getter | Hazelcast：引用类型 getter |
+|---|---|---|---|
+| 直接调用 | 2.59 | 0.5 | 2.2 |
+| `Method.invoke`（已 `setAccessible`） | 5.28（约 2.0 倍） | 6.5（约 13 倍） | 6.0（约 2.7 倍） |
+| `MethodHandle.invoke` | 6.10（约 2.4 倍，JDK 8 反而更慢） | 4.1（约 8.2 倍） | 3.6（约 1.6 倍） |
+| `MethodHandle.invokeExact` | —— | 2.7（约 5.4 倍） | —— |
+| `LambdaMetafactory` 生成的调用 | 3.45（约 1.3 倍） | 2.2（约 4.4 倍） | 2.2（约 1.0 倍） |
+另一组 OpenJDK 23 基准（`Integer.compare`，按每微秒操作数换算）给出更极端的倍数：
+直接调用约 0.32 ns/次，`MethodHandle.invokeExact` 约 2.36 ns/次（约 7.4 倍），
+`Method.invoke` 约 5.10 ns/次（约 15.9 倍）。绝对值随方法体、CPU、JDK 版本大幅波动，
+跨机器只认倍数区间，不认某个精确纳秒数。
+### 算例一：热点循环里 invoke 到底多花多少时间
+取 Hazelcast 原始类型 getter 一组：直接调用 0.5 ns/次，反射 6.5 ns/次，差 6.0 ns/次。
+循环 100 万次：直接调用耗时 `1,000,000 × 0.5 ns = 0.5 ms`；反射耗时
+`1,000,000 × 6.5 ns = 6.5 ms`，多花 6.0 ms，约 13 倍。同组换 `MethodHandle.invokeExact`
+（2.7 ns/次）：100 万次耗时 2.7 ms，比反射省 3.8 ms；换 `LambdaMetafactory`（2.2 ns/次）：
+100 万次耗时 2.2 ms，比反射省 4.3 ms。
+取 DZone JDK 8 一组复核：直接 2.59 ns/次，反射 5.28 ns/次，100 万次分别为 2.59 ms 与 5.28 ms，
+只多花 2.69 ms，约 2.0 倍。两组结论一致：热路径反射是“几倍”，不是“几百倍”。
+### 算例二：最容易踩的坑是 `invokeWithArguments`
+同一组 OpenJDK 23 基准里，`MethodHandle.invokeWithArguments` 约 90.09 ns/次，
+是直接调用的约 281 倍、是 `Method.invoke` 的约 18 倍（`90.09 ÷ 5.10 ≈ 17.7`）。
+循环 100 万次：`invokeWithArguments` 耗时约 90.09 ms，而 `Method.invoke` 约 5.10 ms，
+直接调用约 0.32 ms。贵的原因：每次调用都要做参数装箱、类型检查与签名分析，
+反射则把一部分检查缓存了下来。结论：签名已知时只用 `invokeExact` / `invoke`，
+不要为了图方便用 `invokeWithArguments`。
+### 反射膨胀：前 15 次走 native，之后生成字节码
+JDK 17 及更早版本里，`Method.invoke()` 有“膨胀”机制：同一个方法的前 15 次调用走 native
+accessor（`NativeMethodAccessorImpl`），第 16 次起生成专用的字节码 accessor 并切换过去。
+OpenJDK 源码里该阈值就是常量 `inflationThreshold = 15`，注释同时写明：生成字节码的首次
+调用比 native 调用贵 3–4 倍，但后续调用可快 20 倍以上——先付一次生成成本，再长期受益。
+这解释了原文“反射越用越快”：只调一两次的冷路径最慢，压测只测一次就下结论会高估成本；
+也解释了为什么框架要在启动时先把常用方法“跑热”，而不是等到业务高峰才第一次膨胀。
+版本口径要分清：JDK 18（JEP 416）把 `Method` / `Constructor` / `Field` 的实现改到
+`MethodHandle` 之上，旧的 native + 字节码膨胀机制已被移除，“15 次”阈值只适用于 JDK 17
+及更早版本，在 JDK 18+ 上不要再拿它做推理。
+
+### `setAccessible` 与安全检查的成本
+
+`setAccessible(true)` 本身是一次性成本：它在调用前把访问检查关掉，之后每次 `invoke`
+不再重复做语言级访问检查。DZone 的数据就是在已 `setAccessible` 的前提下测的——
+即使关掉了检查，反射仍要 5.28 ns/次，剩下的成本是参数打包成 `Object[]`、基本类型装箱 /
+拆箱、返回值拆包、异常包装成 `InvocationTargetException`，以及 JIT 无法内联。
+`MethodHandle` 的思路与之同构：创建句柄时一次性做完访问检查，调用时不再重复检查。
+所以“检查成本”不是每次都付，而是“创建时付一次”还是“每次调用都付”的区别；
+把 `Method` / `MethodHandle` 缓存为 `static final`，就是把这笔账从每次调用摊到只付一次。
+
+### 算例三：重复 `getMethod` 比重复 `invoke` 贵得多
+
+查找本身比调用贵一个数量级。DZone 给出的反射 bootstrap 成本约 268.51 ns/次，
+把它作为单次查找的量级估算（实际 `getMethod` 还随类的方法数量、是否命中内部缓存而浮动），
+缓存后的单次 `invoke` 取 5.28 ns/次，循环 100 万次手算如下：
+每次都 `getMethod` 再 `invoke`：`1,000,000 × (268.51 + 5.28) ns ≈ 273.8 ms`；
+只查一次、缓存 `Method` 后反复 `invoke`：`1,000,000 × 5.28 ns ≈ 5.28 ms`。
+缓存省下约 `273.8 − 5.28 ≈ 268.5 ms`，约 51.9 倍；其中查找本身就占了约 268.5 ms。
+另一组独立基准交叉验证了量级：Kt. Academy 的 JMH 里，Java 反射每次调用都重新找方法时
+耗时 168.9 ms/操作，缓存方法后同一组调用只要 111 ms/操作——两组口径不同不能直接比绝对值，
+但都指向同一结论：查找是反射成本里的大头，缓存 `Method` 对象是性价比最高的优化。
+
+### 注解解析在启动期的成本量级
+
+单次 `getAnnotation()` 本身很轻，通常在亚微秒到数微秒量级（首次解析要生成注解动态代理、
+读 class 文件里的注解元数据，会更贵一些），真正的成本在“全量扫描”：
+Spring Boot 典型启动 5–30 秒，classpath 扫描与 Bean 实例化占大头，类越多扫描时间近似线性增长。
+用编译期索引把扫描换成读表能省一大块：Spring 的 `@Indexed` / `spring.components`
+索引可使大型项目启动时间下降约 30–50%（以 10 秒启动计，约省 3–5 秒）；
+Jandex 这类构建期索引把扫描挪到编译期，运行期启动成本接近于零。
+所以框架的通用做法与方法调用一致：启动时一次性解析注解并缓存成元数据
+（Spring 的 `BeanDefinition`、MyBatis-Plus 的 `TableInfo`），运行期只读缓存，不再重复解析。
+
+### 边界条件
+
+- 本节所有纳秒数都是 JMH 充分预热后的热路径值，未预热的冷调用（首次膨胀、首次生成 Lambda、
+  类加载）要以微秒甚至毫秒计，不能拿热路径数字去估启动成本。
+- 绝对值随 JDK 版本、CPU、方法体大小剧烈变化：JDK 8 上 `MethodHandle` 甚至比反射慢，
+  新版 JDK 上则快约一倍；跨版本、跨机器比较时只看倍数区间。
+- 空方法 / 简单 getter 的倍数会被放大：真实方法体越重，反射的固定开销占比越低，
+  倍数会向 1 收敛；反过来，只测空方法会高估反射的相对成本。
+- 涉及基本类型参数 / 返回值时要另算装箱账：反射每次调用都要把 `int`、`long` 装箱成
+  `Integer`、`Long`，还会产生约 24 字节/次的分配（Hazelcast 原始类型一组），
+  `invokeExact` 用原始类型签名可把这笔分配降到 0。
+
 ## 小技巧与冷知识
 
 【小技巧】把查到的 `Method`、`Field`、`Constructor` 缓存起来复用，不要每次调用都重新 `getDeclaredMethod`。原文已讲框架是“启动时反射一次、运行期缓存结果”，自己写工具类时也可以用一个 `ConcurrentHashMap` 按“类名 + 方法名 + 参数类型”做键，第一次查到后放进去，后面直接取，这样既省了查找开销，也避免了在热点循环里反复做反射查找。
@@ -270,11 +360,15 @@ public class LogTimeRunner {
 2. 框架用的注解为什么都要 `@Retention(RetentionPolicy.RUNTIME)`？编译期 APT 路线和运行期反射路线各有什么取舍？
 3. 反射调用为什么慢？框架一般用什么办法规避这个成本？
 
+4. 热路径下 `Method.invoke` 比直接调用慢多少？为什么缓存 `Method` 对象比只优化 `invoke` 本身更划算？膨胀阈值是多少，在哪个 JDK 版本后不再适用？
+
 ### 参考答案
 
 1. 本类声明的全部成员（含 private）用 `getDeclaredField/Method/Constructor`，不含继承；本类 + 父类中 public 的成员用 `getField/Method`。构造器不存在继承，所以只有 `getDeclaredConstructor(s)` / `getConstructor(s)`，没有“继承版”之分。排查 `NoSuchMethodException` 的第一板斧就是：private 方法只能用 `getDeclaredMethod`，别用 `getMethod`。
 2. 保留级别是 SOURCE < CLASS < RUNTIME，框架用注解都是 RUNTIME 档，因为运行期反射要靠 `getAnnotation()` 读到它。编译期 APT（如 Lombok、MapStruct）在 `javac` 阶段扫描注解生成代码或报错，零运行期开销；运行期反射（如 Spring、MyBatis-Plus、Hibernate Validator）启动/运行时读取，灵活但有成本。
 3. 每次 `invoke` 都有参数装箱/拆箱、安全检查、方法查找，且反射调用阻碍 JIT 内联（JIT 看不到稳定调用目标）；冷路径下比直接调用慢 1–2 个数量级。框架的做法是“启动时反射一次、运行期缓存结果”（如 Spring 的 BeanDefinition、MP 的 TableInfo），别在循环热点里反复 `getMethod().invoke()`。
+
+4. 反射约 5–7 ns/次，约为直接调用的 2–16 倍。膨胀阈值 15 次，JDK 18 后旧机制已移除。查找比调用贵，缓存 Method 可省 50 倍耗时。
 
 ## 关联知识
 - [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)：IOC 容器与 AOP 代理是反射+注解最重的两个使用者。
