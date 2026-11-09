@@ -2,7 +2,7 @@
 知识点: Quartz 定时任务
 层级: 进阶
 适用版本: Quartz 2.3 / Spring Boot 2.7.3
-更新日期: 2026-10-31
+更新日期: 2026-11-09
 关联:
   - Spring-Boot
   - 线程池
@@ -133,6 +133,72 @@ public class SpringJobFactory extends AdaptableJobFactory {
 - **表达式对但就是不跑**：按顺序查——Trigger 被 pause、身份 group 写错、cron「日/周」两位同时给了具体值、时区不是 Asia/Shanghai（容器默认 UTC 让「凌晨 2 点」变北京时间 10 点）。时区在 Trigger 上显式 `inTimeZone(TimeZone.getTimeZone("Asia/Shanghai"))` 或统一 JVM 时区，别靠部署环境碰运气。
 - **重启后任务消失**：memory JobStore 的必然结果，要么换 jdbc，要么靠启动时代码注册并保证幂等。
 
+## 9. 调度体量定量：触发次数、线程池与错过量算一算
+
+本节只做定量换算，不重复第 5、6 节的定性结论：先把触发次数、线程占用、错过次数、表行数换算成具体数字，再决定线程数配多少、misfire 策略选哪个。下面数字按一年 365 天算，默认值以 Quartz 2.3 官方文档为准。
+
+### 触发频率：一年跑多少次
+
+一年触发次数 = 每天触发次数 × 365，cron 表达式定下来，这个数就是确定的：
+
+| 触发间隔 | 每天次数 | 一年次数 |
+| --- | --- | --- |
+| 每分钟 | 1,440 | 525,600 |
+| 每 5 分钟 | 288 | 105,120 |
+| 每 15 分钟 | 96 | 35,040 |
+| 每 30 分钟 | 48 | 17,520 |
+| 每小时 | 24 | 8,760 |
+| 每天 1 次 | 1 | 365 |
+
+读法：每 5 分钟跑一次的任务一年触发约 10.5 万次，每分钟跑一次则是一年约 52.6 万次——频率翻 5 倍，总量也翻 5 倍。评估量级时先看这个数：每天 1 次的报表任务一年才 365 次，谈不上体量压力；每分钟跑的任务一年 52 万多次触发，每次执行哪怕只多 1 秒，一年就多出约 146 小时的线程占用。
+
+### 线程池：10 个线程能扛多少并发
+
+默认口径：官方配置参考表把 `org.quartz.threadPool.threadCount` 列为必填项（表内默认值 -1），Quartz jar 内置的默认 `quartz.properties` 配的是 10；Spring Boot 不显式配置时走的就是这份内置默认值，实效 10 个工作线程。也就是说，默认状态下同一时刻最多 10 个任务在跑，第 11 个触发只能排队。
+
+用 Little 定律估算可持续吞吐：并发数 = 到达速率 × 平均耗时，池子满载时到达速率上限 = 线程数 ÷ 平均耗时。按默认 10 线程：
+
+| 任务平均耗时 | 可持续上限（次/分钟） |
+| --- | --- |
+| 30 秒 | 20 |
+| 60 秒 | 10 |
+| 5 分钟 | 2 |
+
+【算例 1】每 5 分钟触发一次的任务，一年约 10.5 万次（288 × 365 = 105,120）；每分钟触发一次则一年约 52.6 万次（1,440 × 365 = 525,600），是前者的 5 倍。
+
+【算例 2】20 个平均耗时 30 秒的任务在同一时刻触发：前 10 个占用全部线程跑 0–30 秒，后 10 个排队等 30 秒才启动，全部跑完要 60 秒；如果 10 个任务平均耗时 5 分钟同时启动，整池被占满 5 分钟，这期间任何新触发都要排队等满 5 分钟。
+
+排队超过 60 秒就会触及下一节的 misfire 阈值：线程池满不是“慢一点”，而是直接让排队的触发变成错过。长任务要么调大线程数，要么只做投递、把重活丢给业务线程池（见第 6 节）。
+
+### 错过量：停机多久、漏多少次
+
+错过次数 = 停机时长 ÷ 触发间隔（向下取整）；只有延迟超过 `misfireThreshold` 默认 60 秒的才算 misfire，60 秒内赶上的不算：
+
+| 停机时长 | 每 1 分钟触发 | 每 5 分钟触发 | 每 15 分钟触发 | 每天 1 次 |
+| --- | --- | --- | --- | --- |
+| 30 分钟 | 30 | 6 | 2 | 0 或 1 |
+| 1 小时 | 60 | 12 | 4 | 0 或 1 |
+| 7 天 | 10,080 | 2,016 | 672 | 7 |
+
+【算例 3】停机 1 小时，每 5 分钟触发的任务错过 12 次（60 ÷ 5）；停机 7 天，每 15 分钟触发的任务错过 672 次（10,080 ÷ 15），每天 1 次的任务只错过 7 次。
+
+补跑量取决于策略：`IGNORE_MISFIRE_POLICY` 是错过几次补几次，停机 7 天的每 15 分钟任务重启后要补跑 672 次，瞬间打爆下游的风险就来自这里；`FIRE_ONCE_NOW` 只补 1 次；`DO_NOTHING` 补 0 次，等下个周期。停机不足 60 秒则一次都不算错过，重启后在阈值内正常触发。
+
+### 持久化体量：多少任务、多少行
+
+JDBC 模式下定义类数据按“一个实体一行”落表：每个 JobDetail 在 `QRTZ_JOB_DETAILS` 占 1 行，每个 Trigger 在 `QRTZ_TRIGGERS` 占 1 行，再按类型在 `QRTZ_CRON_TRIGGERS` 或 `QRTZ_SIMPLE_TRIGGERS` 各占 1 行。
+
+【算例 4】50 个 JobDetail、80 个 Trigger（60 个 cron + 20 个 simple）：`QRTZ_JOB_DETAILS` 50 行、`QRTZ_TRIGGERS` 80 行、`QRTZ_CRON_TRIGGERS` 60 行、`QRTZ_SIMPLE_TRIGGERS` 20 行，定义类行数合计 210 行。
+
+其余表不随任务数线性增长：`QRTZ_FIRED_TRIGGERS` 只存进行中的触发，行数上限约等于同一时刻在跑的任务数（默认池 10 线程，正常不超过 10 行）；`QRTZ_SCHEDULER_STATE` 每节点 1 行；`QRTZ_LOCKS` 只有固定少量锁行。行数换算只管定义类表，`JobDataMap` 里塞大对象不增加行数、只撑大单行体积（估算口径、生产值以实测为准）。
+
+### 边界条件
+
+- 年触发量按 365 天算：闰年每日任务 366 次、每分钟任务一年 527,040 次（多 1,440 次）；`Asia/Shanghai` 无夏令时，时区切换不影响次数，跨夏令时地区会多减一次。
+- Little 定律算的是稳态均值，要求到达均匀、耗时稳定；突发同时触发或耗时长尾都会让实际排队比均值长，`@DisallowConcurrentExecution` 的排队还会再叠加一层等待。
+- misfire 只统计超过 60 秒阈值的延迟：停机不足 60 秒、重启后在阈值内赶上的不算错过；补跑量还取决于策略，`DO_NOTHING` 下停机再久补跑也是 0 次。
+- 行数换算只覆盖定义类表（`QRTZ_JOB_DETAILS`、`QRTZ_TRIGGERS` 及类型子表）；`QRTZ_FIRED_TRIGGERS` 是瞬时在途量，`QRTZ_SCHEDULER_STATE` 按节点数算，`JobDataMap` 体积与单行大小以实测为准，不套用本节公式。
+
 ## 小技巧与冷知识
 
 【小技巧】cron 表达式上线前先用 `CronExpression.isValidExpression(expr)` 静态方法校验一次：它在调度前就能拦住非法表达式，比等 `scheduler.scheduleJob` 抛异常再排查要早。动态录入 cron（运营后台填表达式）的场景必加这道校验，否则一条写错的表达式要到触发时才暴露，中间还可能静默不跑。
@@ -159,13 +225,15 @@ public class SpringJobFactory extends AdaptableJobFactory {
 
 【冷知识】`SimpleTrigger` 的无限重复用常量 `REPEAT_INDEFINITELY`，它的值就是 -1：`withRepeatCount(SimpleTrigger.REPEAT_INDEFINITELY)` 和直接写 -1 等价，但读代码时常量一眼能看出意图。Quartz 里不少“无限”都是用 -1 表达的，看到 -1 先别当成写错了，对照一下是不是这个常量。
 
-## 9. 面试与自测
+## 10. 面试与自测
 
 - JobDetail 与 Trigger 为什么要分开？一对多关系怎么理解？
 - Quartz 集群如何保证同一任务只跑一个节点？是分片吗？
 - misfire 是什么？三种策略分别适合什么任务？
 - Job 里注入 Spring Bean 为 null 的原因与解法？
 - `@DisallowConcurrentExecution` 解决什么问题？和分布式锁防重有何区别（前者只在同一 JobDetail 维度、依赖调度器，后者跨系统）？
+
+- 一个每 5 分钟触发一次的对账任务，应用停机 2 小时后重启，线程池默认 10 线程、任务平均跑 30 秒：会错过多少次触发？用 `IGNORE_MISFIRE_POLICY` 会补跑多少次？改成 `DO_NOTHING` 呢？按 Little 定律，10 线程每分钟最多能稳定承接多少个 30 秒的任务？
 
 ### 参考答案
 
@@ -175,7 +243,9 @@ public class SpringJobFactory extends AdaptableJobFactory {
 4. 因为 Quartz 默认用反射自己 new Job 实例，不经过 Spring 容器，所以 Job 里的 @Autowired 全是 null。解法是自定义 JobFactory 让创建走 Spring，如继承 AdaptableJobFactory、重写 createJobInstance 后用 AutowireCapableBeanFactory.autowireBean 注入，再挂到 SchedulerFactoryBean 上；Boot 2.7 也可用 QuartzProperties + SchedulerFactoryBeanCustomizer 实现，本质相同。
 5. 它解决同一 JobDetail 的并发自压问题：标在 Job 类上后，上一次没跑完、下一次触发排队等待而不是并发再起一个，对账、批处理必备，否则慢任务会自己压死自己。区别在于作用域：它只在同一 JobDetail 维度、依赖调度器生效；分布式锁防重是跨系统的，不依赖同一调度器、能覆盖多系统重复执行的场景。
 
-## 10. 关联知识
+6. 停机 2 小时，每 5 分钟一次错过 24 次（120÷5）；IGNORE 策略错过几次补几次，补跑 24 次；DO_NOTHING 补 0 次，等下个周期。Little 定律下 10 线程、30 秒任务上限约 20 次/分钟，超过就会排队、进而 misfire。
+
+## 11. 关联知识
 
 - [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：自动装配与 starter 机制，quartz starter 的配置入口。
 - [线程池](开发语言/Java/并发/线程池.md)：Quartz 工作线程池与业务线程池的隔离。
