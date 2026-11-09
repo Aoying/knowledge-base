@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -356,3 +356,12 @@
 - **热度/更新**：56,566 stars（2026-11-09 核验 GitHub API），2025-10-19 创建，最近推送 2026-11-09。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；它是技能库不是单个技能，取用前先通读目标技能的 SKILL.md，确认无敏感信息读取、网络上传、危险命令；不要整库装，按任务取单个技能。
+
+### 38. agentskills（agentskills/agentskills）Agent Skills 官方规范仓库
+
+- **功能**：Agent Skills 格式规范的官方本家（agentskills.io）：SKILL.md 的 YAML 头字段、目录结构、allowed-tools 等规范全文，附规范校验器与参考实现；仓库本身不含可直接装的 SKILL.md（0 个），它是写 skill 时查口径的权威来源。与第 2 项（格式规范，Anthropic skill-creator 视角）互补：本项是规范文本本身，那项是手把手教写 skill 的技能。
+- **适用场景**：ao 给小说引擎、知识库整理沉淀自己的 skill 时，先来这里核对 SKILL.md 字段口径（name 1–64 字符、description ≤1024 字符等硬性约束），再用 skill-creator 生成；自写 skill 被 Agent 拒绝加载时，先查这里的校验规则。
+- **来源**：https://github.com/agentskills/agentskills（公开仓库）
+- **热度/更新**：27,094 stars（2026-11-09 核验 GitHub API），2025-12-16 创建，最近推送 2026-11-04。
+- **许可证**：Apache-2.0。
+- **安全注意**：只收集不安装；它是规范文档与校验器，不是可执行 skill；取用前通读规范，确认无额外权限要求。
