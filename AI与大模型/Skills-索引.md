@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -302,3 +302,12 @@
 - **热度/更新**：190,079 stars（2026-11-09 核验 GitHub API），2025-09-22 创建，最近推送 2026-11-06。
 - **许可证**：未声明许可证。
 - **安全注意**：只收集不安装；未声明许可证，商用前先确认授权口径；引入前通读要用的 SKILL.md，确认无敏感信息读取、网络上传、危险命令；不要整库装，按任务取单个文件。
+
+### 32. servers（modelcontextprotocol/servers）MCP 官方参考 Server 合集
+
+- **功能**：7 个官方参考 Server（everything、fetch、filesystem、git、memory、sequentialthinking、time），MCP 协议的官方实现范本：文件读写、HTTP 抓取、Git 操作、知识图谱记忆、顺序思考、时间工具；另有 everything（全功能演示 Server）可作本地调试靶子。
+- **适用场景**：ao 接 MCP、给小说引擎或知识库写自己的 MCP Server 时照官方实现抄结构最稳；与第 22 项 GitHub MCP Server（远程端点、约 80 个工具）互补：本项是“自己搭 Server”一侧的官方范本，filesystem/memory 两个 Server 的权限与数据边界写法可直接参考。
+- **来源**：https://github.com/modelcontextprotocol/servers（公开仓库）
+- **热度/更新**：91,883 stars（2026-11-09 核验 GitHub API），2024-11-19 创建，最近推送 2026-11-05。
+- **许可证**：MIT 向 Apache-2.0 过渡中（仓库 LICENSE 文件注明；GitHub API 识别为 NOASSERTION）。
+- **安全注意**：只收集不安装；filesystem 这类 Server 天生能读写本地文件，引入前通读要用的 Server 实现，确认路径白名单、无敏感信息读取、网络上传、危险命令；不要整库装，按任务取单个 Server。
