@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）、davila7/claude-code-templates（Claude Code 组件目录，926 个 SKILL.md）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -365,3 +365,12 @@
 - **热度/更新**：27,094 stars（2026-11-09 核验 GitHub API），2025-12-16 创建，最近推送 2026-11-04。
 - **许可证**：Apache-2.0。
 - **安全注意**：只收集不安装；它是规范文档与校验器，不是可执行 skill；取用前通读规范，确认无额外权限要求。
+
+### 39. claude-code-templates（davila7/claude-code-templates）Claude Code 组件目录与一键安装 CLI
+
+- **功能**：Claude Code 组件的开放目录：agents、commands、skills、hooks、MCPs、settings、mods，一条命令安装（npm 包 claude-code-templates，另有在线目录 aitmpl.com 可浏览）；仓库内含 926 个 SKILL.md（2026-11-09 核验 trees API），覆盖 AI 助手编排、文档检索、记忆检索、OWASP 安全等多个方向，是目前收录中组件种类最全的 Claude Code 注册表。与第 33 项（vercel-labs/skills，npx skills 安装工具）互补：本项是“组件目录 + 安装器”，那项是“安装工具本身”；与第 7 项（find-skills，skill 搜索引擎）互补：本项按组件类型成体系收录，那项偏搜索发现。
+- **适用场景**：ao 想给小说引擎、知识库整理找现成 skill / agent / hook 时，先上 aitmpl.com 按类型筛，再用 CLI 装到项目里；找安全类 skill 可直接看内置的 owasp-security。注意只挑有明确来源与更新的组件装，不要批量全装。
+- **来源**：https://github.com/davila7/claude-code-templates（公开仓库）
+- **热度/更新**：33,224 stars（2026-11-09 核验 GitHub API），2025-07-04 创建，最近推送 2026-11-09。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；目录里的组件来自社区贡献，安装前逐个通读 SKILL.md 与 hook 脚本，确认无额外权限与网络上传要求；README 带赞助商广告位，与组件本身无关。
