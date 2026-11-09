@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -320,3 +320,12 @@
 - **热度/更新**：38,682 stars（2026-11-09 核验 GitHub API），2026-01-14 创建，最近推送 2026-11-06。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；它是安装器本身，装任何技能前先通读该技能的 SKILL.md，确认无敏感信息读取、网络上传、危险命令；不要整库装，按任务取单个技能。
+
+### 34. agentic-awesome-skills（sickn33/agentic-awesome-skills）2900+ 可复用 Agent Skills 目录
+
+- **功能**：面向 Claude Code、Codex、Cursor、Gemini CLI 的可复用 Agent Skills 大目录，仓库自述 2,926+ 个 SKILL.md（2026-11-09 核验 GitHub API 描述口径）；附 AAS Core（本地目录发现、Agent 自主选技能、计划预览）与 CLI、MCP、插件入口，另有 hosted 目录站 aaskills.tech。
+- **适用场景**：ao 要给某个具体任务找现成 skill 时，先在这份目录里按任务检索定位、再去源仓库通读 SKILL.md；与第 25 项 VoltAgent/awesome-agent-skills（1000+ 索引）、第 26 项 awesome-copilot（475 个）互补：本项量更大、覆盖 Codex/Cursor/Gemini CLI 四端；与第 33 项 npx skills 搭着用：先找、再装。
+- **来源**：https://github.com/sickn33/agentic-awesome-skills（公开仓库）
+- **热度/更新**：49,392 stars（2026-11-09 核验 GitHub API），2026-01-14 创建，最近推送 2026-11-08。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装；它是技能目录不是单个技能，取用前先通读目标技能的 SKILL.md，确认无敏感信息读取、网络上传、危险命令；不要整库装，按任务取单个技能；AAS Core/CLI/MCP 是附带工具链，用前同样先通读再决定。
