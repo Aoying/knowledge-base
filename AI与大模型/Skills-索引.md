@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -293,3 +293,12 @@
 - **热度/更新**：94,909 stars（2026-11-09 核验 GitHub API），2026-04-15 创建，最近推送 2026-11-09。
 - **许可证**：Apache-2.0。
 - **安全注意**：只收集不安装；官方建议的安装方式是让 Agent 读远程 llms.txt，照做前先自己通读安装提示与 SKILL.md，确认无敏感信息读取、网络上传、危险命令；只取本地 SKILL.md 文件，不走其余服务。
+
+### 31. skills（anthropics/skills）Anthropic 官方 Agent Skills 仓库
+
+- **功能**：20 个 SKILL.md（19 个技能 + 1 个模板）：pdf/docx/pptx/xlsx 文档处理、skill-creator（自写技能的脚手架）、mcp-builder、frontend-design、webapp-testing、canvas-design、theme-factory、web-artifacts-builder、internal-comms、brand-guidelines、doc-coauthoring、algorithmic-art、academy-guide、discernment-nudge、claude-api、slack-gif-creator 等，覆盖文档、前端、测试、MCP 与技能创作本身。
+- **适用场景**：官方出品的技能写法范本——ao 写自己的 Agent 技能（小说引擎、知识库）时照 skill-creator 模板抄结构最稳；pdf/docx/xlsx 三个文档技能与知识库的文档处理直接相关；与第 27 项 awesome-claude-code（生态总目录）互补：本项是官方源头。
+- **来源**：https://github.com/anthropics/skills（公开仓库）
+- **热度/更新**：190,079 stars（2026-11-09 核验 GitHub API），2025-09-22 创建，最近推送 2026-11-06。
+- **许可证**：未声明许可证。
+- **安全注意**：只收集不安装；未声明许可证，商用前先确认授权口径；引入前通读要用的 SKILL.md，确认无敏感信息读取、网络上传、危险命令；不要整库装，按任务取单个文件。
