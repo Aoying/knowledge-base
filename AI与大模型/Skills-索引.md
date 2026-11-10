@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-09
+更新日期: 2026-11-10
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）、davila7/claude-code-templates（Claude Code 组件目录，926 个 SKILL.md）、garrytan/gstack（Garry Tan 的 Claude Code 虚拟工程团队，77 个 SKILL.md）、SuperClaude-Org/SuperClaude_Framework（SuperClaude 配置框架，30 个斜杠命令 + 9 个 SKILL.md）、openai/skills（OpenAI 官方 Codex Skills 目录，44 个 SKILL.md）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）、davila7/claude-code-templates（Claude Code 组件目录，926 个 SKILL.md）、garrytan/gstack（Garry Tan 的 Claude Code 虚拟工程团队，77 个 SKILL.md）、SuperClaude-Org/SuperClaude_Framework（SuperClaude 配置框架，30 个斜杠命令 + 9 个 SKILL.md）、openai/skills（OpenAI 官方 Codex Skills 目录，44 个 SKILL.md）、gamedev-skills/awesome-gamedev-agent-skills（游戏开发 Agent Skills，78 个 SKILL.md，含 16 个 Godot 专项）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -401,3 +401,12 @@
 - **热度/更新**：28,609 stars（2026-11-09 核验 GitHub API），2025-11-25 创建，最近推送 2026-10-28。
 - **许可证**：仓库未附 LICENSE 文件（2026-11-09 核验 trees API：全库无 LICENSE 文件，API license 字段为空）；取用前须确认 OpenAI 的使用条款，只收集不安装。
 - **安全注意**：只收集不安装；取用前通读目标 SKILL.md 与附带脚本，确认无额外权限、后台进程与网络上传要求。
+
+### 43. awesome-gamedev-agent-skills（gamedev-skills/awesome-gamedev-agent-skills）游戏开发 Agent Skills：Godot/Unity/Unreal 等 77 个
+
+- **功能**：77 个游戏开发 Agent Skills（2026-11-10 核验 trees API：78 个 SKILL.md，含 1 个路由器 skill）：按引擎分 Godot（16 个：gdscript、godot-2d-movement、godot-3d-essentials、godot-physics、godot-shaders、godot-multiplayer、godot-ui-control、godot-tilemap、godot-animation、godot-audio、godot-resources、godot-signals-groups、godot-nodes-scenes、godot-export、godot-csharp、godot-gdscript-headless-testing）、Unity、Unreal、Phaser、PixiJS、three.js、Bevy、pygame、LÖVE、Roblox 等；另有跨引擎通用学科 skills（game-ai、level-design、game-feel、camera-systems、audio-design、dialogue-systems 等）；router skill 按引擎与任务自动加载对应 skill。覆盖 Claude Code、Cursor、Kiro、Codex、Copilot、Gemini CLI 等多工具。
+- **适用场景**：ao 想按库里《Godot》笔记的入门路径动手做小游戏时，直接取 godot-gdscript、godot-2d-movement、godot-nodes-scenes 等 skill 当开发手册；与库内探索方向建议的 Godot 入门方向对口。注意它面向游戏开发，与 ao 的 Java 后端 + Agent 主栈是并行兴趣线，只在做游戏时取用。
+- **来源**：https://github.com/gamedev-skills/awesome-gamedev-agent-skills（公开仓库）
+- **热度/更新**：8,111 stars（2026-11-10 核验 GitHub API），2026-06-24 创建，最近推送 2026-11-09。
+- **许可证**：Apache-2.0。
+- **安全注意**：只收集不安装；取用前通读目标 SKILL.md，确认无额外权限、后台进程与网络上传要求。
