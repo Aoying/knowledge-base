@@ -2,7 +2,7 @@
 知识点: JavaScript
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-31
+更新日期: 2026-11-11
 关联:
   - 总览
   - 前端开发
@@ -302,6 +302,77 @@ const obj = JSON.parse(text);            // 字符串 -> 对象，非法 JSON �
 - **在条件里写单个等号**：`if (a = 1)` 是赋值不是比较，还恒为真；比较永远写两个或三个等号并配合 lint。
 - **定时器里的 this 与参数**：`setTimeout(obj.method, 100)` 会丢 this，包一层箭头函数 `() => obj.method()` 再传。
 
+## 事件循环与定时器定量：宏任务、微任务与 4ms 钳制算一算
+
+> 原文已讲过事件循环“一句话版”和 `setTimeout(..., 0)` 不是立即执行；本节只算数：钳制从第几层开始、微任务到底先跑多少、200ms 同步代码卡几帧。所有数字要么来自规范原文，要么本地实测，要么明确标注为推断。
+
+### 概念：先排队，再谈时间
+
+- **宏任务**：每次事件循环取一个执行，如同步代码块、`setTimeout` 回调、点击事件回调；**微任务**：在当前宏任务末尾清空，如 `Promise.then` 回调、`queueMicrotask` 回调。
+- 执行顺序口诀：跑完一段同步代码 → 清空全部微任务 → 取下一个宏任务 → 渲染（浏览器）→ 再循环。
+- 定时器的 `delay` 是**最小等待时间，不是精确时间**：到点只是获得进队资格，前面有没跑完的任务就得等（已验证事实，HTML 规范原文："This API does not guarantee that timers will run exactly on schedule"）。
+
+### 1. 4ms 钳制：从第几层开始，20 层最少等多久
+
+- HTML 规范（Timers 一节）原文两句："Timers can be nested; after five such nested timers, however, the interval is forced to be at least four milliseconds." 算法步骤则是：创建新定时器时，若当前任务的嵌套层级 `nestingLevel > 5` 且 `timeout < 4`，则把 `timeout` 设为 4。
+- 逐层推导（`setTimeout(fn, 0)` 链式嵌套，层级从同步代码起算）：
+  - 第 1 个定时器由同步代码创建，当前层级 0，不钳制，任务层级记为 1；
+  - 第 2–6 个在层级 1–5 的回调里创建，创建时层级 ≤ 5，均不钳制；
+  - 第 7 个创建时当前层级为 6（> 5），**第一个被钳制到 ≥ 4ms**，此后每个都 ≥ 4ms。
+- 换算表（n = 链上定时器总数，下限 = 被钳制的个数 × 4ms，只计钳制部分，不含任务本身执行时间）：
+
+| 嵌套层数 n | 被钳制的定时器 | 累计最少等待 |
+| --- | --- | --- |
+| 5 | 0 个 | 约 0ms |
+| 6 | 0 个 | 约 0ms |
+| 10 | 第 7–10 个，共 4 个 | ≥ 16ms |
+| 20 | 第 7–20 个，共 14 个 | ≥ 56ms |
+
+- 通式（n ≥ 7）：下限 ≈ 4 × (n − 6) ms；n ≤ 6 时下限约 0ms（仍受事件循环排队影响）。
+- **口径说明（已验证事实）**：网上常见表述“5 层之后钳制”与本表差一层，是计数口径不同（有人把第 1 个定时器也算作嵌套层）；本表按规范算法原文逐层推导，结论量级一致：链越长，下限越大。另有实测报告称 Safari 每跳约 26.7ms、远高于 4ms（待验证，未在本机复测）。
+- **Node 不钳制（已验证事实）**：Node.js 官方文档 Timers 一节写明，`delay` 小于 1（或大于 2147483647）时会被设为 1，即 `setTimeout(fn, 0)` 在 Node 里最少等 1ms，没有浏览器那种 4ms 嵌套钳制。Node 里想“尽快跑但不阻塞”用 `setImmediate`，它在当前 poll 阶段后、微任务之后执行。
+
+### 2. 微任务 vs 宏任务：手算例（本地 Node 实测）
+
+```js
+console.log('A');
+setTimeout(() => console.log('B'), 0);
+Promise.resolve().then(() => console.log('C'));
+Promise.resolve().then(() => console.log('D'));
+queueMicrotask(() => console.log('E'));
+Promise.resolve().then(() => Promise.resolve().then(() => console.log('F')));
+console.log('G');
+```
+
+- 逐行推演：同步代码先跑，打印 `A`、`G`；`setTimeout` 的 B 排进宏任务队列；C、D、E 按入队顺序进微任务队列；F 是 C 执行时才新产生的微任务，排到队尾。
+- 同步代码跑完 → 清空微任务：C、D、E、F 依次打印 → 再取宏任务：打印 B。
+- 本地实测输出（Node v24.22.1，2026-11-11）：`A G C D E F B`，与推演一致。
+- 结论：`queueMicrotask` 和 `Promise.then` 共用同一个微任务队列、按入队顺序执行，没有优先级之分；微任务里再产生的微任务会插到队尾、本轮继续清空。
+
+### 3. 长任务 50ms 与帧预算 16.7ms：卡几帧算一算
+
+- 两个阈值（已验证事实）：长任务定义是主线程上连续执行 **> 50ms** 的任务（Long Tasks API，`PerformanceObserver` 的 `longtask` 条目）；60fps 下每帧预算 **1000 ÷ 60 ≈ 16.7ms**。
+- 一段 200ms 同步计算：200 ÷ 16.7 ≈ 12，约卡 **12 帧**，期间输入和渲染全被堵住；它对总阻塞时间（TBT）的贡献是 200 − 50 = **150ms**。
+- 拆成 4 × 50ms（每块之间 `await new Promise(r => setTimeout(r, 0))` 让出主线程，原文性能三板斧同款写法）：总工作量还是 200ms 没变，但每块之间浏览器能处理输入和渲染，最坏输入延迟从约 200ms 降到约 50ms；注意每块 50ms 本身仍占约 3 帧（50 ÷ 16.7 = 3.0），**拆分不是让每块塞进一帧，而是让出主线程**。
+- `requestAnimationFrame` 回调里做 30ms 的活：30 ÷ 16.7 ≈ 1.8 帧，这一帧肯定赶不上deadline，下一次绘制约在 33.3ms 后（2 个帧间隔），即**掉 1 帧**，瞬时帧率约 30fps。
+- 边界提醒：长任务的判定是严格大于 50ms，恰好 50ms 的块不计入 TBT；但实测抖动下 50ms 的块很容易越线（个人推断：切块时按 30–40ms 留余量更稳）。
+
+### 边界条件
+
+1. **钳制值是最小值不是精确值**：4ms 只是下限，CPU 忙、队列里有别的任务时只会更晚，永远不要用嵌套 `setTimeout(..., 0)` 做精确计时（已验证事实）。
+2. **后台标签页定时器节流**：Chrome 隐藏标签页把定时器检查降到约每秒一次；隐藏超 5 分钟、链式计数 ≥ 5、静音 30 秒以上时进入 intensive throttling，约每分钟检查一次；Firefox 桌面版非活动标签页最小 1 秒、Android 版最长 15 分钟（已验证事实，MDN setTimeout 页与 Chrome 88 公告口径）。
+3. **Node 与浏览器事件循环阶段不同**：浏览器是“宏任务 → 清微任务 → 渲染”循环；Node 是 timers → pending callbacks → idle/prepare → poll → check → close callbacks 六个阶段，`process.nextTick` 回调在 Node 里比 Promise 微任务先跑，浏览器没有 `process.nextTick`（已验证事实，Node.js 官方文档事件循环一节）。
+4. **微任务无限递归会饿死宏任务**：微任务队列不清完就不取下一个宏任务，`Promise.then` 里不停产生新微任务会让 `setTimeout` 回调和渲染永远等不到执行（已验证事实，事件循环规则的直接推论；浏览器渲染也一样被饿死）。
+5. **`setInterval` 的重复执行同样计入嵌套层级**：规范写明嵌套层级对 `setInterval` 的重复触发同样适用，第 6 次及以后的重复也可能被钳制到 ≥ 4ms 间隔（已验证事实，规范算法原文）。
+
+### 本节事实清单
+
+- 已验证事实：4ms 钳制规则与算法（HTML 规范）、Node 1ms 下限（Node.js Timers 文档）、长任务 > 50ms（Long Tasks API / web.dev）、帧预算 16.7ms（1000 ÷ 60，本地 python3 复算）、微任务执行顺序（Node v24.22.1 本地实测）、后台标签页节流（MDN 与 Chrome 88 公告口径）。
+- 个人推断：切块按 30–40ms 留余量更稳；“拆分不是塞进一帧，而是让出主线程”的表述是工程经验口径。
+- 待验证：Safari 每跳约 26.7ms 的实测值（引自第三方实测报告，未在本机复测）；各浏览器“第几个定时器开始钳制”的实测起始层（规范算法推导为第 7 个，流行表述有 ±1 层差异）。
+
+> 来源与核验日期：2026-11-11。HTML Living Standard（Timers）：https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html ；MDN《Window: setTimeout() method》（含非活动标签页节流一节）；Node.js 官方文档《Timers》（delay < 1 时设为 1）与《The Node.js Event Loop》（六阶段与 process.nextTick 优先）；web.dev《Long tasks》（长任务 > 50ms 定义）；javascript.info《Scheduling: setTimeout and setInterval》：https://javascript.info/settimeout-setinterval 。
+
 ## 小技巧与冷知识
 
 【小技巧】`??` 不能和 `&&` / `||` 不加括号混用：`a ?? b || c` 直接报 SyntaxError，规范强制要求写成 `(a ?? b) || c` 或 `a ?? (b || c)`。这是因为 `??` 和 `||` 的优先级容易让人误读，语言层面索性不让它含糊；混用时先加括号，意图写在括号里。
@@ -341,9 +412,11 @@ const obj = JSON.parse(text);            // 字符串 -> 对象，非法 JSON �
 1. 并行调 10 个接口，1 个失败、9 个成功的结果也拿不到，原因是什么？原文给了哪两种解法？
 2. `arr.forEach(async x => await fetch(x))` 后面代码先跑了、请求还没完，原因是什么？原文给了哪两种改法？
 3. `sort` 和 `toSorted` 有什么区别？原文为什么说这个坑很多人踩过？
+4. 一段代码里 `setTimeout(fn, 0)` 连续嵌套调用 20 层，浏览器里最后一个回调最少要等多久？为什么？微任务无限递归又会怎样？
 
 ### 参考答案
 
 1. 原因：`Promise.all` 遇到第一个 reject 就整体 reject。解法一：用 `Promise.allSettled` 拿全部结果再过滤；解法二：给每个 promise 包 `.catch` 兜底。反过来，如果“都要结果”才用 allSettled，只关心“任一失败全失败”才用 all。
 2. 原因：forEach 不管回调返回的 Promise，async 回调只是“启动了”而已。改法一：换 `for...of` + await（串行）；改法二：`await Promise.all(arr.map(...))`（并行）。
 3. `sort` 是原地改原数组，`toSorted`（以及 `toReversed`、`toSpliced`）是不改变原数组的版本。坑就在于用 `sort` 时以为拿到了新数组，实际上原数组已经被改了。
+4. 最少约 56ms。按 HTML 规范算法，嵌套层级 > 5 才钳制到 4ms，第 7 个起被钳制，共 14 个 ≥ 4ms，即 14×4=56ms；4ms 只是最小值，实际更晚。微任务无限递归会饿死宏任务：队列不清完不取下一个宏任务，定时器回调和渲染等不到执行。
