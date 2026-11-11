@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-10
+更新日期: 2026-11-11
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）、davila7/claude-code-templates（Claude Code 组件目录，926 个 SKILL.md）、garrytan/gstack（Garry Tan 的 Claude Code 虚拟工程团队，77 个 SKILL.md）、SuperClaude-Org/SuperClaude_Framework（SuperClaude 配置框架，30 个斜杠命令 + 9 个 SKILL.md）、openai/skills（OpenAI 官方 Codex Skills 目录，44 个 SKILL.md）、gamedev-skills/awesome-gamedev-agent-skills（游戏开发 Agent Skills，78 个 SKILL.md，含 16 个 Godot 专项）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）、davila7/claude-code-templates（Claude Code 组件目录，926 个 SKILL.md）、garrytan/gstack（Garry Tan 的 Claude Code 虚拟工程团队，77 个 SKILL.md）、SuperClaude-Org/SuperClaude_Framework（SuperClaude 配置框架，30 个斜杠命令 + 9 个 SKILL.md）、openai/skills（OpenAI 官方 Codex Skills 目录，44 个 SKILL.md）、gamedev-skills/awesome-gamedev-agent-skills（游戏开发 Agent Skills，78 个 SKILL.md，含 16 个 Godot 专项）、anthropics/claude-plugins-official（Anthropic 官方 Claude Code 插件目录，40 个 SKILL.md）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -410,3 +410,12 @@
 - **热度/更新**：8,111 stars（2026-11-10 核验 GitHub API），2026-06-24 创建，最近推送 2026-11-09。
 - **许可证**：Apache-2.0。
 - **安全注意**：只收集不安装；取用前通读目标 SKILL.md，确认无额外权限、后台进程与网络上传要求。
+
+### 44. claude-plugins-official（anthropics/claude-plugins-official）Anthropic 官方 Claude Code 插件目录
+
+- **功能**：Anthropic 官方维护的 Claude Code 插件目录（与第 31 项 anthropics/skills 对位：那是 Agent Skills 的格式规范与参考实现，这是官方亲自维护的生产级插件集合）：`plugins/` 下 41 个插件 + `external_plugins/` 下 14 个外部插件目录，全库共 40 个 SKILL.md（2026-11-11 核验 trees API：911 个条目，plugins/ 内 34 个、external_plugins/ 内 6 个），覆盖代码评审（code-review、pr-review-toolkit）、安全（security-guidance、claude-security）、前端设计（frontend-design，与第 17 项 taste-skill 互补、这是官方版）、提交命令（commit-commands）、功能开发（feature-dev）、Ralph 循环（ralph-loop）、MCP 开发（mcp-server-dev）、插件开发（plugin-dev）、数学证明（math-proof、math-olympiad）、多语言 LSP（pyright-lsp、rust-analyzer-lsp、gopls-lsp、typescript-lsp、jdtls-lsp 等）与外部插件（discord、imessage、telegram、github、gitlab、linear、playwright、serena 等）。插件含 skills、agents、commands、hooks 的完整组合，比单个 skill 更成体系。
+- **适用场景**：ao 在 Claude Code 里做代码评审、PR 评审、安全检查、前端设计时，直接取官方插件当工作流范本；skill-creator、plugin-dev、mcp-server-dev 三个 skill 对沉淀自己的 skill/插件/MCP Server 有直接参考价值；与第 31 项对照看“单个 skill”与“插件包”两种组织方式的取舍。注意它面向 Claude Code 插件体系，取用前确认与自己的 Agent 工具链兼容。
+- **来源**：https://github.com/anthropics/claude-plugins-official（公开仓库）
+- **热度/更新**：46,845 stars（2026-11-11 核验 GitHub API），2025-11-20 创建，最近推送 2026-11-11（当天仍在更新）。
+- **许可证**：Apache-2.0。
+- **安全注意**：只收集不安装；插件含 hooks，会拦截工具调用，取用前逐个通读目标 SKILL.md 与 hook 脚本，确认无额外权限、后台进程与网络上传要求。
