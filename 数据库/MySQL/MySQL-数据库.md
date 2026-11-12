@@ -2,7 +2,7 @@
 知识点: MySQL 数据库
 层级: 进阶
 适用版本: MySQL 5.7 / 8.x
-更新日期: 2026-10-31
+更新日期: 2026-11-12
 关联:
   - 数据库知识点地图
   - MySQL-binlog
@@ -248,6 +248,67 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON shop.* TO 'app'@'%';  -- 按最小权限
 - 钱用 FLOAT 存、时间用字符串存、枚举用中文字符串存：三类经典建模错误，分别改 DECIMAL、DATETIME、TINYINT + 字典表。
 - VARCHAR 长度按字符算不是字节：utf8mb4 下一个汉字占 3~4 字节但算 1 个字符，`VARCHAR(255)` 指 255 个字符，别按字节估算。
 
+## 连接与线程定量：连接数、线程缓存与每连接内存算一算
+
+### 核心概念与默认值
+
+- **一个连接就是一个会话、一个线程**：经典模型是一连接一线程（`thread_handling = one-thread-per-connection`），连接不断开，线程和会话内存就不释放。先分清三个数：`Threads_connected`（当前打开的连接数，含空闲）、`Threads_running`（正在执行 SQL 的连接数）、`max_connections`（允许同时存在的连接数上限）。
+- **`max_connections` 默认 151**：MySQL 8.0 与 8.4 官方手册均核实为 151，最大值 100000。打满后再连会报 `ERROR 1040 (08004): Too many connections`。另有 1 个预留的管理连接：持有 `CONNECTION_ADMIN`（或已废弃的 `SUPER`）权限的账号在打满后仍能连上排障，别把这个救命通道随便授给业务账号。
+- **`thread_cache_size` 是线程缓存，不是连接池**：连接断开后，它的线程放回缓存，下个新连接优先复用缓存里的线程，缓存空了才新建线程。默认值 `-1` 表示自动调整，公式为 `8 + (max_connections / 100)`，上限 100——`max_connections = 151` 时自动值是 9。设为 0 则关闭缓存，每次连接都新建线程。
+- **线程缓存命中率这样算**：`Threads_created` 是累计新建过的线程数，`Connections` 是累计连接尝试次数。命中率 ≈ `1 − Threads_created / Connections`。例如累计 100000 次连接、新建了 950 个线程，命中率约 99.05%。手册的口径是“对比 `Connections` 与 `Threads_created` 的差值看缓存效率”；“新建占比持续高于约 1% 就该警觉”是社区经验值（非手册规定，见来源）。
+
+### 每连接缓冲算一算
+
+先列默认值（MySQL 8.0 官方手册核实，单位字节）：
+
+| 变量 | 默认值 | 用途 |
+|---|---|---|
+| `sort_buffer_size` | 262144（256 KiB） | 每个需要排序的会话分一份 |
+| `join_buffer_size` | 262144（256 KiB） | 每个无索引 join 分一份，8.0.18+ 也管哈希 join |
+| `read_buffer_size` | 131072（128 KiB） | 顺序扫描时每线程每表分一份 |
+| `read_rnd_buffer_size` | 262144（256 KiB） | 排序后按序读行、MRR 时每客户端分一份 |
+| `tmp_table_size` | 16777216（16 MiB） | 内部内存临时表的上限（每张表，不是每连接） |
+| `max_heap_table_size` | 16777216（16 MiB） | MEMORY 表可长到的上限；与 `tmp_table_size` 取较小者约束内部临时表 |
+
+四项每连接缓冲合计：256 + 256 + 128 + 256 = **896 KiB/连接**。理论上限换算（只计这四项，实际按需分配，见边界条件）：
+
+| 并发连接数 | 四项缓冲理论上限 |
+|---|---|
+| 100 | 87.5 MiB |
+| 500 | 437.5 MiB |
+| 1000 | 875 MiB |
+| 151（默认值打满） | 132.125 MiB |
+
+临时表另计：`tmp_table_size` 是**每张**内部临时表的上限，不是每连接固定额度。极端假设（每个连接同时各持一张顶格 16 MiB 的内存临时表）才再加 100 连接 1.5625 GiB、500 连接 7.8125 GiB、1000 连接 15.625 GiB；151 连接打满时四项缓冲加临时表极端值合计约 2.49 GiB。注意 `tmp_table_size` 与 `max_heap_table_size` 对同一张 MEMORY 引擎内部临时表取较小者，**不叠加**；TempTable 引擎（8.0.28+ 内部临时表默认引擎之一）只看 `tmp_table_size`。
+
+### 连接内存预算公式与 max_connections 设置建议
+
+- **预算公式**：`max_connections ≤ (可用内存 − 全局缓冲) / 每连接缓冲上限`。全局缓冲的大头是 `innodb_buffer_pool_size`（本篇「小技巧」节已有“专用库服务器建议设到物理内存 70%~80%”）；每连接缓冲上限按上表 896 KiB/连接起算，再按业务里临时表的使用情况留余量。
+- **算例（个人推断，仅作量级参考）**：8 GiB 内存机器，缓冲池占 70%（5.6 GiB），剩余约 2.4 GiB；2.4 GiB ÷ 896 KiB ≈ 2808，即四项缓冲的理论上限要到约 2808 个连接才会吃掉剩余内存。结论不是“可以设 2808”，而是**默认值 151 下每连接缓冲根本不是内存瓶颈**——先看 `Threads_running`、CPU 与锁，再考虑动 `max_connections`。
+- **设置建议**：不要一上来就调大 `max_connections`。先上连接池（池大小按应用实例数 × 单实例池上限反推总连接数，别让 10 个实例 × 100 池直接冲垮 151 上限）；再确认空闲连接及时回收；最后才按预算公式调大，并用 `SET GLOBAL max_connections = N` 临时生效、`SET PERSIST` 或写配置文件持久化。调大前先确认有效上限还受 `open_files_limit − 810` 制约（手册原文），文件句柄不够时设再大也不生效。
+
+### 连接风暴与排查口径
+
+- **连接风暴的典型样子**：短连接（每次请求新建连接、用完即关）、连接池打满后新请求排队、空闲连接长期占位。空闲连接要等 `wait_timeout`（默认 28800 秒，即 8 小时，8.0.46 实测文章确认）才回收，所以“连接数高”先别怪并发高，先看是不是一堆 `Sleep` 状态的空闲连接没释放。
+- **三步排查**：
+  1. `SHOW STATUS LIKE 'Threads_connected'` 对比 `max_connections`：持续高于 80% 就告警，接近打满时先看下一步。
+  2. `SHOW PROCESSLIST` 看状态分布：`Threads_running` 很小、`Sleep` 占大头 → 空闲连接占位或连接池泄漏，查应用侧池配置与连接归还逻辑；`Threads_running` 也高 → 真并发高或慢 SQL 堆积，先看慢查询（见本篇「慢查询排查速记」）。
+  3. `SHOW STATUS LIKE 'Threads_created'` 对比 `Connections`：新建线程占比持续高于约 1%（社区经验阈值）→ 线程缓存太小或短连接太多，先上连接池减少建连次数，再考虑调大 `thread_cache_size`；同时看 `Aborted_connects` 是否在涨，涨说明有大量建连失败（网络、鉴权、打满被拒）。
+- **线程缓存命中率低不是连接风暴的根因**：缓存只能省“新建线程”这点开销，连接握手与鉴权一次都省不了；短连接问题靠连接池解决，不是靠调大 `thread_cache_size`。
+
+### 边界条件
+
+1. **缓冲是按需分配，表中数字是理论上限、不是常驻占用**：空闲连接几乎不占这四项缓冲；只有真的排序、无索引 join、顺序扫描、随机读时才分配，不用的那一份就不占内存。
+2. **按“每连接各一份”是简化口径**：`join_buffer_size` 是每个无索引 join 一份，多表 join 可能同时持有多份；`sort_buffer_size` 是每次排序一份；一条复杂 SQL 可能同时持有多份缓冲，表中数字是下限口径的上限估算，不是绝对最大值。
+3. **`tmp_table_size` 是每张临时表的上限，且与 `max_heap_table_size` 不叠加**：MEMORY 引擎内部临时表受两者较小值约束，TempTable 引擎只看 `tmp_table_size`；多数连接根本不会建临时表，拿 16 MiB × 连接数当常驻开销算是错的。
+4. **`thread_cache` 只复用线程、不复用连接**：新连接仍要走 TCP 握手与鉴权；命中率高只能省线程创建开销，救不了连接风暴，短连接必须靠连接池。
+5. **`max_connections` 是上限、不是目标值**：设 1000 不等于能扛 1000 并发，瓶颈常在 CPU、锁与磁盘；有效上限还受 `open_files_limit − 810` 制约。
+6. **`read_buffer_size` / `read_rnd_buffer_size` 在 InnoDB 为主的业务里很少触达**：前者主要面向 MyISAM 顺序扫描，后者面向 MyISAM 与 MRR；把这两项算满是保守上限，实际通常更低。
+7. **版本差异待验证**：本次只核实了 MySQL 8.0 与 8.4 手册；5.7 的同名变量默认值未逐项核实。项目用 OceanBase MySQL 模式（兼容 5.7 语法），照搬前请以 `SHOW VARIABLES` 实测为准。
+8. **OceanBase 差异待验证**：OceanBase MySQL 模式下连接与线程模型、上述变量是否生效，本次未核实，不展开。
+
+> 来源（核验日期 2026-11-12）：MySQL 8.0 官方手册「Server System Variables」（`max_connections` 默认 151、`sort_buffer_size` / `join_buffer_size` / `read_rnd_buffer_size` 默认 262144、`read_buffer_size` 默认 131072、`tmp_table_size` / `max_heap_table_size` 默认 16777216、`thread_cache_size` 默认 -1 自动调整、公式 `8 + (max_connections / 100)` 上限 100）：https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html ；MySQL 8.4 官方手册同页核实 `max_connections` 默认 151、`max_heap_table_size` 默认 16777216：https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html ；MySQL 8.0 官方手册同页 `thread_cache_size` 条目（线程缓存语义：断开后线程回缓存、缓存空了才新建线程）；Percona《Dealing With "Too Many Connections" Error in MySQL 8》（默认 151、预留 1 个管理连接、ERROR 1040）：https://www.percona.com/blog/dealing-with-too-many-connections-error-in-mysql-8/ ；Netdata《MySQL connection exhaustion》（`Threads_created / Connections` 高于约 0.01 提示缓存太小或缺连接池、`Threads_connected / max_connections` 高于 0.8 告警，社区经验值）：https://www.netdata.cloud/guides/mysql/mysql-connection-exhaustion/ 。`wait_timeout` 默认 28800 秒（8 小时）据 8.0.46 实测文章，未在手册页逐项核对。8 GiB 算例与“先看 Threads_running 再动 max_connections”是个人推断；OceanBase 差异与 5.7 默认值差异待验证。
+
 ## 小技巧与冷知识
 
 【小技巧】只看执行计划的预估不够，用 `EXPLAIN ANALYZE`（8.0.18+）看实际执行：它会真的跑一遍查询并打出每一步的实际耗时和实际行数，优化器“以为很快、实际很慢”的误判一眼就能看出来。线上排障先 `EXPLAIN` 看计划，怀疑优化器选错索引时再上 `EXPLAIN ANALYZE`，别一上来就对生产库跑它——它真的会执行那条 SQL。
@@ -292,8 +353,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON shop.* TO 'app'@'%';  -- 按最小权限
 2. OceanBase MySQL 模式下，跨分区事务与单机 MySQL 有何不同？写代码时要注意什么？
 3. 为什么说自增 ID 不能当业务序号用？分库分表下主键该用什么？
 
+4. 线程缓存命中率怎么算？`Threads_created / Connections` 持续偏高说明什么？
+
 ### 参考答案
 
 1. 越翻越慢是因为要先扫过前面 1000000 行再取 20 行。改游标分页：`WHERE id > 上次 id LIMIT 20`，用上次取到的最大 id 接着往后取。
 2. 单分区内事务强一致，跨分区事务是弱隔离，写代码时别假设单机 MySQL 的锁行为；自增列行为也与单机不同（不保证连续），主键优先雪花 ID；部分系统表/函数不支持，迁移 SQL 先在 OB 测试环境跑一遍。
 3. 自增 ID 是表级计数器，只保证本表单调递增，不保证连续——回滚、删除都会留空洞。分布式/分库分表下更不能依赖自增连续，各分片自增会冲突，应用雪花算法。
+
+4. 线程缓存只复用断开连接后留下的空闲线程，命中看 `Threads_created/Connections`：新建线程占比越低越好，持续高于约 1% 说明缓存太小或短连接太多，应先上连接池、再调大 `thread_cache_size`。
