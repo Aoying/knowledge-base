@@ -1,8 +1,52 @@
 {
   "recentFiles": [
     {
+      "basename": "README",
+      "path": "README.md"
+    },
+    {
+      "basename": "排序算法实现",
+      "path": "计算机基础/算法/排序算法实现.md"
+    },
+    {
+      "basename": "JDBC基础",
+      "path": "开发语言/Java/JDBC基础.md"
+    },
+    {
+      "basename": "分库分表",
+      "path": "数据库/分库分表.md"
+    },
+    {
+      "basename": "Netty",
+      "path": "开发语言/Java/Netty.md"
+    },
+    {
+      "basename": "结构化输出与JSON约束",
+      "path": "AI与大模型/结构化输出与JSON约束.md"
+    },
+    {
+      "basename": "Markdown基础语法",
+      "path": "效率工具/Markdown基础语法.md"
+    },
+    {
+      "basename": "快捷键速查",
+      "path": "工程实践/快捷键速查.md"
+    },
+    {
       "basename": "Windows-常用命令",
       "path": "工程实践/Windows-常用命令.md"
+    },
+    {
+      "basename": "计算机网络",
+      "path": "计算机基础/计算机网络.md"
+    },
+    {
+      "basename": "Lua",
+      "path": "开发语言/Lua.md"
+    },
+    {
+      "basename": "正则表达式",
+      "path": "开发语言/正则表达式.md"
     },
     {
       "basename": "前缀和与差分",
@@ -11,10 +55,6 @@
     {
       "basename": "易经入门",
       "path": "易经/易经入门.md"
-    },
-    {
-      "basename": "README",
-      "path": "README.md"
     },
     {
       "basename": "Bean-Validation",
@@ -101,16 +141,8 @@
       "path": "开发语言/Java/Java-新特性.md"
     },
     {
-      "basename": "Netty",
-      "path": "开发语言/Java/Netty.md"
-    },
-    {
       "basename": "疑难杂症索引",
       "path": "知识地图/疑难杂症索引.md"
-    },
-    {
-      "basename": "快捷键速查",
-      "path": "工程实践/快捷键速查.md"
     },
     {
       "basename": "正则表达式-常用样例",
@@ -131,14 +163,6 @@
     {
       "basename": "运维实战脚本",
       "path": "工程实践/Shell/运维实战脚本.md"
-    },
-    {
-      "basename": "Markdown基础语法",
-      "path": "效率工具/Markdown基础语法.md"
-    },
-    {
-      "basename": "Lua",
-      "path": "开发语言/Lua.md"
     },
     {
       "basename": "组成原理",
@@ -175,14 +199,6 @@
     {
       "basename": "pydantic",
       "path": "开发语言/Python/pydantic.md"
-    },
-    {
-      "basename": "Skills-索引",
-      "path": "AI与大模型/Skills-索引.md"
-    },
-    {
-      "basename": "Java知识点地图",
-      "path": "知识地图/Java知识点地图.md"
     }
   ],
   "omittedPaths": [],
