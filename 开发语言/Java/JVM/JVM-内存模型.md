@@ -2,7 +2,7 @@
 知识点: JVM 内存模型
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-31
+更新日期: 2026-11-13
 关联:
   - Java-并发编程
   - JVM-GC调优
@@ -86,7 +86,7 @@ public class VolatileCounter {
 
 适用场景：一写多读、状态标志位、触发器。不适用：计数、余额、依赖旧值的更新，这类用锁或原子类。
 
-正确停止标志写法见 5.2。
+正确停止标志写法见 6.2。
 
 ### 3.2 final 域语义
 
@@ -147,9 +147,75 @@ volatile 插入策略（JSR-133 模型，简化）：
 
 x86 上很多屏障是 no-op，只有 StoreLoad 需真实指令（如 `lock` 前缀），所以 volatile 读便宜、写较贵。其他架构成本不同，写代码不要依赖硬件细节。
 
-## 5. 实战应用
+## 5. 可见性与同步的代价定量：屏障、缓存行与伪共享算一算
 
-### 5.1 双重检查锁定单例必须加 volatile
+本节只算数量级，不给精确值。同一台机器上实测为准；换硬件、换 JDK 大版本，数字都会变。
+
+### 5.1 内存层级延迟数量级对照
+
+| 层级 | 典型延迟 | 换算（3 GHz，1 周期 ≈ 0.33 ns） | 来源口径 |
+| --- | --- | --- | --- |
+| 寄存器 | 约 1 周期 | 约 0.3 ns | 换算口径 |
+| L1 缓存 | 0.5 ns | 约 1–2 周期 | Jeff Dean 延迟表 |
+| L2 缓存 | 7 ns | 约 21 周期 | Jeff Dean 延迟表 |
+| L3 缓存（干净命中） | 约 9–10 ns | 26–31 周期 | Intel 优化手册 |
+| L3（脏行在另一核） | 约 20 ns | 约 60 周期 | Intel 优化手册 |
+| 主内存（本地） | 100 ns | 约 300 周期 | Jeff Dean 延迟表 |
+| 跨 NUMA 远端内存 | 约 135 ns | 约 400 周期 | Intel 论坛引用的实测，老硬件口径 |
+
+三组换算（3 GHz）：
+
+1. **L1 → L2 → 主存**：0.5 ns → 7 ns → 100 ns，主存约是 L1 的 200 倍、L2 的约 14 倍。一次缓存未命中穿透到主存，约等于 300 次 L1 命中的时间。
+2. **L3 干净命中 → 跨核脏行**：26–31 周期（约 9–10 ns）→ 约 60 周期（约 20 ns）。同一块 L3 里取别的核改过的行，代价约是干净命中的 2 倍。
+3. **本地主存 → 跨 NUMA 远端**：100 ns（约 300 周期）→ 约 135 ns（约 400 周期），跨节点约贵 1.35 倍。这是 Nehalem 时代的实测口径，现代多路服务器差异可能更大，只能作数量级参考。
+
+注意：Jeff Dean 的表是 2009 年硬件口径，L1 0.5 ns、L2 7 ns、主存 100 ns 这组数字今天仍被引用，是因为比例关系大体未变，不是说今天的硬件还是这个绝对值。
+
+### 5.2 volatile 读/写与 synchronized 的相对成本
+
+x86 上只有 StoreLoad 屏障需要真正发给硬件，其余三类屏障（LoadLoad、LoadStore、StoreStore）靠 x86 自身的重排规则就能满足，不产生额外指令（Intel SDM Vol 3A §8.2.1，转引自 Shipilev）。由此得到定性排序：
+
+- **volatile 读 ≈ 普通读**：x86 上 volatile 读不插屏障指令，成本近乎普通读。
+- **volatile 写 > 普通写**：写后要插 StoreLoad 屏障，HotSpot 用 `lock addl $0x0,(%rsp)` 实现（Shipilev《On The Fence With Dependencies》）。`lock` 前缀要排空写缓冲、争用缓存行，比普通写贵。
+- **volatile 写 < CAS < 无竞争 synchronized < 有竞争 synchronized**：CAS 是带 `lock` 前缀的读-改-写，比单次 volatile 写重；synchronized 还要加锁记录、对象头操作，竞争时再加线程挂起与唤醒。这一串排序是经验口径，不是实测值。
+
+能核实的绝对数只有一个：Jeff Dean 表里互斥锁加锁/解锁是 25 ns（2009 年口径），约为主存访问的 1/4。Shipilev 文中没有 volatile 读/写的绝对 ns/op 数值，只有两条相对结论：`mfence` 明显慢于 `lock` 前缀指令；`lock addl` 紧贴栈操作时的数据依赖最坏可让循环慢约 2 倍。所以本节不写“volatile 写是 X ns”这类数字——写了就是编的。
+
+工程结论：volatile 读便宜、写贵。状态标志位（新 §6.2）读多写少，用 volatile 正合适；高频写计数别用 volatile 写循环，用 `LongAdder` 或分片计数。
+
+### 5.3 缓存行 64 字节与伪共享定量
+
+x86-64 的缓存行通常是 64 字节（Apple Silicon 是 128 字节），一行能放 8 个 `long`。一致性按行不按变量：两个逻辑无关的变量落在同一行，两核轮流写时就是伪共享。
+
+- **失效次数换算**：A、B 两核各写 100 万次同一行内的不同变量。每次写都使对方手里的行失效，对方下次写又要重新独占获取——约 200 万次跨核一致性传输，每次写都付一次。这是按 MESI 语义的模型推算，不是实测计数。
+- **单次代价**：L1 命中约 1 ns；跨核取脏行（remote HITM）约 40–120 ns（submillisecond 术语表口径，是否共享 L3、是否跨 NUMA 都会影响）。一次伪共享写比一次 L1 命中贵约 40–120 倍，是一到两个数量级的差距。
+- **减速倍数（案例值，不是常数）**：佐治亚理工课堂示例 16 线程下约 16 倍；Jenkov 的 Java 计数器示例约 4 倍（36 秒 vs 9 秒）；UAF 讲义约 10 倍。倍数随线程数、写频率、核间拓扑而变，4–16 倍只是这三个案例的区间，不可当作通用常数。
+- **@Contended / 字段填充的空间代价**：JEP 142 规定默认填充宽度 128 字节（`-XX:ContendedPaddingWidth=128`），即 2 倍行宽，理由是相邻扇区预取会把伪共享扩大到两行。一个 `long` 字段独占 64 字节行，有效数据 8 字节，空间放大 8 倍；按默认 128 字节填充实测，一个 `Cell` 对象从 24 字节膨胀到 280 字节，约 12 倍（JavaSpecialists #249 的 JOL 实测）。只给高频写字段加填充，滥用等于拿内存换速度。
+
+注意：伪共享只发生在写。只读共享时各核都能持有 Shared 态副本，不产生失效风暴；所以“读多写少”的共享数据不用填充。
+
+### 5.4 DCL / 标志位场景的可见性窗口
+
+无同步时，可见性延迟**无上界**——JMM 只规定“读到旧值是合法执行”，不承诺任何时间上限。以下三句话是全部能说的：
+
+- **无 volatile 的标志位**：写线程改了值，读线程可能下一纳秒看到，也可能永远看不到（JIT 把读提升出循环后，见新 §7.1）。不能写“几毫秒后可见”，那个数字不存在。
+- **volatile 写 → 读**：写方刷出、读方失效都走缓存一致性，通常一次跨核传输几十纳秒量级，但 JMM 不给纳秒级上限承诺；“最终可见”是工程经验说法，不是 JMM 术语。
+- **DCL（新 §6.1）**：volatile 只保证引用发布后构造完成可见，不保证构造本身快。把“可见性窗口”和“初始化耗时”混为一谈是常见错误。
+
+### 5.5 边界条件
+
+1. **官方数字，有年代局限**：Jeff Dean 延迟表是 2009 年硬件口径，L1 0.5 ns / L2 7 ns / 主存 100 ns 只作数量级与比例，不可当作当前机器的实测值。
+2. **官方数字，平台相关**：64 字节行宽只适用于 x86-64 主流；ARM / Apple Silicon 有 128 字节实现，跨平台代码按 128 字节填充才稳妥（后半句是经验口径）。
+3. **经验口径**：volatile 写比普通写贵多少，随写频与竞争而变；低频写可忽略，只有高频写循环中才需计入成本。
+4. **经验口径**：伪共享减速 4–16 倍来自具体案例，不可推广；怀疑伪共享时用 `perf`（看 `remote_hitm` 计数）或 JMH 实测，不靠猜。
+5. **官方数字 + 使用限制**：`@Contended` 默认填充 128 字节、取 2 倍行宽，出自 JEP 142；且该注解是内部 API（`jdk.internal.vm.annotation`），业务代码直接用需 `-XX:-RestrictContended`（默认受限），优先用手动填充或 `LongAdder` 等现成结构。
+6. **规范推论**：JMM 对无同步的可见性不承诺任何时间上界，“最终可见”不是 JMM 术语，是工程经验说法；面试答“过一段时间就能看到”要扣分。
+
+（来源：Jeff Dean《Designs, Lessons and Advice from Building Large Distributed Systems》延迟表；Aleksey Shipilev《On The Fence With Dependencies》；Intel SDM Vol 3A §8.2.1；Intel Optimization Reference Manual；JEP 142；JavaSpecialists #249；Martin Thompson 机械同理心体系；核验日期 2026-11-13）
+
+## 6. 实战应用
+
+### 6.1 双重检查锁定单例必须加 volatile
 
 对象创建三步：1 分配内存，2 调用构造初始化，3 引用指向内存。第 2、3 步可重排为 1、3、2。
 
@@ -174,7 +240,7 @@ public class Singleton {
 
 JDK 5 前 volatile 语义弱，DCL 失效；JDK 5 后 JSR-133 修复，才可用。更简单替代：静态内部类懒加载或枚举单例，无需 DCL 时优先用它们。
 
-### 5.2 状态标志位
+### 6.2 状态标志位
 
 ```java
 public class Worker {
@@ -188,16 +254,16 @@ public class Worker {
 
 一写多读场景典型用法：开关、配置版本号、取消令牌。
 
-### 5.3 synchronized 与框架中的 volatile
+### 6.3 synchronized 与框架中的 volatile
 
 - `synchronized` 可见性来源：unlock happens-before 后续 lock，解锁前把工作内存刷回， 加锁后清空工作内存重读。所以锁内改的普通变量，下一持锁线程可见。
 - AQS：`state` 是 `volatile int`，靠 CAS 改它同步队列状态，屏障语义由 volatile + CAS 提供。
 - `ConcurrentHashMap`：Node 的 `val`、`next` 用 `volatile`，保证扩容、并发读写时链表/红黑树节点更新可见，细节看并发编程篇。
 - 原则：先想清 happens-before 链再写代码，不要靠 `sleep` 或延时碰运气修复可见性。
 
-## 6. 疑难杂症
+## 7. 疑难杂症
 
-### 6.1 停止标志不退出：JIT 提升
+### 7.1 停止标志不退出：JIT 提升
 
 现象：普通 `boolean` 标志，主线程改了，工作线程 `while` 循环永不退出。`-client` 模式偶尔正常，`-server` 模式必现。
 
@@ -207,7 +273,7 @@ public class Worker {
 
 修复：标志位加 `volatile`，或循环内加锁读取。
 
-### 6.2 读到默认值：不安全发布
+### 7.2 读到默认值：不安全发布
 
 现象：A 线程创建对象并发布到静态变量，B 线程读到对象非 null，但 int 字段是 0、引用字段是 null，与构造赋值不符。
 
@@ -222,14 +288,14 @@ static Holder holder; // 非 volatile，无锁发布，不安全
 
 修复三选一：`volatile` 发布、加锁发布、用 `final` 字段且构造不逸出。集合类发布同理，优先用 `ConcurrentHashMap` 等线程安全容器。
 
-### 6.3 排查思路汇总
+### 7.3 排查思路汇总
 
 1. 先问有没有 happens-before 链，没有就是代码 bug，不是玄学。
 2. 复现要开多线程、高迭代、server 模式，单次运行正常不证明正确。
 3. 用 `jstack` 看线程状态，用压力测试（如 jcstress）验证并发语义，别只靠肉眼。
 4. 区分可见性问题与原子性问题：看不到是前者，计数丢更新是后者，药不同。
 
-## 7. 常见误区
+## 8. 常见误区
 
 | 误区 | 正解 |
 | --- | --- |
@@ -239,7 +305,7 @@ static Holder holder; // 非 volatile，无锁发布，不安全
 | 加了 synchronized 就不用 volatile | 锁只在临界区进出时同步，锁外读普通变量仍可能读旧值 |
 | volatile 变量读写和锁一样贵/一样轻 | 读近普通读，写含 StoreLoad 较贵；且 volatile 不阻塞、不替代互斥 |
 
-## 8. 性能优化
+## 9. 性能优化
 
 - 能用 volatile 别用锁：无竞争、无阻塞，适合标志位；需互斥或复合操作时别硬套。
 - 缩小同步块，只包共享变量操作，IO 和耗时计算放锁外。
@@ -247,7 +313,7 @@ static Holder holder; // 非 volatile，无锁发布，不安全
 - 避免伪共享：高频写的不同变量落在同一缓存行会互相失效，JDK 8 用字段填充、JDK 9+ 用 `@Contended`（需 JVM 参数）。
 - 不要滥加 volatile：每个 volatile 写都有屏障成本，高频写字段评估用原子类分段或 LongAdder。
 
-## 9. 版本差异
+## 10. 版本差异
 
 | 版本 | 变化 |
 | --- | --- |
@@ -261,7 +327,7 @@ static Holder holder; // 非 volatile，无锁发布，不安全
 
 【小技巧】`volatile` 修饰数组只保护引用，不保护元素：`volatile int[] arr` 换一个新数组引用时可见，但 `arr[0] = 1` 这种元素写不保证对其他线程可见。元素也要跨线程可见时，用 `AtomicIntegerArray`，或者把数组整体换掉、只用 volatile 引用发布新数组；数组和它的元素是两层东西，volatile 只管最外面那一层。
 
-【小技巧】别把 volatile 标志先缓存到局部变量再进循环：`boolean r = running; while (r) { ... }` 里，r 只在循环前读了一次，之后主线程把 running 改成 false，循环照样不退出。条件里每次直接读 `while (running)`，让每次判断都走一次主内存；原文 6.1 的 JIT 提升是编译器干的，这条是自己手写出来的同一个坑。
+【小技巧】别把 volatile 标志先缓存到局部变量再进循环：`boolean r = running; while (r) { ... }` 里，r 只在循环前读了一次，之后主线程把 running 改成 false，循环照样不退出。条件里每次直接读 `while (running)`，让每次判断都走一次主内存；原文 7.1 的 JIT 提升是编译器干的，这条是自己手写出来的同一个坑。
 
 【小技巧】一次性启动、一次性关闭用 `AtomicBoolean.compareAndSet`：`if (!started) { started = true; 启动(); }` 里两个线程可能同时通过检查，各启动一次。`started.compareAndSet(false, true)` 是原子地"检查并翻转"，只放一个线程进去，返回值直接告诉你是不是第一个；volatile boolean 只能保证"看到最新值"，保证不了"只有一个线程通过检查"。
 
@@ -273,11 +339,11 @@ static Holder holder; // 非 volatile，无锁发布，不安全
 
 【冷知识】happens-before 这个概念不是 Java 发明的：它来自 Leslie Lamport 1978 年的论文《Time, Clocks, and the Ordering of Events》，原意是给分布式系统里的事件定一个"谁先发生"的偏序关系。Java 内存模型把它借了过来，当作可见性的契约——"A happens-before B"在论文里是逻辑时钟的排序依据，在 JMM 里变成了"读到 A 的结果就能看到 B 之前所有写"的保证。
 
-【冷知识】JSR-133 由马里兰大学的 Bill Pugh 牵头，2004 年随 JDK 5 落地：修的正是 JDK 5 之前 volatile 语义太弱的老问题——那时 volatile 只保证"写了马上能看到"，不禁止重排序，双重检查锁定写了 volatile 照样可能读到半初始化对象。JSR-133 把"禁止相关重排序"写进 volatile 语义，DCL 才从"公认的反模式"变回可用写法；原文 5.1 说"JDK 5 前 DCL 失效"，根子就在这次修订。
+【冷知识】JSR-133 由马里兰大学的 Bill Pugh 牵头，2004 年随 JDK 5 落地：修的正是 JDK 5 之前 volatile 语义太弱的老问题——那时 volatile 只保证"写了马上能看到"，不禁止重排序，双重检查锁定写了 volatile 照样可能读到半初始化对象。JSR-133 把"禁止相关重排序"写进 volatile 语义，DCL 才从"公认的反模式"变回可用写法；原文 6.1 说"JDK 5 前 DCL 失效"，根子就在这次修订。
 
 【小技巧】`static final` 字段是最省事的安全发布：类初始化由 JVM 加锁保证只跑一次，`static final Config CFG = new Config(...)` 写好后，所有线程读到的都是初始化完成的值，不用 volatile、不用加锁。配置对象、单例、常量表这类"初始化一次、之后只读"的东西，能放 static final 就别自己搭发布逻辑；JVM 的类加载锁已经替你把 happens-before 链搭好了。
 
-## 10. 面试与自测
+## 11. 面试与自测
 
 1. volatile 能保证原子性吗？不能，举 `i++` 说明读-改-写三步竞态。
 2. DCL 为什么加 volatile？防对象创建第 2、3 步重排导致半初始化对象被读。
@@ -285,6 +351,7 @@ static Holder holder; // 非 volatile，无锁发布，不安全
 4. synchronized 的可见性怎么来的？unlock hb 后续 lock，靠传递性带出锁内所有写。
 5. final 字段为什么线程安全？构造内写 hb 引用逸出，前提是构造不逸出 `this`。
 6. 线程 A 写普通变量后写 volatile 变量，线程 B 读到 volatile 新值，能否看到普通变量新值？能，靠 StoreStore 屏障 + 传递性。自答不出第 6 题，回看 4.1、4.2。
+7. 两个线程各写一个 long 计数器，逻辑上互不干扰，为什么越加线程越慢？怎么验证和修？
 
 ### 参考答案
 
@@ -300,7 +367,9 @@ static Holder holder; // 非 volatile，无锁发布，不安全
 
 6. 能。线程 A 写普通变量在前、写 volatile 变量在后，volatile 写之前插入 StoreStore 屏障，保证前面普通写先刷出；volatile 写 happens-before 线程 B 对同一变量的 volatile 读。再靠传递性，线程 B 读到 volatile 新值时，也能看到该 volatile 写之前的所有普通写新值。
 
-## 11. 关联知识
+7. 伪共享指两个逻辑无关的变量落在同一 64 字节缓存行，两核轮流写时缓存行在核间来回失效，每次写都付出跨核一致性代价（约几十纳秒，相对 L1 命中高一到两个数量级），吞吐随线程数不升反降。解法是填充或 @Contended 让热点字段各占一行，只用于高频写字段，滥用会放大内存占用。
+
+## 12. 关联知识
 
 - Java-并发编程：锁、AQS、线程池、并发容器的实现都建立在 JMM 之上。
 - JVM-GC调优：讲运行时内存区域与 GC，与本文 JMM 是两个维度，面试常连问，注意区分。
