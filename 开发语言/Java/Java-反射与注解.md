@@ -2,7 +2,7 @@
 知识点: Java-反射与注解
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-09
+更新日期: 2026-11-14
 关联:
   - Java
   - Spring-IOC与AOP
@@ -354,6 +354,56 @@ Jandex 这类构建期索引把扫描挪到编译期，运行期启动成本接�
 
 【冷知识】类的 `getName()` 对数组返回的是 JVM 内部名而不是源码写法，例如 `String[].class.getName()` 是 `[Ljava.lang.String;`，而 `int[].class.getName()` 是 `[I`。日志、报错信息或按类名做映射时如果直接用 `getName()`，数组类型会显得很奇怪，需要给人看的名字用 `getCanonicalName()`，它返回的就是源码里写的 `java.lang.String[]` 这种形式。
 
+## 实战案例
+
+### 案例一：自定义注解的耗时统计放进热点循环，接口越跑越慢
+
+以下为设计演练示例，非真实生产事故。
+
+**场景**：给核心方法加了自定义 `@LogTime` 注解做耗时统计，工具类里每次调用都先 `getDeclaredMethod` 再 `method.invoke`。上线后热点接口的 P99 明显变长，压测一跑就更慢，关掉注解统计立刻恢复。
+
+**排查**
+
+先分清慢的是“查找”还是“调用”。按定量节的算例三：DZone 给出的反射 bootstrap 成本约 268.51 ns/次，把它作为单次查找的量级估算，缓存后的单次 `invoke` 取 5.28 ns/次；循环 100 万次，每次都 `getMethod` 再 `invoke` 耗时约 273.8 ms，只查一次、缓存 `Method` 后反复 `invoke` 只要约 5.28 ms，缓存省下约 268.5 ms，约 51.9 倍——其中查找本身就占了约 268.5 ms。另一组独立基准交叉验证了量级：Kt. Academy 的 JMH 里，Java 反射每次调用都重新找方法时耗时 168.9 ms/操作，缓存方法后同一组调用只要 111 ms/操作。结论：查找是反射成本里的大头，缓存 `Method` 对象是性价比最高的优化。再看调用本身：热路径下一次 `Method.invoke()` 约 5–7 ns，约为直接调用的 2–16 倍；DZone JDK 8 一组直接调用 2.59 ns/次、反射 5.28 ns/次，100 万次只多花 2.69 ms，约 2.0 倍——热路径反射是“几倍”，不是“几百倍”，单次调用差几纳秒可以忽略，一旦进入每秒百万次的热点循环，差值就放大到毫秒级。
+
+**根因**
+
+工具类把“查找”写进了每次调用：`getDeclaredMethod` 每调一次就付一次约 268.51 ns 的查找成本，100 万次就是约 268.5 ms，全花在找方法上。调用本身的账反而是小头：`setAccessible(true)` 是一次性成本，调用前把访问检查关掉，之后每次 `invoke` 不再重复做语言级访问检查；剩下的成本是参数打包成 `Object[]`、基本类型装箱/拆箱、返回值拆包、异常包装成 `InvocationTargetException`，以及 JIT 无法内联。冷路径还要再加一笔：JDK 17 及更早版本里同一个方法的前 15 次调用走 native accessor（膨胀阈值 15），第 16 次起生成专用字节码 accessor 并切换过去，只调一两次的冷路径最慢，压测只测一次就下结论会高估成本。
+
+**修复**
+
+按小技巧的口径：把查到的 `Method`、`Field`、`Constructor` 缓存起来复用，不要每次调用都重新 `getDeclaredMethod`——用一个 `ConcurrentHashMap` 按“类名 + 方法名 + 参数类型”做键，第一次查到后放进去，后面直接取；框架的做法与之一致：启动时反射一次、运行期缓存结果（如 Spring 的 `BeanDefinition`、MyBatis-Plus 的 `TableInfo`）。签名已知时优先 `MethodHandle.invokeExact` / `invoke`，不要为了图方便用 `invokeWithArguments`：同一组 OpenJDK 23 基准里它约 90.09 ns/次，是直接调用的约 281 倍、是 `Method.invoke` 的约 18 倍，100 万次耗时约 90.09 ms，而 `Method.invoke` 约 5.10 ms。JDK 18（JEP 416）把 `Method` / `Constructor` / `Field` 的实现改到 `MethodHandle` 之上，旧的 native + 字节码膨胀机制已被移除，“15 次”阈值只适用于 JDK 17 及更早版本，在 JDK 18+ 上不要再拿它做推理。
+
+**复盘**
+
+- 排障顺序：先算查找与调用各占多少（算例三的 273.8 ms vs 5.28 ms），再决定缓存什么；只优化 `invoke` 本身，省不掉查找的大头。
+- 热路径的倍数要看基准口径：空方法/简单 getter 的倍数会被放大，真实方法体越重，反射的固定开销占比越低，倍数会向 1 收敛；只测空方法会高估反射的相对成本。
+- 注解解析的账也在启动期：单次 `getAnnotation()` 本身很轻，真正的成本在“全量扫描”——Spring Boot 典型启动 5–30 秒，classpath 扫描与 Bean 实例化占大头；用编译期索引（Spring 的 `@Indexed` / `spring.components`，可使大型项目启动时间下降约 30–50%）或构建期索引（Jandex）把扫描换成读表，运行期只读缓存，不再重复解析。
+
+### 案例二：AOP 切面读不到实现类方法上的注解，事务“时灵时不灵”
+
+以下为设计演练示例，非真实生产事故。
+
+**场景**：`@Transactional` 标在实现类方法上，接口方法没标；有的调用事务生效，有的调用直接裸奔。换一种写法（注解移到接口上）又全好了，排查时还发现泛型方法上的注解偶尔也读不到。
+
+**排查**
+
+先分清读到的是哪个方法上的注解。JDK 动态代理拿到的是接口方法，注解可能标在实现类方法上，所以框架用 `AnnotationUtils.findAnnotation` 而非裸 `getAnnotation`（它能处理桥接方法、接口继承等坑），这是原文实战应用第 2 节的口径。泛型擦除会生成桥接方法：直接读很可能读到桥接方法而漏掉注解，自己不用 Spring 时，至少要先判断 `method.isBridge()` 并顺着桥接关系找到原始方法再读（小技巧）。再查保留级别：注解的保留级别只有 `RUNTIME` 才能被反射读到，`CLASS` 级别的注解虽然会进 class 文件，但运行期用反射是读不到的；框架用注解都是 RUNTIME 档。最后查继承口径：`@Inherited` 只对“类继承类”生效，接口实现、方法重写、字段隐藏都不继承；子类继承到的其实是父类上的那一个注解实例，`getAnnotation()` 在子类上能读到它，但 `getDeclaredAnnotation()` 在子类上读不到，因为后者只看本类直接标注的注解。
+
+**根因**
+
+三处“读错方法”叠加：代理拿到的是接口方法、注解在实现类方法上，裸 `getAnnotation` 读的是接口方法，自然读不到；泛型方法读到的是桥接方法，注解在原始方法上；`getDeclaredAnnotation` 只看本类直接标注，父类继承来的注解它看不到。注解本身没有“失效”，是读注解的入口没对准方法。注解的本质也佐证了这一点：`@LogTime("x")` 编译后变成实现该注解接口的动态代理实例，`getAnnotation()` 拿到的是代理对象，`value()` 就是调代理方法——读到的代理是对的，错的是从哪个方法上读。
+
+**修复**
+
+读注解走框架的入口：Spring 环境用 `AnnotationUtils.findAnnotation`，它会顺着接口、父类、桥接方法找；自己写工具时先判断 `isBridge()` 再找原始方法，`getAnnotation` 与 `getDeclaredAnnotation` 按“要不要含继承”分开用。读可重复注解时用 `getAnnotationsByType()`，不要自己去拆容器注解：JDK 8 引入 `@Repeatable` 后，同一位置重复标注的注解在编译后会被包进一个容器注解里，直接 `getAnnotation(容器.class)` 才能看到容器，`getAnnotation(原注解.class)` 拿不到。取泛型父类的实际类型参数时用 `getGenericSuperclass()` 而不是 `getSuperclass()`：`class StringList extends ArrayList<String>`，`getSuperclass()` 只能拿到 `ArrayList.class`，而 `getGenericSuperclass()` 返回的 `ParameterizedType` 上用 `getActualTypeArguments()[0]` 才能拿到 `String.class`，MyBatis-Plus 的 `BaseMapper<T>` 反推实体类就是这个套路。
+
+**复盘**
+
+- 排障顺序：先确认读的是接口方法、实现类方法还是桥接方法 → 再查保留级别是不是 RUNTIME → 再查 `@Inherited` 的继承口径；三步缺一不可。
+- 注解比较不要用 `==`：`getAnnotation()` 拿到的注解对象是实现该注解接口的动态代理，`equals`、`hashCode`、`toString` 都是按注解规范实现的，两个从不同类上读到的、成员值相同的同种注解可以 `equals` 为真。
+- 框架的注解解析只在启动时做一次并缓存成元数据（Spring 的 `BeanDefinition`、MyBatis-Plus 的 `TableInfo`），运行期只读缓存；自己写工具类也按这个口径，不要在每次调用时重复解析注解。
+
 ## 面试与自测
 
 1. 要读本类声明的 private 方法用 `getMethod` 还是 `getDeclaredMethod`？要读父类的 public 方法又用哪个？构造器有没有“继承版”之分？
@@ -371,6 +421,17 @@ Jandex 这类构建期索引把扫描挪到编译期，运行期启动成本接�
 4. 反射约 5–7 ns/次，约为直接调用的 2–16 倍。膨胀阈值 15 次，JDK 18 后旧机制已移除。查找比调用贵，缓存 Method 可省 50 倍耗时。
 
 ## 关联知识
+
+### 前置知识
+
+读本篇前建议先有以下基础，括号内是本篇用到它的那一点；路径均已在仓库 tree.json 中核对存在。
+
+- [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)：IOC 容器与 AOP 代理是反射+注解最重的两个使用者（实战应用第 1、2 节）。
+- [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)：`@TableName`、`@TableField`、`BaseMapper<T>` 的注解解析与泛型反推（实战应用第 3 节）。
+- [Bean-Validation](开发语言/Java/Bean-Validation.md)：约束注解的校验链路与自定义约束（实战应用第 4 节）。
+- [JVM-类加载](开发语言/Java/JVM/JVM-类加载.md)：`Class.forName` 触发的加载、链接、初始化过程。
+- [Java](开发语言/Java/Java.md)：语言基础总览。
+- [Java-泛型与类型擦除](开发语言/Java/Java-泛型与类型擦除.md)：桥接方法、类型擦除对反射遍历的干扰与过滤。
 - [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)：IOC 容器与 AOP 代理是反射+注解最重的两个使用者。
 - [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)：`@TableName`、`@TableField`、`BaseMapper<T>` 的注解解析与泛型反推。
 - [Bean-Validation](开发语言/Java/Bean-Validation.md)：约束注解的校验链路与自定义约束。

@@ -2,7 +2,7 @@
 知识点: Quartz 定时任务
 层级: 进阶
 适用版本: Quartz 2.3 / Spring Boot 2.7.3
-更新日期: 2026-11-09
+更新日期: 2026-11-14
 关联:
   - Spring-Boot
   - 线程池
@@ -133,6 +133,26 @@ public class SpringJobFactory extends AdaptableJobFactory {
 - **表达式对但就是不跑**：按顺序查——Trigger 被 pause、身份 group 写错、cron「日/周」两位同时给了具体值、时区不是 Asia/Shanghai（容器默认 UTC 让「凌晨 2 点」变北京时间 10 点）。时区在 Trigger 上显式 `inTimeZone(TimeZone.getTimeZone("Asia/Shanghai"))` 或统一 JVM 时区，别靠部署环境碰运气。
 - **重启后任务消失**：memory JobStore 的必然结果，要么换 jdbc，要么靠启动时代码注册并保证幂等。
 
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新 API，不补新数字，数字一律复用 §9 已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+### Job / JobDetail / Trigger / Scheduler：为什么定义与触发要分开
+
+本节只综合原文 §1 与 §10 参考答案的结论。四个角色分工不同：`Job` 是任务逻辑，只写一个 `execute` 方法，每次触发都新建实例，按无状态写；`JobDetail` 是任务定义，绑哪个 Job、身份（name + group）、参数；`Trigger` 是触发规则，何时跑、重复策略、错过怎么办，只绑一个 JobDetail；`Scheduler` 是调度器，注册 JobDetail + Trigger 统一驱动，应用内一般单例。分开后同一个 JobDetail 可被多个 Trigger 以不同时间规则引用，也便于按 name + group 寻址做动态增删改。参数传递走 `JobDataMap`：JobDetail 和 Trigger 各有一份，取值时 Trigger 的覆盖 JobDetail 的，`JobExecutionContext.getMergedJobDataMap()` 拿合并结果。身份 = name + group，二者组合唯一，动态管理任务全靠它寻址；`withIdentity("reconcile")` 只写名字不写 group 时，group 默认是 `"DEFAULT"`，所有没显式分组的 Job 和 Trigger 都落在同一个默认组里，不同业务的任务最好显式分组，别都挤在 DEFAULT 里。
+
+### 集群防重复：抢锁单跑，不是分片
+
+本节只综合原文 §4 与 §10 参考答案的结论。JDBC JobStore 把触发器状态存进 `QRTZ_*` 系列表（11 张），多节点连同一个库、`org.quartz.jobStore.isClustered=true` 即成集群。防重复原理是抢锁：节点触发前要抢 `QRTZ_LOCKS` 里的行锁，抢到的才执行——所以集群是抢占式单跑，不是负载均衡分片：同一 Trigger 同一时刻只有一个节点执行，想并行分片得自己按数据范围拆多个 JobDetail。集群节点之间靠 `clusterCheckinInterval` 互相“报到”，默认 7500 毫秒：每个节点每隔这段时间往 `QRTZ_SCHEDULER_STATE` 表写一次心跳，超过间隔没报到的节点会被其他节点判定为挂了，它手里正在跑的任务会被接管重跑。集群节点时钟必须同步，时钟漂移会造成重复触发或错过触发，NTP 是前置条件。持久化用 OceanBase（MySQL 模式）存 `QRTZ_*` 表没有障碍，按普通 InnoDB 兼容表对待即可。
+
+### misfire 与线程池：错过不是“慢一点”，是直接变错过
+
+本节只综合原文 §5、§6 与 §9 的结论。任务该跑时没跑上（应用停机、线程池被长任务占满、暂停太久）即 misfire，超过 `org.quartz.jobStore.misfireThreshold`（默认 60 秒）才算数；停机不足 60 秒、重启后在阈值内赶上的不算错过。CronTrigger 的三条策略分工不同：`FIRE_ONCE_NOW` 立刻补跑一次、之后按原计划，适合报表、对账这类漏了要补、但只补一次的任务；`DO_NOTHING` 不补、等下个周期，适合催办提醒、状态同步这类补跑反而重复打扰的任务；`IGNORE_MISFIRE_POLICY` 错过几次补几次，慎用，停机一周能瞬间补跑上百次打爆下游。Cron 触发器的默认 smart policy 等价于 FIRE_ONCE_NOW，不要蒙着用。线程池那头是另一条线：Quartz jar 内置的默认 `quartz.properties` 配的是 10，Spring Boot 不显式配置时走的就是这份内置默认值，实效 10 个工作线程；用 Little 定律估算可持续吞吐——并发数 = 到达速率 × 平均耗时，池子满载时到达速率上限 = 线程数 ÷ 平均耗时：10 线程、任务平均耗时 30 秒时上限约 20 次/分钟，60 秒时约 10 次/分钟，5 分钟时约 2 次/分钟。排队超过 60 秒就会触及 misfire 阈值：线程池满不是“慢一点”，而是直接让排队的触发变成错过。长任务要么调大线程数，要么只做投递、把重活丢给业务线程池（§6）。
+
+### 并发控制：@DisallowConcurrentExecution 防的是自压
+
+本节只综合原文 §6 与 §10 参考答案的结论。`@DisallowConcurrentExecution` 标在 Job 类上：上一次没跑完，下一次触发排队等待而不是并发再起一个。对账、批处理必备，否则慢任务会自己压死自己。它的作用域只在同一 JobDetail 维度、依赖调度器生效；分布式锁防重是跨系统的，不依赖同一调度器、能覆盖多系统重复执行的场景，两者不要混用。`@PersistJobDataAfterExecution` 把 execute 里对 JobDataMap 的修改写回，常与上一个注解搭配做计数器/游标推进；不加则每次都是初始值。长任务还会占满 Quartz 自己的工作线程池（默认 10 线程）：线程被长任务占光后其他任务全部迟到并触发 misfire。Little 定律算的是稳态均值，要求到达均匀、耗时稳定；突发同时触发或耗时长尾都会让实际排队比均值长，`@DisallowConcurrentExecution` 的排队还会再叠加一层等待（§9 边界条件）。
+
 ## 9. 调度体量定量：触发次数、线程池与错过量算一算
 
 本节只做定量换算，不重复第 5、6 节的定性结论：先把触发次数、线程占用、错过次数、表行数换算成具体数字，再决定线程数配多少、misfire 策略选哪个。下面数字按一年 365 天算，默认值以 Quartz 2.3 官方文档为准。
@@ -225,6 +245,56 @@ JDBC 模式下定义类数据按“一个实体一行”落表：每个 JobDetai
 
 【冷知识】`SimpleTrigger` 的无限重复用常量 `REPEAT_INDEFINITELY`，它的值就是 -1：`withRepeatCount(SimpleTrigger.REPEAT_INDEFINITELY)` 和直接写 -1 等价，但读代码时常量一眼能看出意图。Quartz 里不少“无限”都是用 -1 表达的，看到 -1 先别当成写错了，对照一下是不是这个常量。
 
+## 实战案例
+
+### 案例一：停机 2 小时重启后，对账任务瞬间补跑把下游打爆了
+
+以下为设计演练示例，非真实生产事故。
+
+**场景**：每 5 分钟触发一次的对账任务，应用停机 2 小时后重启，重启后下游系统瞬间被一波对账请求打满，接口超时、队列积压；停机前一切正常。
+
+**排查**
+
+先按 §9 的错过量算账：错过次数 = 停机时长 ÷ 触发间隔（向下取整），只有延迟超过 `misfireThreshold` 默认 60 秒的才算 misfire。停机 2 小时，每 5 分钟触发的任务错过 120 ÷ 5 = 24 次。再看补跑量取决于策略：`IGNORE_MISFIRE_POLICY` 是错过几次补几次，停机 7 天的每 15 分钟任务重启后要补跑 672 次（10,080 ÷ 15），瞬间打爆下游的风险就来自这里；`FIRE_ONCE_NOW` 只补 1 次；`DO_NOTHING` 补 0 次，等下个周期。本案的 24 次错过，IGNORE 策略会补跑 24 次，DO_NOTHING 补 0 次。再核对线程池能不能接住这波补跑：按 Little 定律，10 线程、任务平均跑 30 秒时上限约 20 次/分钟；20 个平均耗时 30 秒的任务在同一时刻触发，前 10 个占用全部线程跑 0–30 秒，后 10 个排队等 30 秒才启动，全部跑完要 60 秒——排队超过 60 秒就会触及 misfire 阈值，补跑的触发又变成新的错过。
+
+**根因**
+
+misfire 策略选错了：对账任务配了 `IGNORE_MISFIRE_POLICY`，停机 2 小时攒下的 24 次错过在重启后一次性全补跑，补跑本身又把线程池占满、把排队推过 60 秒阈值，错过与补跑互相放大。Cron 触发器的默认 smart policy 等价于 FIRE_ONCE_NOW，不是一定是你想要的，配策略时要显式写清（§5）。
+
+**修复**
+
+对账、报表这类漏了要补、但只补一次的任务改 `FIRE_ONCE_NOW`：立刻补跑一次、之后按原计划。催办提醒、状态同步这类补跑反而重复打扰的任务改 `DO_NOTHING`。`IGNORE_MISFIRE_POLICY` 只在“错过几次必须全补、且下游扛得住突发”的任务上用，停机一周可能瞬间补跑上百次，配之前先按 §9 的表算好补跑量。长任务侧同步整改：要么调大线程数，要么任务里只做“投递”动作，把重活丢给业务线程池异步执行（§6），别让 Quartz 自己的 10 个工作线程被长任务占光。
+
+**复盘**
+
+- 排障顺序：先算错过次数（停机时长 ÷ 触发间隔）→ 再看策略的补跑量（IGNORE 补几次、FIRE_ONCE_NOW 补 1 次、DO_NOTHING 补 0 次）→ 再用 Little 定律算线程池接不接得住；三步的数字全部来自 §9。
+- 停机不足 60 秒则一次都不算错过，重启后在阈值内正常触发；补跑量还取决于策略，`DO_NOTHING` 下停机再久补跑也是 0 次。
+- 持久化体量的账也要一起算：50 个 JobDetail、80 个 Trigger（60 个 cron + 20 个 simple）时定义类行数合计 210 行；`QRTZ_FIRED_TRIGGERS` 只存进行中的触发，行数上限约等于同一时刻在跑的任务数（默认池 10 线程，正常不超过 10 行）。
+
+### 案例二：集群里同一个对账任务两个节点各跑了一份，账对了两遍
+
+以下为设计演练示例，非真实生产事故。
+
+**场景**：对账任务上了双节点集群，某天发现同一笔账被对了两遍，下游收到重复的对账结果；单节点时从没出过这问题。
+
+**排查**
+
+按 §8 的顺序查：先查 `isClustered` 是否真开启——共用库但没开集群 = 每节点独立调度，必重复；再查是否有两套应用连了同一个库各自调度。集群防重复的原理是抢锁：节点触发前要抢 `QRTZ_LOCKS` 里的行锁，抢到的才执行；没开 `isClustered`，抢锁这一步根本不存在，各节点按自己的调度表各自触发。时钟也要查：集群节点时钟必须同步，时钟漂移会造成重复触发或错过触发，NTP 是前置条件。再查任务身份：身份 = name + group，二者组合唯一；`withIdentity("reconcile")` 只写名字不写 group 时 group 默认是 `"DEFAULT"`，不同业务的任务都挤在 DEFAULT 里，动态管理时查出来的任务可能比预期的多。
+
+**根因**
+
+集群没真正形成：两个节点连了同一个库、但 `isClustered` 没开，等于两套独立的调度器在跑同一份任务定义，抢锁防重从未生效。另一类同根问题是两套应用（比如灰度与正式）连了同一个库各自调度，库是同一个、调度器是两套，同样重复。
+
+**修复**
+
+开集群：多节点连同一个库、`org.quartz.jobStore.isClustered=true`，节点触发前抢 `QRTZ_LOCKS` 行锁，同一 Trigger 同一时刻只有一个节点执行。时钟用 NTP 同步。任务显式分组，别都挤在 DEFAULT 里。想并行分片得自己按数据范围拆多个 JobDetail——集群是抢占式单跑，不是负载均衡分片（§4）。应用停机时调 `scheduler.shutdown(true)` 而不是 `shutdown(false)`：传 true 会等正在执行的任务跑完再关，传 false 立刻返回、不管手头的任务；滚动发布、优雅停机走 true 这条路，正在跑的对账任务不会被半路掐断（小技巧）。关键任务在 JobDetail 上开 `requestRecovery(true)`：节点崩溃时正在跑的任务，调度器恢复后会重新触发一次，相当于给“跑一半就宕机”留了后手（小技巧）。
+
+**复盘**
+
+- 排障顺序：先查 `isClustered` 是否真开启 → 再查是否有两套应用连同一个库 → 再查时钟是否 NTP 同步 → 再查任务身份分组；不要先怀疑业务代码。
+- 表达式对但就是不跑时按顺序查：Trigger 被 pause、身份 group 写错、cron「日/周」两位同时给了具体值、时区不是 Asia/Shanghai（容器默认 UTC 让「凌晨 2 点」变北京时间 10 点），时区在 Trigger 上显式 `inTimeZone(TimeZone.getTimeZone("Asia/Shanghai"))` 或统一 JVM 时区（§8）。
+- 重启后任务消失是 memory JobStore 的必然结果：要么换 jdbc，要么靠启动时代码注册并保证幂等（§8）。
+
 ## 10. 面试与自测
 
 - JobDetail 与 Trigger 为什么要分开？一对多关系怎么理解？
@@ -246,6 +316,15 @@ JDBC 模式下定义类数据按“一个实体一行”落表：每个 JobDetai
 6. 停机 2 小时，每 5 分钟一次错过 24 次（120÷5）；IGNORE 策略错过几次补几次，补跑 24 次；DO_NOTHING 补 0 次，等下个周期。Little 定律下 10 线程、30 秒任务上限约 20 次/分钟，超过就会排队、进而 misfire。
 
 ## 11. 关联知识
+
+### 前置知识
+
+读本篇前建议先有以下基础，括号内是本篇用到它的那一点；路径均已在仓库 tree.json 中核对存在。
+
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：自动装配与 starter 机制，quartz starter 的配置入口（§11）。
+- [线程池](开发语言/Java/并发/线程池.md)：Quartz 工作线程池与业务线程池的隔离（§11）。
+- [Flowable](工程实践/Flowable.md)：流程内定时事件的自有调度，与 Quartz 的分工边界（§11）。
+- [Java](开发语言/Java/Java.md)：Java 语言基线，Job 接口与 cron 表达式的写法都以此为底。
 
 - [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：自动装配与 starter 机制，quartz starter 的配置入口。
 - [线程池](开发语言/Java/并发/线程池.md)：Quartz 工作线程池与业务线程池的隔离。
