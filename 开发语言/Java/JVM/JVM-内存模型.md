@@ -2,7 +2,7 @@
 知识点: JVM 内存模型
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-13
+更新日期: 2026-11-14
 关联:
   - Java-并发编程
   - JVM-GC调优
@@ -261,6 +261,95 @@ public class Worker {
 - `ConcurrentHashMap`：Node 的 `val`、`next` 用 `volatile`，保证扩容、并发读写时链表/红黑树节点更新可见，细节看并发编程篇。
 - 原则：先想清 happens-before 链再写代码，不要靠 `sleep` 或延时碰运气修复可见性。
 
+## 实战案例
+
+### 案例一：状态标志位不可见，工作线程停不下来
+
+以下为最小复现/模式演练，非真实生产事故。
+
+**现象。** 一个工作线程在 `while` 循环里干活，主线程置标志位想让它停下，工作线程却一直跑，`join` 永远等不到返回。换一台机器、换个运行次数，现象时有时无；`-client` 模式下偶尔能停，`-server` 模式下更容易复现。
+
+**排查。** 先排除“标志根本没被改到”：在主线程置标志后打印一次，确认赋值语句确实执行了。再用 `jstack <pid>` 打印工作线程堆栈，确认它卡在循环体里、不是死锁也不是阻塞在 IO 上。注意不要用“循环里加一行 `System.out.println` 看看”来排查——打印自带同步，会偶然让循环读到新值，现象消失，造成“修好了”的假象（原文 §7.1 已点明这一点）。
+
+最小复现骨架（与原文 §6.2 的 Worker 写法不同，这里特意写出主线程侧的置位与等待，便于复现“停不下来”）：
+
+```java
+public class StopFlagDemo {
+    private boolean running = true; // 普通 boolean，未加 volatile
+
+    public void run() {
+        while (running) {
+            // 干活：不读写 running，也不做同步操作
+        }
+        System.out.println("worker exited");
+    }
+
+    public static void main(String[] args) throws Exception {
+        StopFlagDemo demo = new StopFlagDemo();
+        Thread worker = new Thread(demo::run);
+        worker.start();
+        Thread.sleep(100);
+        demo.running = false; // 主线程置位
+        worker.join();        // 若 bug 复现，这里永远等不到返回
+        System.out.println("main exited");
+    }
+}
+```
+
+**根因。** `running` 是普通变量，主线程的写与工作线程的读之间没有任何 happens-before 链（对照原文 §4.1 八大规则，没有一条适用）。JIT 发现循环体内从不修改 `running`，会把读提升出循环、等价改写为 `while (true)`，工作线程此后只读寄存器里的旧值，主内存的新值永远读不到。可见性延迟无上界（原文 §5.4）：“可能下一纳秒看到，也可能永远看不到”，这里就是后一种。
+
+**修复。** 二选一，改一处即可：
+
+```java
+private volatile boolean running = true; // 方案一：volatile
+```
+
+```java
+private final AtomicBoolean running = new AtomicBoolean(true);
+// 读：while (running.get())；置位：running.set(false)；方案二：AtomicBoolean
+```
+
+volatile 写 happens-before 后续 volatile 读（§4.1 规则 3），读方每次判断都走主内存，JIT 也不能再把读提升出循环。需要“只放一个线程通过检查”的一次性启动/关闭场景，选 `AtomicBoolean.compareAndSet`，volatile boolean 做不到这一点。
+
+**验证/复盘。** 改后重跑同一份复现：主线程置位后工作线程退出循环、`join` 返回、`main exited` 正常打印；多跑几遍、换 `-server` 模式再跑，结论不变才算过关。复盘要点：不要靠 `sleep` 或延时碰运气修可见性（原文 §6.3）；先问有没有 happens-before 链，没有就是代码 bug，不是玄学（原文 §7.3）。
+
+### 案例二：两个 long 计数器伪共享，越加线程越慢
+
+以下为最小复现/模式演练，非真实生产事故。
+
+**现象。** 两个线程各写一个 `long` 计数器，逻辑上互不干扰。单线程跑得很快；改成两个线程并行，各写各的计数器，总耗时反而比单线程更长；线程数继续加，吞吐不升反降。
+
+**排查。** 先确认不是锁竞争：代码里没有任何锁、没有任何共享变量读写，两个计数器是两个独立字段。单线程快、多线程反而慢，是伪共享的典型信号。再看字段布局：两个 `long` 各 8 字节，并排声明时大概率落在同一 64 字节缓存行里（x86-64 行宽 64 字节，一行能放 8 个 `long`，原文 §5.3）。怀疑时用 `perf` 看缓存失效指标（原文 §5.5 建议看 `remote_hitm` 计数）或用 JMH 实测对照，不靠猜。只读共享不会有这个问题——各核可同时持有 Shared 态副本，失效风暴只发生在写。
+
+**根因。** 缓存一致性按行不按变量。两个逻辑无关的 `long` 落在同一行，两核轮流写时，每次写都使对方手里的行失效，对方下次写又要重新独占获取——约 200 万次跨核一致性传输对应两侧各写 100 万次（原文 §5.3 的模型推算）。一次伪共享写比一次 L1 命中贵一到两个数量级，写得越频繁，互相失效越严重，所以线程越多越慢。
+
+**修复。** 让两个高频写字段各占一行，二选一：
+
+```java
+// 方案一：手动填充（JDK 8 风格，填充量按 64 字节行宽估算，跨平台按 128 字节更稳妥）
+public class PaddedCounters {
+    public volatile long counterA;
+    private long p1, p2, p3, p4, p5, p6, p7; // 占位，把 counterB 顶到下一行
+    public volatile long counterB;
+}
+```
+
+```java
+// 方案二：@Contended（JDK 9+，需加 JVM 参数 -XX:-RestrictContended，该注解默认受限，见原文 §5.5）
+import jdk.internal.vm.annotation.Contended;
+
+public class ContendedCounters {
+    @Contended
+    public volatile long counterA;
+    @Contended
+    public volatile long counterB;
+}
+```
+
+只给高频写字段加填充；滥用等于拿内存换速度（一个 `long` 独占一行，空间放大 8 倍；按默认 128 字节填充，一个对象可膨胀约 12 倍，原文 §5.3）。能直接用现成结构时优先用 `LongAdder` 等分片计数，不要自己手写填充。
+
+**验证/复盘。** 修复前后用同一份 JMH 压测对照：消除跨核失效后，吞吐随线程数上升，不再出现“越加线程越慢”。减速倍数不写具体数字——原文 §5.3 已声明 4–16 倍只是三个案例的区间、不可推广，本案例不编新数字，结论以实测为准。复盘要点：伪共享是“写”才有的问题，定位先看字段布局与写频率，再决定要不要填充。手动填充只是启发式做法，JVM 不保证字段按声明顺序布局，填充效果以 JOL 实测为准。
+
 ## 7. 疑难杂症
 
 ### 7.1 停止标志不退出：JIT 提升
@@ -370,6 +459,12 @@ static Holder holder; // 非 volatile，无锁发布，不安全
 7. 伪共享指两个逻辑无关的变量落在同一 64 字节缓存行，两核轮流写时缓存行在核间来回失效，每次写都付出跨核一致性代价（约几十纳秒，相对 L1 命中高一到两个数量级），吞吐随线程数不升反降。解法是填充或 @Contended 让热点字段各占一行，只用于高频写字段，滥用会放大内存占用。
 
 ## 12. 关联知识
+
+### 前置知识
+
+- Java-并发编程（前置）：先掌握锁、AQS、线程池与并发容器，再读本文的 happens-before 与屏障分析，否则 §4 的规则推导缺少落点。
+- Java（前置）：`synchronized`、`volatile`、`final` 的语言层语法见 Java 篇；本文只讲它们落到内存语义的部分。
+- JVM-GC调优（关联，非前置）：运行时内存区域与 GC，和 JMM 是两个维度，面试常连问，注意区分。
 
 - Java-并发编程：锁、AQS、线程池、并发容器的实现都建立在 JMM 之上。
 - JVM-GC调优：讲运行时内存区域与 GC，与本文 JMM 是两个维度，面试常连问，注意区分。
