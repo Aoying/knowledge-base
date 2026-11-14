@@ -2,7 +2,7 @@
 知识点: JVM 类加载
 层级: 进阶
 适用版本: JDK 8+（涉及 JDK9 模块化变化时注明）
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Java
   - JVM-内存模型
@@ -230,6 +230,20 @@ java.lang.ClassCastException: com.example.User cannot be cast to com.example.Use
 - JDK9 后三层加载器仍在，但 Bootstrap 加载部分平台模块，Platform 加载其余平台模块。
 - 模块化下同包拆分受限，`--add-exports` / `--add-opens` 仅作迁移期临时放行。
 
+## 实战案例
+
+### 案例一：同名类强转报 ClassCastException，类名明明一样
+
+- 现象：`com.example.User cannot be cast to com.example.User`，报错信息左右两边类名一模一样，代码里怎么看都该转得过去。
+- 排查：原文第 6.2 节的根因——类名相同但加载器不同，JVM 按“加载器 + 全限定名”判定唯一性，视为两个不同类型，强转必抛 `ClassCastException`。常见场景是热部署残留、Tomcat 与应用各放一份 jar、插件系统重复加载。
+- 结论：分别打印两边 `obj.getClass().getClassLoader()` 与 `User.class.getClassLoader()` 对比，也可用 Arthas 的 `classloader -l`、`sc -d <类名>` 查看。解法是共享类只放父加载器可见位置，子加载器不重复放同一 jar。原文第 1 节的定义就是这条排查的依据：类的唯一性由类加载器加全限定名共同决定，两者任一不同即为不同类。
+
+### 案例二：反复热部署后 Metaspace OOM，老类卸载不掉
+
+- 现象：反复热部署几次后报 `OutOfMemoryError: Metaspace`，重启后恢复，再部署几次又满；堆内存看着正常，问题只出在 Metaspace。
+- 排查：原文第 6.3 节的机制——旧加载器被引用持有，其全部类无法卸载，Metaspace 只涨不降。常见持有链：静态集合存对象、未清理的 `ThreadLocal`、未注销的 JDBC 驱动与监听器、未停的线程。排查用 `jcmd <pid> GC.class_stats`、`jmap -dump` 后用 MAT 查 `ClassLoader` 的 GC Root。
+- 结论：部署卸载时清静态集合、注销驱动、停线程，`ThreadLocal` 用完 `remove()`。原文第 8 节的性能口径也指向同一方向：控制加载器数量，避免频繁新建加载器，防止 Metaspace 碎片与重复加载；`-XX:MetaspaceSize` 设下限减少早期扩容，观察 `-Xlog:class+load` 峰值。
+
 ## 小技巧与冷知识
 
 【小技巧】`URLClassLoader` 用完要 `close()`：Java 7 起它实现了 `Closeable`，close 后释放占用的 jar 文件句柄，加载器本身也不再加载新类。插件、热部署场景不 close，Windows 上最明显——应用还跑着，jar 文件删不掉、覆盖升级直接失败；Linux 上旧文件 inode 也一直被占着。用 `try-with-resources` 包起来最省事，卸载顺序是先停用加载器、再 close，别反过来。
@@ -275,6 +289,12 @@ java.lang.ClassCastException: com.example.User cannot be cast to com.example.Use
 6. 过关标准即两部分。loadClass 伪代码关键步骤：`findLoadedClass(name)` 查缓存，命中直接返回；未命中则委派父加载器（父为 null 时找 Bootstrap）；父加载不到才调自己的 `findClass(name)`。findClass 骨架要点：只重写 `findClass`、不重写 `loadClass`；把类名中的 `.` 换成 `/` 并拼上 `.class` 定位文件；读出字节数组后调 `defineClass(name, bytes, 0, bytes.length)` 生成 Class 对象；读不到或 IO 异常时包装为 `ClassNotFoundException` 抛出；字节来源可换成解密、网络或数据库，骨架逻辑不变。
 
 ## 11. 关联知识
+
+### 前置知识
+
+- [JVM 内存模型](开发语言/Java/JVM/JVM-内存模型.md)：方法区、Metaspace 是类元数据存放处，类卸载与 Metaspace OOM 的关系都在该篇（原文第 11 节与第 6.3 节）。
+- [JVM-GC调优](开发语言/Java/JVM/JVM-GC调优.md)：类卸载由 GC 回收加载器触发，Metaspace OOM 需结合 GC 日志看（原文第 11 节与第 6.3 节）。
+- [Java](开发语言/Java/Java.md)：反射、SPI、`ServiceLoader`、Tomcat 容器隔离均建立在类加载之上，读本篇前先有 Java 语言基础的坐标（原文第 11 节与第 4.2 节）。
 - JVM-内存模型：方法区 / Metaspace 是类元数据存放处，卸载与之直接相关。
 - JVM-GC调优：类卸载由 GC 回收加载器触发，Metaspace OOM 需结合 GC 日志看。
 - Java：反射、SPI、`ServiceLoader`、Tomcat 容器隔离均建立在类加载之上。

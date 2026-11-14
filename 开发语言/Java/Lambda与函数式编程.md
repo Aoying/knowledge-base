@@ -2,7 +2,7 @@
 知识点: Lambda与函数式编程
 层级: 基础
 适用版本: 通用（Java 8+）
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Stream与Optional
   - Java-泛型与类型擦除
@@ -173,6 +173,32 @@ BigDecimal fee = calc.getOrDefault(type, o -> o.getAmount()).apply(order);
 
 - Lambda 与函数式接口是 Java 8 引入，Java 8 项目可全量使用本文内容。
 - Lambda 参数上写 `var`（如 `(var x, var y) -> x + y`）是 Java 11+ 才支持，且要求所有参数统一用 var 或全不用；Java 8 项目别写。
+
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新概念，不补新数字，数字一律复用原文已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+- **Lambda 是函数式接口实例的机制**：Lambda 表达式是 Java 8 引入的匿名函数，把“一段行为”当作值传来传去，不用再为一次性的行为写一个实现类。它的落点是函数式接口——只含一个抽象方法的接口（如 `Runnable`、`Comparator`、`Function`），Lambda 就是这个唯一抽象方法的实现。编译器按上下文推断目标类型，Lambda 不是语法糖包装的匿名类，底层用 `invokedynamic` 生成：编译后不是生成一个 `Xxx$1.class`，而是在调用点留一条 `invokedynamic` 指令，运行时由 `LambdaMetafactory` 按需生成实现类。结果是首次调用有少量生成开销，之后与直接调用接近；也因为没有为每个 Lambda 生成类文件，jar 里不会多出一堆匿名类（原文第 1 节与第 3 节）。
+- **变量捕获的副本机制**：Lambda 的生命周期可能长于方法栈帧（如作为返回值、存进集合），方法返回后栈上的局部变量就没了。Java 的做法是让 Lambda 捕获变量的副本（值拷贝），而非引用——副本与原变量一旦能改动就会出现“改了原变量、副本没变”的不一致，所以编译器强制要求被捕获的局部变量事实最终（effectively final：声明后不再改赋值，不用显式写 final）。两点推论：实例字段、静态字段可以改（Lambda 通过 `this` / 类引用访问它们，捕获的是对象引用而非字段副本）；想在 Lambda 里累计值时，用数组、`AtomicInteger` 这类“引用不变、内容可变”的容器（原文第 3 节）。
+- **this 指向的机制**：匿名内部类的 `this` 是匿名类实例，Lambda 的 `this` 是外围对象。在 Lambda 里写 `this` 拿到的是包着它的类实例，这点在回调里调外围方法时很顺手，但从匿名类迁移过来时别按老直觉写（原文第 3 节）。
+- **方法引用的四种形式机制**：当 Lambda 体只是调用一个已有方法时，用 `::` 更简洁——类名::静态方法（如 `Integer::parseInt`）、对象::实例方法（如 `user::getName`）、类名::实例方法（如 `String::length`）、类名::new（如 `User::new`）。第三种最容易看错：`String::length` 的 Lambda 是 `s -> s.length()`，第一个参数成了方法的接收者；用在 `Comparator.comparing(User::getAge)` 里同理，`User::getAge` 等价于 `u -> u.getAge()`（原文第 2 节）。
+- **自定义函数式接口的校验机制**：`@FunctionalInterface` 注解不是必需的，但加上后编译器会校验“恰好一个抽象方法”，多写一个就编译失败，自定义接口时建议加上。受检异常的包装机制是自定义允许受检异常的函数式接口（如 `CheckedFunction`），再包一层转成 `RuntimeException` 的适配器供 Stream 链使用（原文第 3 节）。
+- **定量算例复用**：原文第 3 节的捕获示例用 `factor = 2`（`x -> x * factor`）；原文第 4 节的策略表示例里 VIP 计费是 `o.getAmount().multiply(new BigDecimal("0.9"))`，即 9 折；原文第 3 节的旧 DTO 约 50 行，改成 record 后只剩声明加紧凑构造器。本节不引入新数字。
+- **未展开的点**：原文没有给出 `LambdaMetafactory` 生成实现类的完整字节码细节，本节只拆解了实例、捕获、this、方法引用与自定义接口五条已有结论的机制；泛型擦除对 Lambda 的影响（桥接方法、类型推断边界）以 Java-泛型与类型擦除篇为准。
+
+## 实战案例
+
+### 案例一：受检异常直接往 Lambda 里写，编译不通过
+
+- 现象：`stream().map(x -> readFile(x))` 里 `readFile` 抛受检异常，编译直接不通过；同样的 `readFile` 在普通 for 循环里写 `try-catch` 就能编译，换成 Stream 链就不行。
+- 排查：原文第 5 节的误区与参考答案第 3 条——函数式接口的方法签名没声明该异常，`Function.apply` 的签名没有声明受检异常，Lambda 体抛出的受检异常无处声明，编译不通过。问题不在业务逻辑，在 Lambda 的方法签名容不下受检异常。
+- 结论：按原文第 3 节的 `unchecked` 包装——自定义允许受检异常的函数式接口（如 `CheckedFunction`），再包一层转成 `RuntimeException` 的适配器供 Stream 链使用；或者改用普通 for 循环。两种解法都不改业务逻辑，只换异常的出口。
+
+### 案例二：计费类型一多，if-else 越来越长
+
+- 现象：计费逻辑按类型分支，NORMAL、VIP 两种还能看，类型一多就成了一串 if-else；每加一种计费方式就要改这个方法内部，还要回归测试全部旧分支。
+- 排查：原文第 4 节的实战应用——计费策略用类型到计费逻辑的映射表，一张表代替一串 if-else。复用原文第 4 节的原数：`Map<String, Function<Order, BigDecimal>> calc`，NORMAL 取 `o.getAmount()`，VIP 取 `o.getAmount().multiply(new BigDecimal("0.9"))`，取值用 `calc.getOrDefault(type, o -> o.getAmount()).apply(order)`。
+- 结论：策略数量少、逻辑简单时 if-else 更直观；策略多、需动态注册（如从配置、数据库加载策略）时策略表胜出。策略本身变复杂（多步骤、有状态）时回到策略模式，见设计模式相关笔记。
 
 ## 小技巧与冷知识
 

@@ -2,7 +2,7 @@
 知识点: Java 新特性
 层级: 基础
 适用版本: JDK 17 / 21
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Java
   - 虚拟线程
@@ -168,6 +168,20 @@ Stream 侧的配合用法（`toList()` 不可变结果等 JDK 16 起的小改进
 2. **要用虚拟线程等 Web 层新能力**：必须升 Spring Boot 3.x（`spring.threads.virtual.enabled` 是 Boot 3.2+ 的能力，且要求 JDK 21）。这一步的最大坑是 **Jakarta 命名空间迁移**：Boot 3 基于 Jakarta EE 9+，`javax.servlet.*`、`javax.persistence.*`、`javax.validation.*` 等要整体改成 `jakarta.*`，漏改的表现是编译不过或启动时类找不到。注意只有 Jakarta EE 的包改名，JDK 自带的 `javax.sql`、`javax.crypto` 等**不改**，别全局替换误伤。配套的还有 Spring Framework 6、Security 配置 API 变化，工作量按「一次大版本升级」评估，不要和升 JDK 混为一谈。
 
 语言基础总览见 [Java](开发语言/Java/Java.md)。
+
+## 实战案例
+
+### 案例一：record 当实体，字段改不动
+
+- 现象：把查询结果的 DTO 改成 record 后，某处代码想改其中一个字段再保存，编译报错；按普通类的直觉给 record 加 setter，也加不上。
+- 排查：原文第 6 节的疑难杂症——record 不可变是设计而非 bug。record 是 final 类、字段 private final、没有 setter，编译器生成构造器、访问器与 equals/hashCode/toString，组件访问器是 `name()` 而不是 `getName()`。原文第 5 节的判断表也写了：不要把 record 用在 JPA/MyBatis 实体上，实体需要可变字段和框架反射填充，和不可变 record 冲突。
+- 结论：要“改”状态就新建对象，或该类本就不该是 record。复用原文第 3 节的例子：`LoanApplyDTO(Long id, BigDecimal amt, String status)`，紧凑构造器只做校验（`amt == null || amt.signum() < 0` 时抛 `IllegalArgumentException("金额非法")`），不能写 `this.x = ...` 赋值，字段赋值由编译器自动完成。判断口诀按原文小技巧节：这个对象创建后字段还改不改——只读快照、接口 DTO、查询结果、事件对象用 record，JPA/MyBatis 实体、带 setter 的表单对象、需要继承扩展的用普通类。
+
+### 案例二：sealed 子类编译报错，类不允许继承 sealed 类
+
+- 现象：新加一个审批状态类去继承 sealed 接口，编译报错 `class is not allowed to extend sealed class`；同样的类继承普通接口就能编译。
+- 排查：原文第 6 节的疑难杂症——子类没写进 `permits`，或子类没声明 `final`、`sealed`、`non-sealed` 三者之一。复用原文第 3 节的例子：`sealed interface ApproveState permits Pending, Approved, Rejected`，三个子类分别是 `record Pending(String auditor)`、`record Approved(Instant at)`、`record Rejected(String reason)`，新状态必须先写进 `permits` 清单。
+- 结论：新状态先加进 `permits`，再给子类声明三者之一。sealed 的价值正在这里：对 sealed 类型做 switch 模式匹配时漏一个状态就编译报错，sealed 新增子类后旧 switch 也会直接编译失败，穷尽性在编译期检查。复用原文第 3 节的 switch 例子：`Pending p -> "待审，审批人=" + p.auditor()`，`Approved(var at) -> "已通过 " + at`，带 `when` 守卫的 `Rejected r when r.reason().isBlank() -> "驳回（无原因）"` 要放在普通 `Rejected r` 之前，否则通用分支会先匹配、把带守卫的分支吞掉。
 
 ## 小技巧与冷知识
 
