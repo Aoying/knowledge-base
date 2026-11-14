@@ -2,7 +2,7 @@
 知识点: LangGraph
 层级: 进阶
 适用版本: LangGraph 1.x（Python）
-更新日期: 2026-11-04
+更新日期: 2026-11-14
 关联:
   - Agent
   - Tool-Calling
@@ -188,6 +188,26 @@ app = b.compile()
 - 预制 Agent（如 `create_react_agent`）在新版本中逐步迁往 LangChain 的 agent 抽象下维护，自己拼图（StateGraph 手动连边）不受影响，且更利于理解原理，建议以手拼为主。
 - 来源：LangGraph 官方文档与 API 参考（StateGraph、checkpoint、interrupt 章节），2026-10 核对。
 
+## 实战案例
+
+以下两则只用原文已给出的写法与数字，不引入原文之外的事实。
+
+### 案例一：章节分析图校验失败后在抽取与校验之间往复
+
+现象：章节分析图在 LLM 抽取后 JSON 校验不通过，走条件边回到抽取节点重试；重试仍不通过时，图在抽取与校验之间往复，抽取节点被反复调用。
+
+排查：先看 State 里的 `retry_count` 是否随重试递增、条件边是否按该计数值分流；再看调用配置里的 `recursion_limit`，原文给出其默认值为 25 步，超限直接抛错（出处：原文 §3 进阶知识）。同时对照原文 §6 疑难杂症：条件边永远指回同一节点且没有计数器，就会无限循环烧 token。
+
+结论：按原文，章节分析图的校验失败重试带 `retry_count`，上限 2 次，而不是整条流水线重跑（出处：原文 §5 实战应用）；`recursion_limit` 默认 25 步是最后兜底，超限直接抛错（出处：原文 §3 进阶知识）。原文未展开：2 次耗尽后具体走向（例如结束、转人工处理或直接报错）原文未展开，不作定论；原文也未给出重试间隔或每次重试的 token 消耗数字，不作定论。
+
+### 案例二：批量章节分析用 Send 扇出时并发与合并同时出问题
+
+现象：批量章节分析按原文 `Send` 写法扇出后，模型调用量随章节数放大；同时并行 worker 写同一字段时图直接报错，不继续向下汇总。
+
+排查：先看扇出规模，原文明确写道，600 章全量扇出会同时打 600 次模型调用（出处：原文 §3 进阶知识）；调用时在配置里设 `max_concurrency` 限并发，本地 Ollama 场景先按显存与内存能并行的路数设，再按需放开（出处：原文 §3 进阶知识）。再查 `findings` 字段是否配了追加型 reducer，原文写法为 `Annotated[list[dict], operator.add]`；没有追加型 reducer，同一轮超步里多个 worker 写 `findings` 会直接报 `INVALID_CONCURRENT_GRAPH_UPDATE`，而不是悄悄覆盖（出处：原文 §3 进阶知识）。最后看超步预算，fan-out 与汇总都要消耗超步预算，`recursion_limit` 默认 25 步，层数一多就要显式调高（出处：原文 §3 进阶知识）。
+
+结论：节流靠调用配置里的 `max_concurrency`，不要在节点里循环调用子图，`Send` 才是为这种形态准备的写法（出处：原文 §3 进阶知识）；并行写同一字段必须配追加型 reducer，或者让各分支写各自的字段，再由下游汇总节点合并（出处：原文 §3 进阶知识、原文小技巧与冷知识）。原文未展开：600 章以外规模下合适的 `max_concurrency` 取值、以及深层嵌套扇出时应把 `recursion_limit` 调高到多少，原文未展开，不作定论；原文也未给出扇出后的实际耗时数字，不作定论。
+
 ## 小技巧与冷知识
 
 【小技巧】路由判断和状态更新是同一段逻辑时，让节点直接返回 `Command(update={...}, goto="下一节点")`，把“改状态”和“选路”合在一次返回里，不用再单写一个只读 State 的路由函数。但要注意分工：`Command(update=...)` 和 `Command(goto=...)` 是给节点返回值用的，不能当作 `invoke()` 的入参传进去；从外部恢复或继续对话时，入参只认 `Command(resume=...)`，其他写法传进去不会按预期工作。
@@ -226,6 +246,12 @@ app = b.compile()
 6. 静态边只能表达编译时确定的分支；Send 解决「运行前不知道要并行几路」的问题——路由函数返回一串 `Send("worker", {...})`，每份输入启动一次目标节点并行跑，跑完由 reducer 收结果、汇总节点合并（Map-Reduce）。并行 worker 写同一字段时，该字段必须配追加型 reducer（如 `Annotated[list, operator.add]`），否则报 `INVALID_CONCURRENT_GRAPH_UPDATE`；worker 的输入 State 可以与图 State 不同 schema；节流靠调用配置里的 `max_concurrency`，不要在节点里循环调用子图。
 
 ## 11. 关联知识
+
+### 前置知识
+
+- [Agent](AI与大模型/Agent/Agent.md)：先会裸写 ReAct 循环再学图，否则容易只会连线不懂循环为什么存在（引用原文 §11 关联知识）。
+- [Tool-Calling](AI与大模型/Agent/Tool-Calling.md)：ToolNode 本质是把工具调用循环标准化，工具本身的定义规范见该篇（引用原文 §11 关联知识）。
+- [MCP](AI与大模型/Agent/MCP.md)：图里的节点可以是 MCP 客户端，通过 MCP 发现的工具同样能挂进 ToolNode，协议细节见该篇（引用原文 §11 关联知识）。
 
 - Agent：LangGraph 是 Agent 四种设计模式（ReAct、Plan-and-Execute、Reflection、Multi-Agent）的工程化载体。
 - Tool-Calling：ToolNode 本质是把工具调用循环标准化，工具本身的定义规范见 Tool-Calling 篇。

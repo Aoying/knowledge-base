@@ -2,7 +2,7 @@
 知识点: Spring Cache 缓存抽象
 层级: 进阶
 适用版本: Spring Boot 2.7.3 / Spring Framework 5.3
-更新日期: 2026-11-05
+更新日期: 2026-11-14
 关联:
   - Spring-Boot
   - Redis
@@ -198,6 +198,82 @@ Caffeine 做一级、Redis 做二级时，一级缓存是每个 JVM 各一份的
 - 本地高性能需求可把 CacheManager 换成 Caffeine（`spring-boot-starter-cache` + caffeine 依赖，`spring.cache.type=caffeine`），注解不变——这正是抽象层的价值。
 - 多级缓存（一级 Caffeine 抗热点、二级 Redis 跨实例共享）没有开箱即用的官方实现，需要自定义 CacheManager 或引入专用组件，且要解决一级缓存的跨实例失效广播问题，不要低估复杂度，无明确瓶颈前不上。
 
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新概念，不补新数字，数字一律复用 §7 已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+### 注解如何生效：代理拦截与调用时点
+
+原文 §2 的结论是：入口是 `@EnableCaching`，不加则所有注解静默无效；`@Cacheable` 在调用前查缓存，命中直接返回、不进方法，未命中执行方法并回写；`@CachePut` 在调用后写缓存，方法必执行、结果覆盖缓存；`@CacheEvict` 删单个 key 或整表。把这组结论拆开，机制是同一条链：请求先经过 Spring 的 AOP 代理，代理按注解的时点决定查、写、删哪一步发生，业务方法本身只负责回源查库或写库。
+
+时点的差别决定了参数的求值顺序：`condition` 在调用前求值，决定这次查不查缓存；`unless` 在方法执行完后求值，决定这次的结果写不写缓存。原文 §2 的例子是 `unless = "#result == null"` 不缓存空值，而原文 §5 指出这等于放弃防穿透——同一行配置在读路径上是“不写空值”，在穿透防线上是“放过空值”，取舍要按缓存分别定，原文未展开给出每种数据该选哪一边的通用判定规则，不作定论。
+
+同一机制也解释了自调用失效：同类内 `this.getItem()` 不走 AOP 代理，`@Cacheable` 静默不生效。原文 §4 指出这与 `@Transactional` 自调用是同一个病根，解法同样是注入自身代理或拆类。原文未展开代理的创建细节与切面排序的具体做法，不作定论；排查时原文 §6 给出的单子是先确认是否加了 `@EnableCaching`、方法是否私有、类是否被 Spring 管理。
+
+### 存储如何切换：CacheManager 抽象与自动装配
+
+原文 §1 与 §3 的结论是：接口是 `CacheManager` / `Cache`，实现可以是本地 `ConcurrentHashMap`、Caffeine、Redis、EhCache，切换不动业务代码；Boot 引入 `spring-boot-starter-data-redis` 后自动装配 `RedisCacheManager`，`spring.cache.type=redis` 可显式指定。机制是注解只依赖抽象，真正建缓存、决定数据落在哪里的，是 `CacheManager` 这个实现层，Boot 按 classpath 上的依赖与 `spring.cache.type` 的显式指定来选装配哪一个实现。
+
+本地缓存一侧同样如此。原文 §7.1 的结论是：依赖在 classpath 上时，Boot 自动装配从 `ConcurrentMapCacheManager` 切换为 `CaffeineCacheManager`；`spring.cache.type=caffeine` 是显式指定，写不写效果一样，但写了意图更清楚。也就是说，注解写法不变，变的是 `CacheManager` 背后的存储实现，读多写少的字典、参数类数据因此可以在不改业务代码的情况下，从进程内换到跨实例共享的远端缓存，或反过来。
+
+按缓存分别配置的机制也在这里分叉：原文 §7.1 指出 `spring.cache.caffeine.spec` 对 `cache-names` 里列出的所有缓存一刀切，各缓存要不同策略时不能只靠 spec，改自定义 `CaffeineCacheManager` Bean，用 `setCaffeine` / `setCacheSpecification` 分别配。原文未展开自定义 Bean 的完整写法，不作定论；多级缓存（一级 Caffeine、二级 Redis）原文 §7.5 与 §8 均指出没有开箱即用的官方实现，同样原文未展开，不作定论。
+
+### 写路径为什么只删不更新：顺序错乱与事务窗口
+
+原文 §4 的结论是：读路径是标准的 Cache Aside，`@Cacheable` 查不到才查库回写；写路径的纪律是先更新数据库、再删缓存，不要用 `@CachePut` 去“同步更新缓存”当一致性手段。机制是顺序不可控：高并发下两个写请求交错时，`@CachePut` 写缓存的顺序可能与数据库提交顺序相反，缓存里反而留下旧值；先更新数据库、再删缓存，下次读时按 Cache Aside 回源重建，顺序错乱的影响只剩短暂不一致，再配合 TTL 兜底。
+
+事务把这个窗口又拉大了一步：`@CacheEvict` 默认在方法返回后执行，但如果方法在事务里，缓存删除发生的时点可能早于事务提交——删完到提交之间有读请求进来，又把旧值回写进缓存。原文 §4 给出的两种解法是把 evict 动作注册到事务提交后（`TransactionSynchronizationManager` 的 `afterCommit` 里执行），或给缓存切面与事务切面排 order 并接受最终一致；做不到这两点就老实接受短暂不一致加 TTL 兜底，并在选型时就排除强一致数据。原文未展开 `afterCommit` 的具体注册写法与切面 order 的具体取值，不作定论。
+
+### Caffeine 本地缓存：过期、刷新与淘汰如何分工
+
+原文 §7 的定量算例是 `spring.cache.caffeine.spec=maximumSize=10000,expireAfterWrite=10m,recordStats`（出处 §7.1）。把这串规约拆开：`maximumSize=10000` 约束条目上限，超过时按淘汰策略挤出旧条目；`expireAfterWrite=10m` 的计时起点是写入或最近一次替换值，到点即过期，下次访问重新回源，读多少次都不续命，字典、参数这类要求最多旧 10 分钟的数据用它（出处 §7.2）；`recordStats` 显式开启统计，否则 `Cache.stats()` 返回的计数全是 0（出处 §7.4）。
+
+过期与刷新是两条不同的线。`expireAfterWrite` 到期即过期；`refreshAfterWrite` 到期只变“可刷新”而非过期，首次访问到旧条目时异步刷新并立即返回旧值，刷新期间的并发请求也都读旧值，刷新抛异常会被记录后吞掉、旧值继续留着。关键的机制分界在原文 §7.2：`refreshAfterWrite` 只对 `LoadingCache` 生效，刷新走 `CacheLoader.reload(K, V)`；而 Spring 默认的 `CaffeineCacheManager`（只配 spec、没配 loader）建的是普通 `Cache`，不是 `LoadingCache`，只在 spec 里写 `refreshAfterWrite`、不配 `CacheLoader`，刷新永远不会发生，想用它要显式调 `CaffeineCacheManager.setCacheLoader(...)`。首次加载仍是同步的：缓存里没有该 key 时，`@Cacheable` 方法照常同步执行并回写，`refreshAfterWrite` 管不着第一次。
+
+淘汰的机制在原文 §7.3：近似 LRU（Window TinyLFU）——新条目先进一个很小的 LRU 窗口，窗口挤出的受害者由 TinyLFU 用 Count-Min Sketch 估算历史访问频率来裁决，频率高于主缓存受害者才准入主缓存，否则直接丢弃；既留得住刚来的热点，也防得住一波流的冷数据把高频旧条目挤走。由此 `maximumSize=10000` 直接决定这套策略的腾挪空间，调参没有通用最优值，看 `recordStats` 的命中率说话（出处 §7.3、§7.4）。过期是惰性淘汰：过期条目在下次访问、写操作或 `cleanUp()` 触发的维护时才被清理，但过期后读操作永远看不到它（出处 §7.2）。
+
+还有两条边界是同一机制的反面：`expireAfterAccess` 的计时起点是最近一次读或写，持续被访问的热点 key 计时器不断重置、永不过期，配了它就等于放弃了定时刷新，要求数据最多旧 10 分钟的场景必须用 `expireAfterWrite`（出处 §7.2）；`maximumSize` 与 `maximumWeight` 不能同时用，二选一，按条目数控用前者，按字节或权重控用后者（出处 §7.6）。`expireAfterWrite` 与 `expireAfterAccess` 同时配置时以谁为准，原文 §7.2 已明确标注待验证、未在官方文档中核实，原文未展开，本文不作定论。
+
+跨实例的一致性边界在原文 §7.5：Caffeine 做一级、Redis 做二级时，一级缓存是每个 JVM 各一份的独立副本，本实例 `@CacheEvict` 只清掉本机的一级缓存，其它实例的一级缓存还留着旧值，直到各自过期；跨实例失效要靠失效广播或接受一级缓存 TTL 内各实例读到的值可能不一致。原文未展开失效广播的具体实现，不作定论。
+
+## 实战案例
+
+### 案例一：只写了刷新规约，缓存到期后没有自动刷新
+
+现象：按原文 §7.1 的写法配了本地缓存，规约串里写了刷新，期望旧条目到期后自动刷新；实际到期后读到的仍是旧值，也没有见到刷新发生。
+
+```properties
+spring.cache.type=caffeine
+spring.cache.cache-names=dict,param
+spring.cache.caffeine.spec=maximumSize=10000,expireAfterWrite=10m,recordStats
+```
+
+排查：先按原文 §7.6 的提示查有没有配 `CacheLoader`，别先怀疑过期时间写错了。原文 §7.2 的机制是：`refreshAfterWrite` 只对 `LoadingCache` 生效，刷新走 `CacheLoader.reload(K, V)`；而 Spring 默认的 `CaffeineCacheManager`（只配 spec、没配 loader）建的是普通 `Cache`，不是 `LoadingCache`。只在 spec 里写刷新规约、不配 `CacheLoader`，刷新永远不会发生。
+
+结论：刷新不生效不是过期时间的问题，是缓存根本不是 `LoadingCache`。要生效需显式调 `CaffeineCacheManager.setCacheLoader(...)` 把缓存变成 `LoadingCache`；`@Cacheable` 的方法体仍是首次加载的回源逻辑，`CacheLoader` 只负责后续的异步刷新。原文未展开 `setCacheLoader` 的完整配法，不作定论。
+
+### 案例二：命中率上不去，分不清是容量不够还是过期太短
+
+现象：字典缓存按原文 §7.1 的算例配了 `maximumSize=10000,expireAfterWrite=10m,recordStats`，跑一段时间后命中率仍低，不知道该调大容量还是调长过期时间。
+
+```properties
+spring.cache.caffeine.spec=maximumSize=10000,expireAfterWrite=10m,recordStats
+```
+
+排查：原文 §7.4 的闭环是先开 `recordStats` 跑一段时间，再看命中率与淘汰数。临时排查直接读统计快照，复用原文 §7.4 已出现的写法：
+
+```java
+Cache dict = (Cache) cacheManager.getCache("dict").getNativeCache();
+CacheStats stats = dict.stats();
+double hitRate = stats.hitRate();          // 命中率
+long evictions = stats.evictionCount();    // 淘汰条数
+long misses = stats.missCount();
+```
+
+分清两种病因再下药：淘汰数高指向容量不够，`maximumSize=10000` 装不下工作集，窗口和主缓存都没有腾挪空间；miss 高但淘汰低指向过期太短，条目在 `expireAfterWrite=10m` 到点后反复过期回源。没开 `recordStats` 时这些计数全是 0，别拿 0 当“缓存没命中”去调参（出处 §7.4）。
+
+结论：命中率低先分清是容量不够还是过期太短，两种病因的药方不一样；调参没有通用最优值，看 `recordStats` 的命中率说话。另有一条底线要先排除：不设 `maximumSize` 等于无界增长，Caffeine 默认不做任何淘汰，过期时间不能代替容量上限（出处 §7.6）。
+
 ## 小技巧与冷知识
 
 【小技巧】`condition` 和 `unless` 的求值时点不一样，别混着用：`condition` 在方法调用前求值，决定“这次查不查缓存”；`unless` 在方法执行完后求值，决定“这次的结果写不写缓存”。两者可以叠加，比如 `condition = "#id != null"` 拦住空参数不查缓存，再配 `unless = "#result == null"` 让空结果不进缓存；只写一个，另一半的口子就还开着。
@@ -249,6 +325,13 @@ Caffeine 做一级、Redis 做二级时，一级缓存是每个 JVM 各一份的
 6. `refreshAfterWrite` 只对 `LoadingCache` 生效：到期后条目变「可刷新」而非过期，首次访问到旧条目时异步调 `CacheLoader.reload(K, V)` 刷新并立即返回旧值，刷新异常被记录后吞掉，旧值继续留着；`expireAfterWrite` 则是到期即过期，下次访问重新回源。Spring 默认的 `CaffeineCacheManager`（只配 spec、没配 loader）建的是普通 `Cache`，不是 `LoadingCache`——只写 spec 不配 `CacheLoader`，刷新永远不会发生；要生效需显式调 `CaffeineCacheManager.setCacheLoader(...)`。首次加载仍是同步的：缓存里没有该 key 时，`@Cacheable` 方法照常同步执行并回写，`refreshAfterWrite` 只管「已有旧条目的后续刷新」，管不着第一次。
 
 ## 10. 关联知识
+
+### 前置知识
+
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：自动配置与 starter，缓存与 Redis 的装配入口（引用原文 §3、§7.1）。
+- [Redis](数据库/Redis/Redis.md)：底层存储本身的数据结构与使用（引用原文 §3）。
+- [Redis 缓存问题与分布式锁](数据库/Redis/Redis-缓存问题与分布式锁.md)：穿透/击穿/雪崩与一致性的系统级对策，与本篇的注解落法对应（引用原文 §4、§5）。
+- [Spring 事务](开发语言/Java/Spring/Spring-事务.md)：代理自调用与切面顺序的同源问题（引用原文 §4）。
 
 - [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：自动配置与 starter，缓存与 Redis 的装配入口。
 - [Redis](数据库/Redis/Redis.md)：底层存储本身的数据结构与使用。

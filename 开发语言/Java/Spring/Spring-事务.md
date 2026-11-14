@@ -2,7 +2,7 @@
 知识点: Spring 事务
 层级: 进阶
 适用版本: Spring Boot 2.7.3 / Spring Framework 5.3
-更新日期: 2026-11-06
+更新日期: 2026-11-14
 关联:
   - Spring-Boot
   - Spring-IOC与AOP
@@ -177,6 +177,24 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 
 来源：MySQL 官方文档 `innodb_lock_wait_timeout`（默认 50 秒，语句级回滚）；OceanBase 官方文档 `ob_query_timeout` 默认 10000000 微秒（10 秒）、`ob_trx_timeout` 控制事务总时长；核验日期 2026-11-06。
 
+## 实战案例
+
+### 案例一：事务内一次 3 秒外部调用，连接池吞吐从 50 TPS 跌到 3.1 TPS
+
+**现象：** 一个标注 `@Transactional` 的 Service 方法在事务内调了一次 3 秒的外部接口，高并发下后续请求排队等连接，接口延迟放大。原文 §5、§8 已定性指出事务方法里禁止远程调用、发 MQ 等慢操作，长事务占着连接和行锁，高并发下先爆的是连接池。
+
+**排查：** 先按原文 §9 的连接池占用定量表核算。Spring Boot 2.7 默认 HikariCP，`maximumPoolSize` 默认 10；事务平均持连接 50ms（纯本地写）时 10 连接池的理论 TPS 上限为 200，平均持连接 200ms（几次查询 + 写）时为 50 TPS，含一次 3 秒外部调用、平均持连接 3.2 秒时仅为 3.1 TPS（原文 §9）。即一次 3 秒外部调用就把吞吐上限从 50 TPS 拉到 3.1 TPS。同时分清撞的是哪一层超时：`@Transactional(timeout)` 默认 -1（不限），超时只把事务标记为 rollback-only，方法体不会被中途打断，走到提交时直接回滚（原文 §9）；该方法的 timeout 实际配置值原文未展开，需核对代码，不作定论。
+
+**结论：** 把外部调用移出事务方法，事务只包本地写操作（原文 §5、§8）；批量任务另给 `timeout` 设上限，避免失控长事务堵住连接池（原文 §8）。外部调用的具体拆分方式原文未展开，不作定论。
+
+### 案例二：10 万条批量导入一个事务全包，失败一次全部重做
+
+**现象：** 10 万条批量导入包在一个事务里，一次失败全部重做；长事务期间快照让 OceanBase/MySQL 的旧版本无法回收，undo 持续膨胀，还可能撞上 `ob_trx_timeout` 或 Spring 的 `timeout` 被整批回滚（原文 §9）。
+
+**排查：** 对照原文 §9 的大事务分批定量：一个事务全包时锁持有时间等于全程，失败一次全部重做；改为每 1000 条一事务、共 100 个事务后，单批失败只重做本批，每批提交释放锁与连接，失败清单可落表重试（原文 §9，落表重试见原文 §5 的 NESTED 方案）。批大小取舍上，每批 1000 条是常用经验值（非官方数字）；批太小（<100 条）则事务开销占比上升、总耗时拉长；批太大则回到大事务的老路（原文 §9）。具体租户的 `ob_trx_timeout` 值原文未展开，原文 §9 只说明其因租户模板而异、上线前用 `SHOW VARIABLES LIKE 'ob_trx_timeout'` 实测，需以实测值为准，不作定论。
+
+**结论：** 按每 1000 条一事务分批提交，单批失败只重做本批；按“单批执行时间控制在 1 秒内”反推批大小，比死记数字可靠（原文 §9）。失败清单落表重试的完整实现原文未展开，不作定论。
+
 ## 小技巧与冷知识
 
 【小技巧】排障时先确认当前到底有没有事务：`TransactionSynchronizationManager.isActualTransactionActive()` 返回 true 才说明当前线程真的开着事务。方法上明明标了 `@Transactional` 却怀疑没生效时，在方法里打一行这个判断，比翻代理类、翻日志快得多；返回 false 就按原文第 6 节的失效表逐项排查，别先去调传播行为。
@@ -220,6 +238,14 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 5. 会把事务拖长：长事务一直占着数据库连接和行锁，高并发下先爆的是连接池，后续请求排队等待连接，延迟放大、甚至互相等连接卡死；同时长事务还会给 OceanBase 的 undo 带来压力。因此事务方法里禁止远程调用、发 MQ 等慢操作，应把耗时操作移出事务，或缩小事务范围、给批量任务设 timeout 上限。
 
 ## 11. 关联知识
+
+### 前置知识
+
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：注解与数据源配置是理解 `@Transactional` 生效的前提（原文 §2、§11）
+- [Spring IOC 与 AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)：声明式事务靠 AOP 代理与事务拦截器实现，代理机制是本篇的基础（原文 §4、§11）
+- [多数据源](开发语言/Java/多数据源.md)：多数据源下须在注解上显式指定 `transactionManager`，否则会用错管理器（原文 §6、§11）
+- [Flowable](工程实践/Flowable.md)：流程命令与业务表同事务提交的前提是共用同一个事务管理器（原文 §3、§11）
+- [MySQL 事务与 MVCC](数据库/MySQL/MySQL-事务与MVCC.md)：读已提交下长事务的快照成本与 MVCC 旧版本回收问题（原文 §9）
 
 - 前置：[Spring Boot](开发语言/Java/Spring/Spring-Boot.md)（注解与数据源配置）
 - 相关：[Spring IOC 与 AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)（代理机制）、[多数据源](开发语言/Java/多数据源.md)、[Flowable](工程实践/Flowable.md)（流程引擎事务整合）
