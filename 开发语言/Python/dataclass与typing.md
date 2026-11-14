@@ -2,7 +2,7 @@
 知识点: dataclass 与 typing
 层级: 基础
 适用版本: Python 3.10+
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Python
   - pydantic
@@ -111,6 +111,40 @@ ch = from_dict(Chapter, {"id": 3, "title": "重逢", "junk": 1})  # 多余字段
 - **注解 ≠ 校验**：`def f(x: int)` 传字符串照样跑；想要运行时拦截只有 pydantic 或手写检查。反过来，注解写错类型（如实际返回 None 却标 `-> Chapter`）会让 IDE 的提示变成误导，比不写更糟。
 - **继承 dataclass 时的字段顺序坑**：父类带默认值的字段会把子类字段全部"传染"成必须有默认值，设计继承体系时先想清楚，或用 `kw_only=True` 化解。
 - **`field(default_factory=list)` 写成 `default=list()`**：后者是定义时求值一次的共享实例，就是要避开的那个坑本身。
+
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新概念，不补新数字，数字一律复用 §X 已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+### 可变默认值为什么在定义期就被拦下来
+
+原文 §2 给出的规则是：直接写 `entities: list = []` 会报 `ValueError: mutable default`；正确写法是用 `field(default_factory=list)`，每个实例各拿一份新的列表。机制在于类属性级别的默认值会被所有实例共享——这与 Java 里静态字段被共享是同一个坑，Python 干脆在定义期就拦下来。`@dataclass` 按字段声明自动生成 `__init__`，字段的默认值直接落在类属性上；默认值是 `[]` 这种可变对象时，所有实例的 `entities` 指向的是同一个列表，`append` 改的就是同一份。`field(default_factory=list)` 把“默认值”换成“每次构造时调用一次的工厂函数”，每个实例构造时都新造一个列表，共享就断了。原文 §5 的 `from_dict` 助手也守同一条规则：字段对不上时直接 `Chapter(**d)` 会因多余键报错，助手先按 `dataclasses.fields(cls)` 过滤掉多余键再构造。
+
+### frozen 为什么不是深度不可变、又为什么能让实例可哈希
+
+原文 §6 的误区给出的结论是：`frozen=True` 不是深度不可变，字段里装的 list/dict 本身仍可改，冻结的只是属性绑定。机制在于冻结拦的是“属性绑定”这一步：`frozen=True` 让实例不可改属性（赋值抛 `FrozenInstanceError`），但字段值本身如果是 list/dict，改列表里的元素并不经过属性绑定，冻结拦不住。原文 §2 的附带好处是：`frozen=True` 的实例自动可哈希，可当 dict 的 key 或放进 set，适合表示“值对象”，如一条不可变的剧情事实 StoryFact。原文冷知识节补了一句：`frozen=True` 不保证对象一定可哈希，字段里只要有一个不可哈希的类型（如 list、dict），`hash()` 就会报 `TypeError`——冻结只保证“属性绑定不能改”，不保证“字段值本身可哈希”。所以把 frozen 实例当 dict 的 key 或放进 set 之前，要确认所有字段都是可哈希类型；含 list 的字段可以先转成 tuple，或者干脆不要指望它可哈希。复制并改一两个字段用 `dataclasses.replace(ch, summary="新摘要")`——对 frozen 类尤其有用，不可变对象靠 replace 产生新版本，正好对应 EntityState 的“状态变更生成新记录”模型（原文 §5）。
+
+### 类型注解为什么不等于校验
+
+原文 §6 的误区给出的结论是：注解 ≠ 校验，`def f(x: int)` 传字符串照样跑；想要运行时拦截只有 pydantic 或手写检查。机制在于类型注解在运行时默认不强制（Python 不会因为注解报错），它的价值在静态检查（IDE、mypy）和代码可读性（原文 §1）。注解是给工具看的声明，不是给解释器执行的检查：函数调用时解释器不看注解，只按位置传参。反过来，注解写错类型（如实际返回 None 却标 `-> Chapter`）会让 IDE 的提示变成误导，比不写更糟（原文 §6）。原文 §4 的经验分工把这条机制落到了边界上：dataclass 无运行时校验，pydantic 有；LLM 吐的 JSON 经 pydantic 验证后转成 dataclass 对象进入业务层，业务层里就不必再到处防空指针式地 `.get()`。
+
+### 边界用 pydantic、内部用 dataclass 的分工为什么这样划
+
+原文 §4 的表格给出的分工是：裸 dict 无校验、适合一次性脚本与透传；dataclass 无校验、标准库、进程内部传递的结构（主力）；TypedDict 无校验、描述外部 dict 的形状；pydantic 有校验、第三方、外部输入边界（LLM 输出、API 入参）；namedtuple 极轻量只读记录，现多被 dataclass 取代；attrs 部分校验、第三方，dataclass 的“完全体”，新项目一般不需要。经验分工一句话：边界用 pydantic 校验，内部用 dataclass 传递。机制在于校验有成本：pydantic 的校验在每次构造时都跑一遍，内部可信数据每传一次就校验一次是白花钱；dataclass 只在构造时按字段生成样板方法，不做运行时校验，内部传递零额外成本。原文 §4 的结论是：LLM 吐的 JSON 经 pydantic 验证后转成 dataclass 对象进入业务层，业务层里就不必再到处防空指针式地 `.get()`——dataclass + 类型注解让 IDE 直接标红拼错的字段名。
+
+## 实战案例
+
+### 案例一：tags: list = [] 写在 dataclass 字段上，两个实例的列表互相串
+
+- **现象**：Chapter 实例的 `entities` 列表在两个实例之间互相串：第 3 章的实体出现在第 5 章的列表里，章节分析结果越跑越乱。
+- **排查**：可变默认值（`tags: list = []`）是 dataclass 的头号坑：所有实例会共享同一份列表，必须用 `field(default_factory=list)`（原文 §4.3 引用的面向对象基础篇表述；本篇 §2 的原话是直接写 `entities: list = []` 会报 `ValueError: mutable default`）。对照本篇 §2 的 Demo：`entities: list[str] = field(default_factory=list)`，每个实例各拿一份新的列表；一旦写成 `entities: list = []`，默认值落在类属性上，所有实例的 `entities` 指向同一个列表，`append` 改的就是同一份。根子在默认值是类属性级别的：dataclass 按字段声明自动生成 `__init__`，字段默认值直接落在类属性上，可变对象一共享，实例之间就互相污染。
+- **结论**：可变默认值必须用 `field(default_factory=...)`（原文 §2）。`field(default_factory=list)` 写成 `default=list()` 是后者定义时求值一次的共享实例，就是要避开的那个坑本身（原文 §6）。派生字段用 `field(init=False)` 加 `__post_init__` 来算，不要让调用方传（原文小技巧节）。
+
+### 案例二：frozen 实例含 list 字段，当 dict key 时 hash 直接报 TypeError
+
+- **现象**：StoryFact 设了 `frozen=True`，想把它当 dict 的 key 做去重，`hash()` 直接报 `TypeError`，之前“冻结就能当 key”的预期落了空。
+- **排查**：`frozen=True` 不保证对象一定可哈希，字段里只要有一个不可哈希的类型（如 list、dict），`hash()` 就会报 `TypeError`（原文冷知识节）。对照本篇 §2 的 Demo：`@dataclass(frozen=True, slots=True)` 的 StoryFact 四个字段（subject、predicate、obj、since_chapter）全是 str 与 int，都是可哈希类型，所以它能当 key；一旦某个字段换成 list，冻结只保证“属性绑定不能改”，不保证“字段值本身可哈希”，哈希在字段值那一层就卡住了。根子在冻结与可哈希是两件事：冻结拦的是属性绑定，可哈希要求的是字段值本身可哈希。
+- **结论**：把 frozen 实例当 dict 的 key 或放进 set 之前，要确认所有字段都是可哈希类型；含 list 的字段可以先转成 tuple，或者干脆不要指望它可哈希（原文冷知识节）。`frozen=True` 的实例自动可哈希、可当 dict 的 key 或放进 set，适合表示“值对象”，如一条不可变的剧情事实 StoryFact——前提是字段本身都可哈希（原文 §2）。
 
 ## 小技巧与冷知识
 
