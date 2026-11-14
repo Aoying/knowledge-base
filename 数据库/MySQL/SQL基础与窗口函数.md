@@ -2,7 +2,7 @@
 知识点: SQL基础与窗口函数
 层级: 基础
 适用版本: MySQL 8.0+
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - MySQL-数据库
   - MySQL-索引与执行计划
@@ -354,6 +354,68 @@ FROM / JOIN → ON → WHERE → GROUP BY → HAVING → SELECT → DISTINCT →
 8. **LIKE 前导 `%` 走不了索引**：`LIKE '张%'` 可走索引，`LIKE '%张'` 不行；要全文检索需求用全文索引或 ES，别硬拼 LIKE。
 9. **UPDATE / DELETE 忘 WHERE**：见第 2 节，先 SELECT 确认行数再执行；生产删改优先逻辑删除。
 10. **把“能跑”当成“写对”**：小数据量下错的 SQL 也能跑出看似正确的结果（排序不稳定、NULL 判定、帧语义），上线前用边界数据（NULL、并列值、空组、单行组）各测一遍。
+
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新命令/参数，不补新数字，数字一律复用原文已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+### 为什么 WHERE 里不能用别名、聚合函数、窗口函数
+
+原文第 7 节执行顺序一共 9 步：FROM/JOIN → ON → WHERE → GROUP BY → HAVING → SELECT → DISTINCT → ORDER BY → LIMIT。WHERE 在第 3 步，SELECT 在第 6 步：别名是在 SELECT 阶段才产生的，WHERE 执行时别名还不存在，所以 `WHERE total > 100` 里 total 这个别名找不到。聚合函数同理：聚合在 GROUP BY 之后才算出来，WHERE 阶段还没有聚合结果，想过滤聚合结果要用 HAVING（第 5 步，在 GROUP BY 之后）。窗口函数更晚：原文第 6 节原话是"窗口函数是在 SELECT 之后执行的"，所以 WHERE 里既不能用窗口函数，也不能在 WHERE 里直接过滤窗口函数的结果，要包一层子查询或 CTE 再过滤。三条铁律原文第 7 节已经给了：SELECT 里才能用别名，WHERE 里不能用聚合函数，聚合结果过滤用 HAVING。
+
+### 为什么 RANK 并列跳号、DENSE_RANK 不跳号
+
+原文第 6 节给的三组序列是：ROW_NUMBER 1,2,3,4；RANK 1,2,2,4；DENSE_RANK 1,2,2,3。拆开讲计数规则：ROW_NUMBER 不管并列，每行一个唯一序号；RANK 按"前面有几行"编号——两个并列第 2 名占了第 2 位和第 3 位，下一名前面已经有 3 行，所以是第 4 名，中间跳过第 3 名；DENSE_RANK 按"前面有几个不同值"编号——并列第 2 名只算一个不同值，下一名前面只有 2 个不同值，所以是第 3 名，不跳号。用 SQLite 实测验证，演示取值金额 300、200、200、100 四行：ROW_NUMBER 得 1,2,3,4；RANK 得 1,2,2,4；DENSE_RANK 得 1,2,2,3，三组输出与原文第 6 节的序列逐字一致。NTILE(4) 是另一类：把结果集尽量平均分成 4 档，不是排名。
+
+### 为什么 LEFT JOIN 条件放 WHERE 会退化成内连接
+
+原文第 3 节原话分两句：ON 是"匹配规则"，WHERE 是"结果行过滤"。拆开讲：条件写在 ON 里时，不满足的右表行补 NULL，但左表行保留，这就是 LEFT JOIN"左表全保留"的语义；条件写在 WHERE 里时，过滤发生在连接之后，右表补 NULL 的行在 `右表.列 = 值` 这一关上结果是 NULL 而不是 TRUE，被滤掉了——左表没有匹配的行全部消失，LEFT JOIN 就退化成了内连接。原文第 3 节给的坑位原话是"LEFT JOIN 的条件放错位置（WHERE vs ON）"，属于 5 种 JOIN 里最容易踩的坑。实测见本篇实战案例二：3 个用户、2 人有订单，条件放 WHERE 只剩 2 行，放 ON 才是 3 行。
+
+### 为什么 NOT IN 遇 NULL 全灭
+
+原文第 5 节原话是"NOT IN 遇到 NULL 时结果是 UNKNOWN 而不是 FALSE，整行被滤掉"，第 8 节第 9 条是同一条误区。拆开讲：`x NOT IN (1, 2, NULL)` 要逐个比 `x <> 1 AND x <> 2 AND x <> NULL`，`x <> NULL` 的结果永远是 UNKNOWN，整条 AND 变成 UNKNOWN，WHERE 只保留 TRUE 的行，所以整行被滤掉——不是"有一行不符合"，而是"所有行都算不出来"。解法原文给了两个：改用 NOT EXISTS，或先排除 NULL。同一条线上的另一处：`COUNT(*)` 与 `COUNT(列名)` 的区别也在第 4 节，COUNT(列名) 不计 NULL 行；GROUP BY 里 NULL 会被归为一组，ORDER BY 里 NULL 默认排最前（升序时）。
+
+## 实战案例
+
+### 案例一：窗口函数三者排名实测，RANK 跳号、DENSE_RANK 不跳
+
+- **现象**：要给销售额排名，并列第二的两行在 RANK 下一名直接是第 4 名，业务以为排名算错了；换成 DENSE_RANK 后下一名是第 3 名，业务又以为少算了一名。
+- **排查**：用 SQLite 实测，演示取值金额 300、200、200、100 四行（演示数据，金额本身不是原文数据；三组输出与原文第 6 节给出的序列逐字一致）：
+
+```sql
+WITH amt(v) AS (VALUES (300),(200),(200),(100))
+SELECT v,
+  ROW_NUMBER() OVER (ORDER BY v DESC) AS rn,
+  RANK() OVER (ORDER BY v DESC) AS rk,
+  DENSE_RANK() OVER (ORDER BY v DESC) AS dr
+FROM amt;
+```
+
+| v | rn | rk | dr |
+|---|---|---|---|
+| 300 | 1 | 1 | 1 |
+| 200 | 2 | 2 | 2 |
+| 200 | 3 | 2 | 2 |
+| 100 | 4 | 4 | 3 |
+
+- **结论**：三组序列分别是 1,2,3,4 / 1,2,2,4 / 1,2,2,3，和原文第 6 节逐字一致。RANK 按"前面有几行"编号所以跳号，DENSE_RANK 按"前面有几个不同值"编号所以不跳；ROW_NUMBER 每行唯一，不管并列。选哪个看业务口径：要"第几名"用 RANK，要"第几档"用 DENSE_RANK，分页取 Top N 用 ROW_NUMBER。
+
+### 案例二：LEFT JOIN 条件放 WHERE，王五整行消失
+
+- **现象**：查"所有用户及其订单"，用了 LEFT JOIN，但没有订单的王五整行不见了，结果只有 2 行，业务以为王五这条用户数据丢了。
+- **排查**：用 SQLite 实测，演示数据取自原文第 2 节的示例表与金额（用户张三、李四、王五；订单 NO2026001 金额 99.00、NO2026002 金额 59.00，王五无订单）：
+
+```sql
+-- 错：条件放 WHERE，左表没有匹配的行被滤掉
+SELECT u.name, o.order_no FROM t_user u
+LEFT JOIN t_order o ON u.id = o.user_id WHERE o.amount > 0;
+-- 对：条件放 ON，不满足的右表行补 NULL，左表行保留
+SELECT u.name, o.order_no FROM t_user u
+LEFT JOIN t_order o ON u.id = o.user_id AND o.amount > 0;
+```
+
+实测结果：WHERE 版返回 2 行（张三、李四），ON 版返回 3 行（张三、李四、王五，王五的 order_no 是 NULL）。2 行与 3 行只差王五这一行，正好是 LEFT JOIN"左表全保留"的语义差。
+- **结论**：LEFT JOIN 的条件放 WHERE 会退化成内连接，原文第 3 节的坑位原话就是"LEFT JOIN 的条件放错位置（WHERE vs ON）"。规则是 ON 定匹配规则、WHERE 定结果行；想"左表全保留、右表按条件匹配"就把条件写进 ON。同一类错误还有第 3 节的另一条：UNION 模拟 FULL JOIN 时别漏了右表独有的行。
 
 ## 小技巧与冷知识
 
