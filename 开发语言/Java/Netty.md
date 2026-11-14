@@ -2,7 +2,7 @@
 知识点: Netty
 层级: 进阶
 适用版本: Netty 4.1.x
-更新日期: 2026-11-03
+更新日期: 2026-11-14
 关联:
   - Java-IO与NIO
   - 计算机网络
@@ -134,6 +134,91 @@ class EchoHandler extends SimpleChannelInboundHandler<ByteBuf> {
 - 误区：writeAndFlush 返回了就是对方收到了。它只表示数据进了内核发送缓冲，送达确认要靠应用层 ack。
 - 误区：把 Netty 的「零拷贝」理解成 sendfile。它主要是 ByteBuf 层面的逻辑合并与池化，与文件 sendfile 是两回事（见 NIO 篇第 5 节）。
 
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新概念，不补新数字，数字一律复用 §8 已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+### EventLoop 串行：一条连接只绑一个线程
+
+串行模型的核心是一条绑定规则（§2）：一条 Channel 从创建到关闭，只由一个 EventLoop 线程处理，该连接的所有 IO 事件和 handler 回调都在这一个线程里串行执行。串行执行的意思是同一连接的数据不会在两个线程里同时被处理，所以 handler 里处理同一连接的数据天然无并发，不用加锁——无锁不是因为没有共享状态，而是因为同一连接的访问被串行化到了一个线程上。
+
+这个结论的另一面是代价（§2）：EventLoop 线程既跑 IO 事件，也跑进其任务队列的普通任务和定时任务，handler 里一旦做阻塞操作，堵住的不只是当前这一次处理，而是该 EventLoop 线程后续要跑的所有事件和任务，挂在它上面的所有连接一起卡死。耗时业务要扔到业务线程池，或用 `DefaultEventExecutorGroup` 把某个 handler 单独绑到另一组线程上执行，本质都是把阻塞工作移出 EventLoop 线程，让串行链路只留非阻塞的事件处理。
+
+原文未展开：一个 EventLoop 同时管多条 Channel 时，各连接事件在该线程内的调度顺序与公平性，原文只说一个 EventLoop 同时管多条 Channel，未展开事件之间的排队与调度细节，不作定论。
+
+### Pipeline 双向传播：入站与出站走相反方向
+
+Pipeline 是挂在 Channel 上的双向链表，顺序由 addLast 的先后决定（§3）。入站事件从 head 往 tail 传，出站操作从 tail 往 head 反着走，两条方向相反是因为入站与出站的处理顺序天然相反：入站要先解码再做业务处理，出站要先经过业务侧的出站处理再编码写出，同一条链按相反方向走，恰好让编解码与业务 handler 各自落在正确的顺序上。
+
+事件靠手动接力（§3）：入站 handler 处理完要调 `ctx.fireChannelRead(msg)` 才传给下一节，不调就到此为止；异常往 tail 冒泡到 `exceptionCaught`。写数据时 `ctx.writeAndFlush` 从当前节往 head 走，`channel.writeAndFlush` 从 tail 全程走，结果可能不同，排查编解码没生效时先看用的是哪一个——编解码 handler 若在当前节的上游方向之外，从当前节出发的写操作根本不会经过它。
+
+原文未展开：异常冒泡到 tail 之后若仍无 handler 处理会发生什么，原文只说异常往 tail 冒泡到 `exceptionCaught`，未展开默认的兜底行为，不作定论。
+
+### ByteBuf：双指针、池化与引用计数是一套机制
+
+ByteBuf 对 ByteBuffer 的改进首先是双指针（§4）：readerIndex 与 writerIndex 分开，读和写各记各的位置，不需要 flip。flip 在 ByteBuffer 里是读模式与写模式之间切换指针的动作，双指针把它省掉，是因为读游标与写游标互不干扰，写完直接读、读完继续写都不用先切换模式。
+
+池化与引用计数是同一枚硬币的两面（§4）：默认 `PooledByteBufAllocator` 复用堆外内存块，高频分配不打 GC 和系统调用；池化意味着内存不是用完就由 GC 回收，而是要还回池子复用，还的凭证就是引用计数。谁最后用完谁负责 release，`SimpleChannelInboundHandler` 自动处理入站消息，自己把消息转发给异步线程池时必须 `retain()` 一份并在用完后 release，否则异步线程读到的是已被回收复用的脏数据——计数归零即回收，回收即可能被下一个分配复用，脏数据就是这么来的。
+
+原文未展开：池化分配器的分块与复用细节，原文只说默认池化复用堆外内存块，未展开内存块的切分、归还与复用过程，不作定论。
+
+### 背压与水位线：只通知、不拦截
+
+`writeAndFlush` 是异步的（§8）：调用返回只表示写请求已入队，不表示数据已发出。下游读得慢时 Netty 不会替调用方挡，写请求照单全收，攒在 `ChannelOutboundBuffer` 里等 socket 可写，生产者持续写，待发缓冲会无界增长，直到 OOM。这是长连接网关、代理转发最常见的内存事故形态，根因不在写得快，而在写请求入队与实际发出之间没有反压。
+
+水位线机制就是补上这个反压信号（§8）：每个 Channel 有一对水位线，`ChannelOption.WRITE_BUFFER_WATER_MARK`，默认值低水位 32KB、高水位 64KB。待发字节超过高水位 64KB，`channel.isWritable()` 变 false；排空回落到低水位 32KB 以下，变回 true 并触发 `channelWritabilityChanged` 事件到 pipeline。低水位与高水位之间留了一段回滞区间：恢复的阈值比触发的阈值低，避免待发字节在高水位附近来回抖动时可写状态反复翻转。
+
+标准用法是把信号接成动作（§8）：写之前先查 `isWritable()`，不可写时 `config().setAutoRead(false)` 暂停读上游，停止从 socket 拿新数据，也就停止产生新写请求；`channelWritabilityChanged` 里可写恢复时再 `setAutoRead(true)`。转发代理场景同理，出站 Channel 不可写时停掉入站 Channel 的 AUTO_READ，可写恢复后再开，背压就沿着链路反向传回了源头。
+
+三个边界条件决定了这套机制的用法边界（§8）：其一，水位线只管通知，不管拦截，不可写时继续 `writeAndFlush` 依然会入队，内存照涨，必须业务层自己停手，框架不会替调用方丢数据；其二，水位线按待发字节数算，不是按消息条数，一条 10MB 的大消息一次就能冲过高水位 64KB，大文件下发要分片写，每片写完查一次可写性；其三，默认值偏保守，64KB 高水位对高吞吐转发偏小，调大前先想清楚，连接数 × 高水位就是最坏情况下的待发内存上限，乘完再定——水位越高，单连接能积压的内存越大。
+
+水位线与 TCP 滑动窗口是两层机制（§8）：TCP 窗口挡的是对端发来的数据，Netty 水位线挡的是本进程攒着没发出去的数据，两层都要管，只管一层另一层照样爆。
+
+原文未展开：`channelWritabilityChanged` 事件在 pipeline 中的传播细节与默认处理，原文只说该事件会触发到 pipeline，未展开各 handler 是否需要显式处理它，不作定论。
+
+## 实战案例
+
+以下两则均按 §8 已核验的定量算例推演，不引入原文之外的数字与事实；现象、排查、结论三段均只用原文 §2、§8 已给出的结论与数字，代码只复用原文已出现的写法。
+
+### 案例一：一条 10MB 大消息一次冲过 64KB 高水位
+
+现象：按 §8 的算例，一条 10MB 的大消息一次就能冲过高水位 64KB。10MB 约为 64KB 的 160 倍（10240 / 64 = 160），单条消息的待发字节在一次写操作后就远超高水位，`channel.isWritable()` 变 false。此时待发缓冲里攒着整条大消息，要排空回落到低水位 32KB 以下、可写状态才会恢复，几乎整条消息都要先发出去，恢复不会很快到来。
+
+排查：先查可写状态与水位线（§8）：待发字节是否超过高水位 64KB，`channel.isWritable()` 是否已变 false，`channelWritabilityChanged` 是否已触发。再看写侧的用法：是否在写之前查了 `isWritable()`，不可写时是否 `config().setAutoRead(false)` 暂停读上游；若写侧是“一条大消息整条写出、写完才查可写性”，说明分片环节缺失——按 §8 的做法，大文件下发要分片写，每片写完查一次可写性，而不是整条写完再查。
+
+```java
+if (ctx.channel().isWritable()) {
+    ctx.writeAndFlush(msg);
+} else {
+    ctx.channel().config().setAutoRead(false);
+}
+```
+
+结论：这不是下游突然变慢，而是单条消息的体量本身就超过了水位线的度量单位（§8）：水位线按待发字节数算，不是按消息条数，一条 10MB 的消息一次写出，条数上只有一条，字节数上已是高水位 64KB 的 160 倍。解决方向在写侧分片与逐片查可写性，不在调大水位线——调大高水位只是把单连接能积压的内存上限抬高，按“连接数 × 高水位”算，最坏待发内存也跟着放大。
+
+原文未展开：分片大小取多少合适，原文只说大文件下发要分片写、每片写完查一次可写性，未给出分片大小的数值，不作定论。
+
+### 案例二：出站不可写时不停入站，待发缓冲无界增长
+
+现象：转发代理场景中，出站 Channel 的待发字节超过高水位 64KB，`channel.isWritable()` 已变 false，但入站 Channel 仍在以 AUTO_READ 读上游、持续产生新的写请求。写请求照单全收，攒在 `ChannelOutboundBuffer` 里等 socket 可写，待发缓冲无界增长，直到 OOM（§8）。水位线已经发出了不可写的信号，但信号没有接成停读的动作，背压没有沿着链路反向传回源头。
+
+排查：先确认信号是否发出（§8）：出站 Channel 待发字节是否超过高水位 64KB，`isWritable()` 是否为 false，`channelWritabilityChanged` 是否触发。再确认信号是否接成了动作：不可写时是否 `config().setAutoRead(false)` 停掉了入站 Channel 的读，可写恢复、排空回落到低水位 32KB 以下时是否 `setAutoRead(true)` 重新打开。若只查了 `isWritable()` 却没有停读，或停读后没有在恢复时重开，问题就在信号与动作的接线处，不在水位线本身。
+
+```java
+@Override
+public void channelWritabilityChanged(ChannelHandlerContext ctx) {
+    if (ctx.channel().isWritable()) {
+        ctx.channel().config().setAutoRead(true);
+    } else {
+        ctx.channel().config().setAutoRead(false);
+    }
+}
+```
+
+结论：水位线只管通知，不管拦截（§8）：不可写时继续 `writeAndFlush` 依然会入队，内存照涨，必须业务层自己停手，框架不会替调用方丢数据。本则的根因就是“只收到了通知、没执行停手”，补上“出站不可写时停入站 AUTO_READ、可写恢复后再开”这一环，背压才能反向传回源头；同时按“连接数 × 高水位”复核最坏待发内存，高水位 64KB 定下来之前先乘完再定。
+
+原文未展开：停读期间上游数据的去向，原文只说暂停读上游即停止从 socket 拿新数据，未展开停读期间上游侧的积压位置与恢复后的补读过程，不作定论。
+
 ## 小技巧与冷知识
 
 【小技巧】`writeAndFlush` 返回的 ChannelFuture 要挂监听器，别直接 `sync()`：`writeAndFlush(msg).addListener(ChannelFutureListener.CLOSE_ON_FAILURE)` 写失败才关连接，`sync()` 会阻塞当前线程。尤其别在 EventLoop 线程里调 `sync()` 等另一个 ChannelFuture——等的那一方也要同一个 EventLoop 执行，直接死锁；EventLoop 里一律用 addListener。
@@ -181,6 +266,12 @@ class EchoHandler extends SimpleChannelInboundHandler<ByteBuf> {
 6. writeAndFlush 是异步的：下游慢时写请求照单全收、攒在 ChannelOutboundBuffer 里等 socket 可写，生产者持续写会让待发缓冲无界增长直至 OOM。水位线机制的做法是：每个 Channel 有一对水位线（ChannelOption.WRITE_BUFFER_WATER_MARK，默认低 32KB、高 64KB），待发字节超高水位时 channel.isWritable() 变 false、排空回落到低水位以下变回 true 并触发 channelWritabilityChanged；标准用法是写前查 isWritable()，不可写时 config().setAutoRead(false) 暂停读上游、可写恢复时再 setAutoRead(true)，转发代理场景把背压沿链路反向传回源头。注意水位线只通知、不拦截：不可写时继续 writeAndFlush 依然入队，必须业务层自己停手；水位线按字节数算，一条 10MB 大消息一次就能冲过高水位，大文件下发要分片写、每片查一次可写性；调大高水位前要按“连接数 × 高水位”算最坏待发内存。
 
 ## 12. 关联知识
+
+### 前置知识
+
+- [Java IO 与 NIO](开发语言/Java/Java-IO与NIO.md)：本篇的原理底座，EventLoop 与 Selector 的对应关系（§2）须先理解 NIO 的大循环再看封装。
+- [计算机网络](计算机基础/计算机网络.md)：TCP 字节流与粘包的根源（§5），以及 TCP 滑动窗口与 Netty 水位线的两层关系（§8）须先理解 TCP 再区分。
+- [线程池](开发语言/Java/并发/线程池.md)：耗时业务扔到业务线程池的分工边界（§2），须先理解线程池再定 EventLoop 与业务线程池的分工。
 
 - [Java IO 与 NIO](开发语言/Java/Java-IO与NIO.md)：本篇的原理底座，Buffer/Selector/零拷贝都在那里。
 - [计算机网络](计算机基础/计算机网络.md)：TCP 字节流与粘包的根源。

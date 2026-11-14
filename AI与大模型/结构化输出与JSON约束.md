@@ -2,7 +2,7 @@
 知识点: 结构化输出与JSON约束
 层级: 进阶
 适用版本: 通用（Ollama / OpenAI 兼容接口）
-更新日期: 2026-11-03
+更新日期: 2026-11-14
 关联:
   - Tool-Calling
   - Prompt-工程
@@ -107,6 +107,37 @@ raise StructuredOutputError(...)  # 超限：落盘原始输出 + 报错，人�
 - **用正则从自然语言里「抠」数据**：能约束输出就别事后抠，抠取逻辑会随模型措辞漂移不断打补丁。
 - **校验失败静默返回空**：把失败伪装成「没有数据」，是长链路里最贵的 bug 形态。
 - **Schema 写得比业务还复杂**：嵌套过深、字段过多会反噬模型准确率；先拆任务，再简化 schema。
+
+## 实战案例
+
+### 案例一
+
+**现象：** 小说引擎章节分析链路的输出要直接回写 SQLite，输出包含 entities、entity_changes、relations、events、facts、rules 六类结构（原文「实战应用」一节）。其中 entity_changes 引用的实体在 Entity 表中查不到，relations 两端无法解析，输出形状上仍是合法 JSON，业务上却不能落库。
+
+**排查：** 按原文「基础知识：一条可靠的解析管线」一节的顺序排查：提取 JSON 主体后经 `json.loads` 解析，再走 Schema / pydantic 校验字段与类型，最后走业务校验，查枚举值、外键存在性与数值范围。本案例在前两步没有报错，是业务校验一环拦住了它——entity_changes 引用的实体必须已在 Entity 表中存在、relations 两端必须可解析，查不过就不许落库。排查时不把责任推给提取逻辑或语法：原文「实战应用」一节已说明，这类「输出即入库」场景里业务校验尤其关键，宁可整章分析失败重跑，不让半份脏数据进去。至于具体是哪一章的分析、引用的实体名是什么、重试后是否成功，原文未展开，不作定论。
+
+**结论：** 按原文「进阶知识：解析失败的重试策略」一节处理：把校验器的原始报错喂回去，只修正格式问题，重新输出完整 JSON，不要解释；重试上限一般 2–3 次（原文「进阶知识：解析失败的重试策略」一节），重试时保持低温度。重试耗尽必须硬失败：抛错并保存原始输出供排查，绝不允许「解析失败就当空结果继续跑」。本案例中重试要修的是引用不存在的问题，而不是把失败伪装成没有数据——原文「常见误区」一节指出，校验失败静默返回空是长链路里最贵的 bug 形态。
+
+### 案例二
+
+**现象：** 接口开了 JSON Mode，输出语法上是合法 JSON，但字段缺失、类型不对，下游仍无法使用。排查前容易误以为「开了 JSON Mode 就万事大吉」，原文「常见误区」一节已点明这是误区。
+
+**排查：** 按原文「核心概念」一节区分档位：JSON Mode 是接口级开关，如 OpenAI 兼容接口的 `response_format: {"type": "json_object"}`、Ollama 的 `format: "json"`，作用是保证输出语法是合法 JSON，仅此而已，字段缺没缺、类型对不对，它不管。字段与类型结构合规要靠 Schema 约束输出：把 JSON Schema 直接给到接口，解码时按 schema 限制可选 token。原文「小技巧与冷知识」一节还区分了两者的发布时间与写法：OpenAI 在 2024 年 8 月 6 日推出 Structured Outputs，`response_format` 用 `{"type": "json_schema", ...}` 加 `strict: true`，保证输出按 schema 来；原来的 `json_object` 只保证语法合法，不管字段。本地链路里 Ollama 的 `format` 传 schema 走的是 Structured Outputs 同类思路。排查时还要确认接口是否支持该档约束：原文「核心概念」一节指出 Schema 约束支持程度因接口而异，接入前实测。至于具体是哪个接口、哪个模型版本在本次排查中表现如何，原文未展开，不作定论。
+
+**结论：** 不要把 JSON Mode 当作字段与类型合规的保证；需要字段与类型合规时，改用 Schema 约束输出，并在程序侧再用 schema / pydantic 验一遍。程序侧校验仍不可少：原文「核心概念」一节指出，解码层保证的是「形状」，业务规则只能在程序层查。代码只复用原文已出现的写法，不引入新的调用方式：
+
+```python
+for attempt in range(MAX_RETRY):  # 上限一般 2–3 次
+    raw = llm_call(messages)
+    try:
+        data = parse_and_validate(raw)   # 解析 + schema + 业务校验
+        return data
+    except ValidationError as e:
+        messages.append({"role": "assistant", "content": raw})
+        messages.append({"role": "user",
+            "content": f"上面的输出不符合要求：{e}。只修正格式问题，重新输出完整 JSON，不要解释。"})
+raise StructuredOutputError(...)  # 超限：落盘原始输出 + 报错，人工介入
+```
 
 ## 小技巧与冷知识
 
