@@ -2,7 +2,7 @@
 知识点: Flowable-事件与监听器
 层级: 进阶
 适用版本: Flowable 6.7.2
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Flowable
   - 工程实践知识点地图
@@ -107,6 +107,26 @@ Flowable 没有原生的汇总节点元素，「各分支结论汇总到一处�
 4. **事件监听器里做重活**：全局监听器在引擎线程同步执行，查慢 SQL、调远程接口会拖慢每次任务办理；重活投递到自己的线程池或队列，监听器里只留轻量投递。
 5. **异步节点异常被吞**：异步 job 的异常不回到办理人请求里，接口返回成功、流程却死在死信表。上线清单里必须有死信表监控项。
 
+## 实战案例
+
+以下两则只用原文已给出的写法与数字，不引入原文之外的事实。
+
+### 案例一：监听器里注入的 Bean 全是 null
+
+现象：任务监听器用 class 挂法，里面 `@Autowired` 的字段全是 null，一跑就空指针。
+
+排查：class 挂法由引擎反射 new，不走 Spring 注入；要 Spring 注入必须用 `delegateExpression`。三种挂法按推荐度是 delegateExpression（Spring Bean，可注入、可测，首选）、class（全类名，引擎自己 new）、expression（轻量逻辑用）。
+
+结论：改用 `delegateExpression="${auditTaskListener}"`。监听器里的 Spring 依赖用构造器注入，别只留字段注入——字段注入在单测里还得靠反射塞值。
+
+### 案例二：异步节点挂了，接口却返回成功
+
+现象：接口返回成功，流程却死在死信表，办理人完全不知道。
+
+排查：异步 job 的异常不回到办理人请求里；job 抛异常自动重试，默认 3 次，耗尽进 `ACT_RU_DEADLETTER_JOB` 死信表。节点标 `flowable:async="true"` 后落一条 job 到 `ACT_RU_JOB`，由异步执行器捞起执行；执行器没开或线程池打满，表现就是「时间到了流程不动」。
+
+结论：修好后用 `managementService.moveDeadLetterJobToExecutableJob(jobId)` 把它放回重试，别直接改表；放回前先看异常堆栈确认根因已修好，否则放回后立刻又失败进死信；上线清单里必须有死信表监控项。
+
 ## 小技巧与冷知识
 
 【小技巧】流程级审计不用逐个节点挂监听器：ExecutionListener 可以直接挂在 `<process>` 元素的 `start` / `end` 上，流程启动和结束时各触发一次，在里面记开始时间、结束时间就能算出整条流程的耗时。节点级监听器只在需要定位“卡在哪一步”时再挂，流程级先搭好审计骨架。
@@ -138,6 +158,12 @@ Flowable 没有原生的汇总节点元素，「各分支结论汇总到一处�
 3. job 抛异常会自动重试，默认 3 次，耗尽后进入 `ACT_RU_DEADLETTER_JOB` 死信表。修好后用 `managementService.moveDeadLetterJobToExecutableJob(jobId)` 把它放回重试，别直接改表；另外异步 job 的异常不会回到办理人请求里，接口返回成功、流程却可能死在死信表，所以上线清单里必须有死信表监控项。
 
 ## 关联
+
+### 前置知识
+
+- [Flowable基础入门](工程实践/Flowable/Flowable基础入门.md)：流程定义、实例、任务与变量，监听器是挂在这些节点上的钩子（原文开篇与关联列表）。
+- [Flowable-多实例与网关](工程实践/Flowable/Flowable-多实例与网关.md)：分支结论从哪来，「汇总节点」的组合实现要读各分支写回的结论变量（原文关联列表与汇总节点一节）。
+- [Flowable-历史与部署](工程实践/Flowable/Flowable-历史与部署.md)：死信、作业的历史侧，异步 job 进死信表后的恢复与监控（原文关联列表与异步一节）。
 
 - 多实例与网关（分支结论从哪来）：[工程实践/Flowable/Flowable-多实例与网关.md](工程实践/Flowable/Flowable-多实例与网关.md)
 - 历史与部署（死信、作业的历史侧）：[工程实践/Flowable/Flowable-历史与部署.md](工程实践/Flowable/Flowable-历史与部署.md)

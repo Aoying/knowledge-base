@@ -2,7 +2,7 @@
 知识点: Flowable
 层级: 进阶
 适用版本: Flowable 6.7.2
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - 工程实践知识点地图
   - Java知识点地图
@@ -114,5 +114,10 @@ taskService.complete(taskId, variables);
 3. 逻辑超过 10 行、要复用或单测，选 `JavaDelegate`（`flowable:delegateExpression="${bean}"` 走 Spring Bean）；简单赋值/判断，选 `flowable:expression` 表达式或脚本任务。delegate 抛异常时整个事务回滚，想“失败继续”要把节点标异步、用边界错误事件接住。
 
 ## 关联知识
+
+### 前置知识
+
+- [DDD与架构设计](工程实践/DDD与架构设计.md)：流程引擎只做应用层编排、领域规则不进流程图的边界划分（原文关联知识节）。
+- [Flowable基础入门](工程实践/Flowable/Flowable基础入门.md)：流程引擎解决什么问题、核心概念、第一个请假流程从画图到审批跑通，本篇是它的全景汇总（原文子篇索引与开篇）。
 
 - [DDD 与架构设计](工程实践/DDD与架构设计.md)：流程引擎只做应用层编排、领域规则不进流程图的边界划分。

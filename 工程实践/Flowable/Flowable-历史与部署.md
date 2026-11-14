@@ -2,7 +2,7 @@
 知识点: Flowable-历史与部署
 层级: 进阶
 适用版本: Flowable 6.7.2
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Flowable
   - 工程实践知识点地图
@@ -91,6 +91,26 @@ runtimeService.createProcessInstanceMigrationBuilder()
 3. **history-level 中途调低**：从 full 改 audit 只对新数据生效，老明细还在；调高同理不补历史。改级别按「即时生效于新实例」理解，别指望它回溯。
 4. **图上线靠改库救火**：直接改 `ACT_RE_*` 里的定义或版本号，绕过部署与缓存，节点间状态不一致，出问题没法查。任何图变更只走部署 API。
 
+## 实战案例
+
+以下两则只用原文已给出的写法与数字，不引入原文之外的事实。
+
+### 案例一：重复部署把版本号刷爆了
+
+现象：应用每次启动都无条件 deploy 一遍，版本号无意义暴涨，还掩盖真正的变更。
+
+排查：同一份 BPMN 重复部署只会多产生一个版本而不报错；版本号是按 key 递增的，每个 key 的版本都从 1 开始、每次部署加 1，`corpLoan` 的版本 3 和另一个 key 的版本 3 互不相干。
+
+结论：部署前先按 key 加资源校验和判断是否已部署同内容版本，发布流程里做资源校验，避免「改了个空格多一版」。
+
+### 案例二：删部署把审计历史一起删了
+
+现象：`deleteDeployment` 带 `cascade=true` 执行后，审计历史查不到了，事后对账无据。
+
+排查：`cascade=true` 连运行与历史数据一起删；`cascade=false` 时有实例在跑删不掉。删部署前先用运行查询数一遍在途实例：`runtimeService.createProcessInstanceQuery().processDefinitionId(defId).count()`，count 为 0 再删。
+
+结论：删定义前先确认没有在途与待保留历史，生产禁用随手 cascade；清理历史先归档到历史库（或导出），再按保留期分批删，并避开业务高峰。
+
 ## 小技巧与冷知识
 
 【小技巧】历史清理作业默认是关闭的，开启前先把保留期对齐审计口径：默认每天凌晨 1 点清理 365 天前结束的实例（`flowable.enable-history-cleaning=true`、`flowable.history-cleaning-after=365d`），但审批流的审计保留期往往以年计，365 天未必够用。别照抄默认值就上线，先问合规要保留年限，再定清理周期，清理策略是合规决定不是纯技术决定。
@@ -120,6 +140,11 @@ runtimeService.createProcessInstanceMigrationBuilder()
 3. 把旧版本的 BPMN 重新部署一次，它会以最新版本号成为默认启动版本（内容是旧图、版本号是新的），比直接改库里版本号安全得多；要立刻止血也可以先用 `suspendProcessDefinitionById` 挂起出问题的新版本定义，让新单子暂时起不来。注意任何图变更只走部署 API，不要直接改 `ACT_RE_*` 里的定义或版本号救火。
 
 ## 关联
+
+### 前置知识
+
+- [Flowable基础入门](工程实践/Flowable/Flowable基础入门.md)：history-level 常用档位、部署四步链路的入门版，本篇是它的进阶展开（原文开篇与关联列表）。
+- [Flowable-多实例与网关](工程实践/Flowable/Flowable-多实例与网关.md)：会签节点内的驳回不要在多实例里画线，先让完成条件放行再整体跳转（原文回退一节）。
 
 - 事件与监听器（汇总节点、死信重试）：[工程实践/Flowable/Flowable-事件与监听器.md](工程实践/Flowable/Flowable-事件与监听器.md)
 - 案例（版本升级自然过渡的实战口径）：[项目沉淀/神农-e贷-审批流.md](项目沉淀/神农-e贷-审批流.md)

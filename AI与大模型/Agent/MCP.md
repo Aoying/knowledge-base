@@ -2,7 +2,7 @@
 知识点: MCP
 层级: 进阶
 适用版本: MCP 规范 2026-07-28
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Agent
   - Tool-Calling
@@ -149,6 +149,26 @@ if __name__ == "__main__":
 - **2025-03-26 版**：Streamable HTTP 取代旧的 HTTP+SSE 双端点传输；老教程里的 SSE 写法已过时。
 - **2026-07-28 版**（当前）：核心协议无状态化，移除 `initialize` 握手与会话 ID；sampling、roots 弃用；elicitation 保留。跟教程前先确认它针对哪个版本。
 - 来源：MCP 官方规范（modelcontextprotocol.io，架构与传输章节）与 Real Python MCP 词条，2026-10 核对。
+
+## 实战案例
+
+以下两则只用原文已给出的写法与数字，不引入原文之外的事实。
+
+### 案例一：Server 连不上，工具列表为空
+
+现象：Host 里看不到任何工具，模型自然也调不到。
+
+排查：先脱离 Host 用官方 Inspector 或手写 JSON-RPC 请求直连 Server 验证；stdio 场景最常见原因是启动命令的解释器路径不对、依赖没装进那个虚拟环境。排障先别进 Host，用 `npx @modelcontextprotocol/inspector` 直连——填好启动命令连上后就能看它到底暴露了哪些工具、资源和提示模板，还能当场填参数调一次、看原始 JSON-RPC 来回。
+
+结论：先确认 Server 本身能起来、工具清单能拉到，再回头查 Host 的配置与发现流程；比反复改 Host 配置、重启、看模型为什么不用某个工具要快得多。
+
+### 案例二：调用中途通信崩坏
+
+现象：工具调用到一半断了，Host 报错通信异常。
+
+排查：查 Server 是否往 stdout 打了日志或进度 print——stdio 传输下 Server 的 stdout 被协议占用，往 stdout 乱 print 会直接污染 JSON-RPC 流导致通信崩坏。调试日志只能打 stderr 或文件。
+
+结论：日志改到 stderr 或文件。模型看见工具却不用或乱用时，问题多在描述——和其他工具描述重叠、没写触发条件，先改描述，再考虑换模型。
 
 ## 小技巧与冷知识
 
