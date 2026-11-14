@@ -2,7 +2,7 @@
 知识点: TreeMap与红黑树
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - HashMap
   - LinkedHashMap与LRU
@@ -114,6 +114,29 @@ m.put("cd", 2);   // 比较结果 0，被当成同一 key，覆盖为 2，且 ke
 
 - `NavigableMap` 的 floor/ceiling/poll 等方法自 JDK 6 引入后稳定；JDK 8 起可配合函数式 API 使用，无结构变化。
 
+## 实战案例
+
+### 案例一：按长度比较的 TreeMap，“ab” 与 “cd” 只剩一个
+
+- **现象**：按字符串长度比较的 TreeMap，先 put “ab” 再 put “cd”，最后 map 里只剩一个键值对，key 还是 “ab”。
+- **排查**：TreeMap 判断“同一个 key”只看比较结果是否为 0，不看 equals（原文第 3 节）。复现代码就是原文第 3 节的例子：
+
+```java
+// 按字符串长度比较：长度相同即视为同一 key
+TreeMap<String, Integer> m = new TreeMap<>(Comparator.comparingInt(String::length));
+m.put("ab", 1);
+m.put("cd", 2);   // 比较结果 0，被当成同一 key，覆盖为 2，且 key 仍是 "ab"
+```
+
+对照原文第 10 节参考答案第 6 条：复现后 size 仍为 1，key 仍是“ab”，后 put 的值 2 覆盖了前一个的值 1。根子不在 put 的顺序，在比较器把“长度相同”等同于“同一个 key”。
+- **结论**：多级排序用 `Comparator.comparing(...).thenComparing(...)` 链起来，先比主字段、再比次字段（长度相同比字典序），比较结果为 0 才真正意味着“同一个 key”（引自原文小技巧节）。修复后“ab”与“cd”共存、size 为 2（原文第 10 节参考答案第 6 条的验证要点）。另两个同根的坑要一起避开：比较逻辑用了可变字段，put 之后字段变化会破坏树的有序性；比较器不满足传递性会悄悄插乱树结构且不报任何异常（原文第 3 节）。
+
+### 案例二：往 subMap 视图里 put 区间外的 key，直接抛异常
+
+- **现象**：取了 `map.subMap(10, 25)` 的视图，往视图里 put 一个 key 为 30 的元素，程序抛 `IllegalArgumentException`。
+- **排查**：subMap/headMap/tailMap/descendingMap 都是活视图，不是拷贝，改视图影响原 map，反之亦然；但视图写入有区间准入限制——向视图里 put 区间外的 key 抛 `IllegalArgumentException`（原文第 2 节）。边界本身也容易算错：`subMap(10, 25)` 默认左闭右开，取的是 [10, 25)，25 本身不在区间里；想含 25 得写四参数版 `subMap(10, true, 25, true)`（引自原文小技巧节）。所以 30 不在 [10, 25) 内，25 同样不在，put 两者都会被视图挡住。
+- **结论**：往视图里写之前先确认 key 落在区间内，越界的写操作改走原 map；区间边界含不含先把四个布尔参数想清楚，别靠“试一次看结果”定边界（引自原文小技巧节）。视图的正确用法是区间统计、批量删除这类“在区间里动”的操作，越界的写操作改走原 map。
+
 ## 小技巧与冷知识
 
 【小技巧】多级排序用 `Comparator.comparing(...).thenComparing(...)` 链起来，别只比一个字段：只比高位字段（比如只比分数）时，分数相同的不同 key 比较结果是 0，会被当成同一个 key 覆盖掉。链式比较器先比主字段、再比次字段（分数相同比学号），比较结果为 0 才真正意味着“同一个 key”；比较器写几级，取决于“几个字段合起来才能唯一区分一个 key”。
@@ -163,6 +186,12 @@ m.put("cd", 2);   // 比较结果 0，被当成同一 key，覆盖为 2，且 ke
 6. 自测思路：用“按长度比较”的比较器 put “ab” 再 put “cd”，复现 key 被覆盖（size 仍为 1，key 仍是“ab”）；改成长度 + 字典序两级比较修复。验证要点：修复后“ab”与“cd”共存、size 为 2；同时确认比较器满足传递性，整数比较用 Integer.compare、不要写 a - b。
 
 ## 11. 关联知识
+
+### 前置知识
+
+- [HashMap](开发语言/Java/集合/HashMap.md)：无序 O(1) 的对照组，原文第 1 节用它衬出 TreeMap 的 O(log n) 与顺序能力；原文第 4 节指出 HashMap 树化用的 TreeNode 只是同为红黑树思想、与 TreeMap 的 Entry 是另一套独立实现，读前先分清两者。
+- [LinkedHashMap与LRU](开发语言/Java/集合/LinkedHashMap与LRU.md)：同样“有序”，一个按 key 的值排序、一个按插入/访问排序，原文第 5 节选型对比以它为界；原文第 4 节指出 HashMap 的 TreeNode 正是继承自 LinkedHashMap.Entry，读前先知道这层继承关系。
+- [Queue与Deque](开发语言/Java/集合/Queue与Deque.md)：PriorityQueue 是堆实现的有序队列，与 TreeMap 的全序维护成本不同，原文第 11 节已将其列为关联知识；读前先分清“队头有序”与“全表有序”。
 
 - [HashMap](开发语言/Java/集合/HashMap.md)：无序 O(1) 的对照组；树化思想同源但实现独立。
 - [LinkedHashMap与LRU](开发语言/Java/集合/LinkedHashMap与LRU.md)：同样「有序」，一个按值排序，一个按插入/访问排序。

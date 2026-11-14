@@ -2,7 +2,7 @@
 知识点: LinkedHashMap与LRU
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - HashMap
   - TreeMap与红黑树
@@ -113,6 +113,20 @@ class LruCache<K, V> extends LinkedHashMap<K, V> {
 
 - 机制自 JDK 1.4 引入后基本稳定，无显著版本差异；JDK 8 起可直接用 HashMap 的函数式 API（`computeIfAbsent` 等），访问顺序模式下它们同样触发节点移位。
 
+## 实战案例
+
+### 案例一：访问顺序下遍历时 get，抛 ConcurrentModificationException
+
+- **现象**：一张 accessOrder=true 的 LinkedHashMap，正在遍历它时顺手调了一次 get，迭代器立刻抛 ConcurrentModificationException。
+- **排查**：访问顺序模式下 get 会把节点移到链尾，属于结构性修改，modCount 递增，正在进行的迭代器校验失败（原文第 6 节场景 1）。插入顺序模式下 get 不移位，遍历时 get 安全（原文同节），所以同样的代码在默认构造的表上跑得好好的，一换成访问顺序就炸。根子在“读也是写”：访问顺序下只有 get() 会把节点挪到链尾，containsKey 和 getOrDefault 内部直接调 getNode、不经过刷新顺序的钩子，查了等于没查（引自原文小技巧节）；get 命中会改链表、递增 modCount（引自原文小技巧节）。
+- **结论**：遍历期间不要 get；需要边遍历边查时先复制一份 key 列表（原文第 6 节场景 1）。想“摸一下”某个 key 让它变新就用 get，想“判断有没有”就用 containsKey，两个意图别用同一个方法混着办（引自原文小技巧节）。取“最久未访问的那一项”时直接取迭代器的第一个元素，别用 map.get(key)——后者会把这个刚要淘汰的节点又挪到链尾，查一次就把它“救活”了（引自原文小技巧节）。
+
+### 案例二：LRU 不淘汰，内存一直涨
+
+- **现象**：按原文第 3 节手写了一个 LRU 缓存，容量设了 3，跑了一阵发现内存一直涨，最久未访问的元素始终没有被淘汰。
+- **排查**：排查顺序是 accessOrder 是否传了 true、removeEldestEntry 是否重写且返回条件正确、是否只 put 不经过插入路径（原文第 6 节场景 2）。最常见的错是第一步：默认是插入顺序，LRU 要构造时第三参传 true 且重写淘汰方法（原文第 7 节）；传 false 也能“淘汰”，但淘汰的是最先插入的 FIFO，不是 LRU（原文第 6 节场景 2）。淘汰只在插入新 key 时触发，更新已有 key 不会淘汰：removeEldestEntry 只在 afterNodeInsertion 里被调用，put 已有 key、哪怕 size 早已超容，也不会触发任何淘汰（引自原文小技巧节）。
+- **结论**：对照原文第 10 节第 4 题的手推验证修完后的行为：容量 3，put 1、2、3 → 顺序 [1, 2, 3]；get 1 → 1 挪到链尾 → [2, 3, 1]；put 4 → 超容，淘汰链头 2 → 最终内容 [3, 1, 4]，链头 3 最久未访问、链尾 4 最新。手推的三步都对上，才算 LRU 真的在工作。另有两条同根的规矩：作为缓存必须给容量上限，无淘汰策略的 LinkedHashMap 当缓存用等于内存泄漏（原文第 5 节）；手写 LRU 没有过期、并发、统计、穿透保护，只适合简单场景，并发量大或需要过期直接上 Caffeine（原文第 5 节、第 7 节）。
+
 ## 小技巧与冷知识
 
 【小技巧】想“摸一下”某个 key 让它变新，别用 `containsKey` 或 `getOrDefault`：访问顺序下只有 `get()` 会把节点挪到链尾，`containsKey` 和 `getOrDefault` 内部直接调 `getNode`、不经过刷新顺序的钩子，查了等于没查。判断“有没有”用 `containsKey`、想“刷新访问时间”用 `get`，两个意图别用同一个方法混着办，缓存里“查一下在不在”顺手把热度刷掉是最常见的误用。
@@ -158,6 +172,12 @@ class LruCache<K, V> extends LinkedHashMap<K, V> {
 5. 本质区别：TreeMap 按 key 的值排序（自然顺序 Comparable 或构造时 Comparator），顺序与插入/访问无关；LinkedHashMap 按插入顺序或访问顺序排列，与 key 本身的大小无关。只要顺序不要范围查询用 LinkedHashMap；需要按值排序、范围查询用 TreeMap。
 
 ## 11. 关联知识
+
+### 前置知识
+
+- [HashMap](开发语言/Java/集合/HashMap.md)：父类，桶结构、扩容、树化都看它，原文第 4 节指出哈希表部分完全复用 HashMap；原文第 3 节的三个钩子方法正是 HashMap 增删流程里预留的回调，读前先知道回调埋在哪里。
+- [TreeMap与红黑树](开发语言/Java/集合/TreeMap与红黑树.md)：按 key 的值排序的有序 Map，与按访问/插入顺序是两种思路，原文第 10 节第 5 题以此设问；读前先分清“按值排序”与“按访问排序”。
+- [ArrayList与扩容](开发语言/Java/集合/ArrayList与扩容.md)：fail-fast 的 modCount 机制同源，原文第 6 节场景 1 的 ConcurrentModificationException 正是这套机制在起作用；读前先知道迭代器校验的原理。
 
 - [HashMap](开发语言/Java/集合/HashMap.md)：父类，桶结构、扩容、树化都看它。
 - [TreeMap与红黑树](开发语言/Java/集合/TreeMap与红黑树.md)：按 key 值排序的有序 Map，与按访问/插入顺序是两种思路。
