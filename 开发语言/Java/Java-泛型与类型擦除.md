@@ -2,7 +2,7 @@
 知识点: Java-泛型与类型擦除
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Java
   - MyBatis-Plus
@@ -250,6 +250,26 @@ Integer i = ints.get(0);             // ClassCastException 抛在这里！
 - **JDK 5**：泛型引入；擦除实现（为兼容 1.4 字节码）。
 - **JDK 7**：菱形操作符 `<>`，`Map<String, List<String>> map = new HashMap<>();`，右侧类型由左侧推断。
 - **JDK 8**：目标类型推断增强——`List<String> list = Collections.emptyList();` 不再需要写 `Collections.<String>emptyList()`。
+
+## 实战案例
+
+以下两则只用原文已给出的写法与数字，不引入原文之外的事实。
+
+### 案例一：两个重载方法编译报「相同擦除」
+
+现象：同时写 `void foo(List<String> a)` 和 `void foo(List<Integer> a)`，编译直接报错，两者具有相同擦除。
+
+排查：泛型只在编译期存在，编译后类型参数被擦除，两者擦除后签名一模一样，都是 `foo(List)`。原文第 1 节已说明运行期 `List<String>` 和 `List<Integer>` 是同一个 `Class` 对象，擦除是 Java 泛型与 C# 泛型最根本的区别。
+
+结论：想区分只能改方法名或加别的参数，泛型擦除是方法签名的盲区，不能靠泛型参数区分重载。
+
+### 案例二：没写转型的地方抛 ClassCastException
+
+现象：`List raw = new ArrayList<Integer>();`，`raw.add("oops");` 编译通过（只有警告），`List<Integer> ints = raw;` 也是警告，到 `Integer i = ints.get(0);` 这一行抛 `ClassCastException`——代码里明明没写转型。
+
+排查：`ints.get(0)` 处编译器自动插入了 `(Integer)` 强转，原文原理剖析一节已说明「没写转型却抛 ClassCastException」的真相就在这里；污染点在更早的地方——原生类型关掉了泛型检查，`raw.add("oops")` 把 `String` 塞进了本该装 `Integer` 的集合。
+
+结论：不要用原生类型；看到「没转型却报转型异常」，往上找 unchecked 警告和原生类型赋值，污染点一定在更早的地方。
 
 ## 小技巧与冷知识
 

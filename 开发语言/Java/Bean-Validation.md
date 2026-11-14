@@ -2,7 +2,7 @@
 知识点: Bean Validation 参数校验
 层级: 基础
 适用版本: Spring Boot 2.7
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Java
   - Spring-Boot
@@ -104,6 +104,50 @@ public class ValidateHandler {
 - 校验是第一道防线，不是唯一防线：金额、状态机流转这类业务规则放 Service 里再查一遍。
 - message 里别拼用户输入，防日志注入；对外返回的错误信息只给字段名与规则描述，不回显完整入参。
 
+
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新命令/参数，不补新数字，数字一律复用原文已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+### 注解与校验器的分工
+
+Bean Validation（JSR 380，校验注解规范）加 Hibernate Validator（默认实现）的分工是：注解声明「字段长什么样才合法」，框架在入参绑定后自动校验，业务代码不再写满屏 if 判空。它只管格式与范围这类无状态规则（非空、长度、正则、数值区间）；「客户状态必须正常」「额度够不够」这类要查库的业务规则不在它的范围，仍放 Service。Boot 2.3 起 web starter 里没有 validation，必须显式加 `spring-boot-starter-validation` 依赖。
+
+### 触发点机制
+
+`@Valid` 只在 Controller 入参与 `@Validated` 的 Service 方法上才触发；DTO 字段上的注解本身不会「自动」生效。非 `@RequestBody` 的散参数（`@RequestParam`、路径变量、方法参数直接是基本类型）要校验，注解标在参数上，且类上必须加 `@Validated`，触发的异常也换成 `ConstraintViolationException`，全局处理要单独接。
+
+### 级联机制
+
+嵌套对象要单独标 `@Valid` 才会级联进去校验；嵌套集合校验要双写：字段上 `@Valid` 加泛型上注解（`List<@NotBlank String>`），否则集合元素不校验。漏写任何一边，校验链就断在那一层，表现为「校验没生效」。
+
+### 分组机制
+
+新增与修改共用 DTO 时用分组：`@Validated(Create.class)` 与 `@Validated(Update.class)`，`@NotNull(groups = Update.class)` 按场景生效。分组接口是普通空接口。`@Valid` 不支持分组，`@Validated` 才支持——`@Valid` 没有 groups 属性，Controller 入参只写 `@Valid` 时，分组注解永远按默认组跑。最容易踩的坑是一旦用了分组，未指定 groups 的注解属于默认组 `Default`，触发时没带 `Default` 就不会校验；要么全字段都标组，要么触发时把 `Default.class` 一起带上。
+
+### 两条异常通道
+
+`@RequestBody` 校验失败抛 `MethodArgumentNotValidException`（表单绑定是 `BindException`），散参数与方法校验失败抛 `ConstraintViolationException`。全局处理两个都要接，只接一个，另一条路径就会漏成 500，是联调时最常见的「校验没生效」假象——其实校验生效了，只是异常没人接。
+
+## 实战案例
+
+以下两则只用原文已给出的写法与数字，不引入原文之外的事实。
+
+### 案例一：嵌套集合校验「没生效」
+
+现象：`LoanApplyDTO` 的 `materials` 是 `List<@NotBlank String>`，提交了含空字符串元素的材料清单，接口却直接通过了校验。
+
+排查：字段上漏标了 `@Valid`，嵌套集合根本没被级联校验；泛型上的 `@NotBlank` 只在字段 `@Valid` 存在时才对元素生效。原文第 3 节的规则是双写——字段上 `@Valid` 加泛型上注解，只写一个集合元素不校验。
+
+结论：字段补上 `@Valid`，与泛型注解双写。修完后同一请求返回字段级错误，`materials` 的空字符串元素被拦下。
+
+### 案例二：校验生效了，却返回 500
+
+现象：散参数校验失败（`@RequestParam` 上标了注解），接口返回 500 而不是参数错误，前端拿不到字段级提示。
+
+排查：全局处理只接了 `MethodArgumentNotValidException`，散参数失败抛的是 `ConstraintViolationException`，没人接就漏成 500。原文第 4 节明确要求两个异常都要接。
+
+结论：全局处理补接 `ConstraintViolationException`，与 `MethodArgumentNotValidException` 分开处理。修完后同一请求返回统一的参数校验失败响应，不再是 500。
 
 ## 小技巧与冷知识
 

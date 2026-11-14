@@ -2,7 +2,7 @@
 知识点: Druid 监控与慢 SQL 定位
 层级: 进阶
 适用版本: Druid 1.2.x
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Java
   - MyBatis-Plus
@@ -71,6 +71,46 @@ Boot 2.7 集成用 `druid-spring-boot-starter`，监控页账号密码走 `sprin
 2. 开 `remove-abandoned: true` + `remove-abandoned-timeout` 只能作临时止血和定位手段（它会在日志里打印疑似泄漏的堆栈），根因修掉后建议关掉，自动回收掩盖问题。
 3. 事务方法里调了慢的外部接口（HTTP 等待几十秒），事务全程占着连接——这类「长事务占连接」在监控页上看就是活跃连接高、SQL 却不慢，要把外部调用移出事务。
 
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新命令/参数，不补新数字，数字一律复用原文已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+### StatFilter 的统计机制
+
+Druid 的监控不是事后采样，是 Filter 链拦截每次 SQL 执行后记账：每条 SQL 的执行次数、总耗时、最大耗时、慢 SQL（超过 `slow-sql-millis` 阈值记慢日志）都在 StatFilter 里累计。`druid.stat.mergeSql=true` 时，参数不同的同构 SQL 合并成一条统计——`WHERE id = 1` 和 `WHERE id = 2` 只算一条，执行次数和总耗时是汇总值。想按参数值分开看是哪条具体 SQL 慢，可以把 mergeSql 关掉，但统计条目会随参数值爆炸；平时先看合并后的汇总，锁定某条再关合并下钻。
+
+### 连接池参数的作用链
+
+`max-active` 决定池子最多给出去多少连接，要和下游库的连接上限、实例数一起算——3 个实例各配 50，就是 150 个连接顶到库上。`max-wait` 是拿不到连接时的最长等待，超时抛 `GetConnectionTimeoutException`，设有限值是为了故障时快速失败；设成 -1 无限等会把故障拖成雪崩。`test-while-idle` 只在空闲连接上探活，借出时不校验；想借出时也验一次用 `test-on-borrow: true`，但每次借连接都要多跑一次 `SELECT 1`，高并发下这笔开销不划算。池打满时还要看 `WaitThreadCount`：有线程排队等连接才是「池太小」，没人排队更可能是长事务占连接。
+
+### Wall 的语义拦截
+
+Wall 不是靠正则表达式拦注入的：它是基于 Druid 自带的 SQL Parser 做语义分析后拦截的，先把 SQL 解析成语法树再判断合不合法。所以注释里藏注入、`UNION` 拼接这类靠正则很难拦全的花样它能认出来；反过来，复杂合法 SQL 被误杀也是因为解析器是按语法判的——误杀要从「语法」上找原因，而不是调正则。
+
+### 泄漏排查的判断链
+
+连接池打满的表现是 `max-wait` 超时、监控页活跃连接长期不降。排查顺序是先看监控页「连接池」与 SQL 统计，确认是真慢（某条 SQL 占着连接久）还是连接没还（业务代码拿了连接不关，多见于手写 JDBC 或流式查询没关流）。`remove-abandoned: true` 加 `remove-abandoned-timeout` 只能作临时止血和定位手段（它会在日志里打印疑似泄漏的堆栈），根因修掉后建议关掉，自动回收掩盖问题。
+
+## 实战案例
+
+以下两则只用原文已给出的写法与数字，不引入原文之外的事实。
+
+### 案例一：活跃连接长期不降，SQL 却不慢
+
+现象：监控页活跃连接长期满、又有线程在排队等连接，但 SQL 统计里没有慢 SQL，最大耗时也不高。
+
+排查：先看监控页连接池与 SQL 统计，区分真慢还是连接没还；本例是事务方法里调了慢的外部接口（HTTP 等待几十秒），事务全程占着连接——这类「长事务占连接」在监控页上看就是活跃连接高、SQL 却不慢。
+
+结论：把外部调用移出事务，事务只包数据库操作。`remove-abandoned` 只作临时止血和定位，根因修掉后关掉，不要靠自动回收长期掩盖问题。
+
+### 案例二：Wall 误杀真实 SQL
+
+现象：上线后某条多层嵌套的合法 SQL 被 Wall 拦下，抛 `WallFilterCheckException`，业务报错。
+
+排查：先确认是真违规还是方言差异——OceanBase（MySQL 模式）下个别语法与 MySQL 有细微差异，Wall 报错时先确认这一点；再在测试环境把核心 SQL 跑一遍 Wall，或者先开 `log-violation` 只记录不拦截，观察一段时间再转拦截。
+
+结论：Wall 可以逐项放行，`selectAllow`、`deleteAllow`、`updateAllow`、`insertAllow` 等是分开的开关，某类合法语句被拦先只放开对应的那一项，不要整个关防火墙；全局异常处理里给 `WallFilterCheckException` 一个明确的错误码，别混进「系统异常」里看不见。
+
 ## 小技巧与冷知识
 
 【小技巧】监控页里看到的 SQL 带问号占位符，是 StatFilter 默认把参数不同的同构 SQL 合并成一条统计：`druid.stat.mergeSql=true` 时，`WHERE id = 1` 和 `WHERE id = 2` 只算一条，执行次数和总耗时是汇总值。想按参数值分开看是哪条具体 SQL 慢，可以把 mergeSql 关掉，但统计条目会随参数值爆炸；平时定位慢 SQL 先看合并后的汇总，锁定某条再关合并下钻，别一上来就关。
@@ -106,6 +146,12 @@ Boot 2.7 集成用 `druid-spring-boot-starter`，监控页账号密码走 `sprin
 3. 先在测试环境把核心 SQL 跑一遍 Wall，或先开 `log-violation` 只记录不拦截、观察一段时间再转拦截；OceanBase（MySQL 模式）下先确认是真违规还是方言差异。直接关防火墙等于丢掉防注入、防误删全表那层保护。Wall 拦截抛 `WallFilterCheckException`，全局异常处理里要给它一个明确的错误码，别混进「系统异常」里看不见。
 
 ## 关联知识
+
+### 前置知识
+
+- [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)：SQL 最终由 MyBatis-Plus 发出，Druid 统计的 SQL 是它执行后的形态，慢 SQL 定位要先知道 SQL 从哪一层来（原文第 1 节与关联列表）。
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：数据源装配与 druid-spring-boot-starter 集成、监控页账号密码配置都在 Spring Boot 侧（原文第 3 节末尾与关联列表）。
+- [MySQL-数据库](数据库/MySQL/MySQL-数据库.md)：druid 慢日志定位到 SQL 后，EXPLAIN 看执行计划、索引优化都在这一篇（原文第 3 节慢 SQL 定位链路）。
 
 - [多数据源（dynamic-datasource）](开发语言/Java/多数据源.md)
 - [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md)
