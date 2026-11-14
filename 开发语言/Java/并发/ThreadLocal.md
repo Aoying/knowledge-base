@@ -2,7 +2,7 @@
 知识点: ThreadLocal
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-09
+更新日期: 2026-11-14
 关联:
   - Java-并发编程
   - 线程池
@@ -174,6 +174,46 @@ ttlPool.execute(() -> System.out.println(TRACE.get()));   // 池线程里也能�
 - `InheritableThreadLocal` 的拷贝只在新建线程时发生，与本节数字无关；本节数字按单个线程的 map 计，N 个线程就是 N 份相加，线程池线程数直接乘进泄漏总量。
 - 阈值比较的是 `size`：`size` 计的是表里 Entry 的个数，含未清理的过期 Entry 在被清掉之前的计数，所以过期 Entry 攒多了也会把 `size` 推过阈值、提前触发 rehash。
 
+## 实战案例
+
+### 案例一：线程池复用导致 ThreadLocal 残留串数据
+
+**现象：** 线上偶发串号：A 用户的请求读到了 B 用户的信息，重启后消失，压测时才复现。原文 §6 的排查口诀正好描述了这一类现象：“偶发串号、重启就好、压测才复现”，先查 ThreadLocal 清理点。原文 §4 指出，更现实的事故是串数据而不是 OOM：线程池复用线程，上一个请求 set 的用户信息没 `remove()`，下一个请求复用同一线程且入口漏 set 时，就会读到上一个用户的值，这是权限与隐私级事故，比泄漏更常见。
+
+**排查：** 先查清理收口是否在统一位置：原文 §4 的铁律是“凡 set 必有 finally remove”，收口放在过滤器/拦截器/切面统一做，不靠业务代码自觉；原文 §2 的标准姿势也是拦截器入口设置、请求结束在 finally 清理。逐个核对入口与出口：入口是否每次都 set，出口（包括异常路径）是否都进了 finally——原文 §7 明确指出，只在正常路径 remove 等于没清，remove 必须进 finally。确认是残留而非传值错误后，再按原文 §3、§4 的泄漏链条理解残留物：数据挂在每个 `Thread` 对象自己的 `threadLocals` 字段（`ThreadLocalMap`）上，key 是 ThreadLocal 实例（弱引用），value 是实际值；线程池线程常驻不死，key 被回收变 null 后 value 还在，这条 Entry 永远取不到、删不掉——原文 §4 指出 set/get 时的启发式清理只能顺手扫掉一部分过期 Entry，不能指望它兜底。堆侧的佐证按原文 §6 的口径：出现“老年代缓慢上涨且堆里大量业务对象被 ThreadLocalMap 引用”就是泄漏，`jmap` 堆转储顺引用链一查便知；具体用哪条 `jmap` 命令、转储后如何筛引用链，原文未展开。
+
+**结论：** 修复只做一件事：把清理收口到统一位置，用原文 §4 并发任务里的安全姿势，任务自己提交、自己清理：
+
+```java
+pool.execute(() -> {
+    try {
+        UserContext.set(uid);
+        doBusiness();
+    } finally {
+        UserContext.remove();
+    }
+});
+```
+
+同时用原文 §8.4 的 `N × M × S` 换算残留的量级（N 是线程池线程数，M 是每个线程 map 里未清理的 value 个数，S 是每个 value 的平均大小；`1 KB = 1024 B`，`1 MB = 1024 KB`）：同样是 200 线程 × 每线程 10 个 value，value 平均 1 KB 时泄漏总量为 `200 × 10 × 1 KB = 2000 KB ≈ 1.95 MiB`，value 平均 1 MB 时为 `200 × 10 × 1 MB = 2000 MiB ≈ 1.95 GiB`；原文 §8.4 的结论是泄漏规模对 S 是线性敏感的，value 里挂大对象时 M 不用大就够出事。量级之外还要看表长：原文 §8.2 指出 `INITIAL_CAPACITY = 16`，阈值 `16 × 2 / 3 = 32 / 3 = 10`（向下取整，不是 10.67）；一个线程里 ThreadLocal 实例数到 11 个时（`size = 11 ≥ 10`），表 16 第一次走到 rehash 门口，清完过期 Entry 后活 Entry 仍 ≥ 8 个（`10 − 10 / 4 = 8`）才翻倍到 32。残留 Entry 既会串数据，也会把 `size` 推过阈值——原文 §8.5 指出 `size` 计的是表里 Entry 的个数，含未清理的过期 Entry 在被清掉之前的计数，所以过期 Entry 攒多了也会提前触发 rehash。
+
+### 案例二：用 TransmittableThreadLocal 改造跨线程传递
+
+**现象：** 父线程 set 了 trace id，提交到线程池的异步任务里 `get()` 拿到的是 null，链路在异步一跳后断了。按原文 §5 的问题描述：`InheritableThreadLocal` 只在新建线程时继承，而线程池的线程是复用的、早建好了，父线程提交任务时的上下文根本传不进池线程；异步一跳，trace id、用户信息全丢。原文 §2 也已说明，`InheritableThreadLocal` 只是创建那一刻的浅拷贝，且与线程池完全不兼容。
+
+**排查：** 先确认丢失点在“提交—执行”之间，而不是父线程本身没 set：父线程内 `get()` 能拿到值、池线程内拿不到，且池线程是复用线程而非新建线程，就符合原文 §5 的失效模式；原文 §7 同样指出，在异步/池场景指望 InheritableThreadLocal 必丢，因为继承只发生在 new Thread 那一刻，池线程不新建。不要把排查方向放在反复 set 或换一个 ThreadLocal 实例上——原文 §3 指出数据挂在每个线程自己的 map 上，换实例只是换 key，池线程的 map 里本来就没有父线程那份值。
+
+**结论：** 按原文 §5 的解法改造：用 `TransmittableThreadLocal` 存值，再用 `TtlExecutors.getTtlExecutorService(pool)` 包装线程池——提交任务时捕获当前线程的全部 TTL 值、执行前回放到工作线程、执行后恢复，把池线程当一次性线程用。原文 §5 的示例形式如下：
+
+```java
+static final TransmittableThreadLocal<String> TRACE = new TransmittableThreadLocal<>();
+ExecutorService ttlPool = TtlExecutors.getTtlExecutorService(rawPool);
+TRACE.set("trace-123");
+ttlPool.execute(() -> System.out.println(TRACE.get()));   // 池线程里也能拿到 trace-123
+```
+
+改造后仍要 `remove()`：原文 §5 明确指出，用了 TTL 也仍然要 `remove()`，它解决的是“传得进去”，不解决“残留串扰”，执行后恢复机制反而更依赖入口值的正确设置。框架侧原文 §5 只给了对应物，未展开细节：Spring 的 `TaskDecorator`、链路追踪组件（MDC 透传）本质都在解同一个问题，自研时优先 TTL，接入现成框架时先查框架是否已内置传递，别叠加两套；TTL 依赖的引入方式与版本，原文未展开。改造是否生效的判断标准只按原文 §5：池线程里能拿到提交时刻父线程的值，且执行后恢复、不把本次的值残留给下一个任务。
+
 ## 小技巧与冷知识
 
 【小技巧】没 set 过的 `ThreadLocal.get()` 返回 null，不抛异常：普通 `new ThreadLocal<>()` 第一次 get 拿到的是 null，业务代码里直接 `.toString()` 或拆箱就会 NPE。原文第 2 节的 `withInitial` 就是治这个的——它给每个线程一个初始值，get 永远非空；不确定调用方会不会先 set 时，优先用 withInitial，别在每个 get 点写判空。
@@ -217,6 +257,15 @@ ttlPool.execute(() -> System.out.println(TRACE.get()));   // 池线程里也能�
 4. 表长 16 时阈值是 16×2/3 向下取整得 10，第 11 个 Entry 插入后 size 为 11，先启发式清理过期 Entry；清不掉且 size≥10 就 rehash，清理后 size 仍≥8（10−10/4）才翻倍到 32，否则只清理不扩容。
 
 ## 10. 关联知识
+
+### 前置知识
+
+- [Java-并发编程](开发语言/Java/并发/Java-并发编程.md)：本篇的汇总与全景，原文 §10 已列为关联知识，先读它再读本篇的 §3 原理与 §4 线程池的坑。
+- [线程池](开发语言/Java/并发/线程池.md)：线程复用的来源，原文 §4 的串数据与泄漏都以它为前提，§8.4 的 N 即线程池线程数。
+- [Async-异步](开发语言/Java/Async-异步.md)：异步编排中的上下文，原文 §10 已列为关联知识，与本篇 §5 跨线程传递（TTL）直接对应。
+- [volatile与JMM](开发语言/Java/并发/volatile与JMM.md)：先分清“隔离”与“同步”，再读本篇 §1（ThreadLocal 不是锁的替代品）与 §7（以为它能让变量线程安全是误区）。
+- [HashMap](开发语言/Java/集合/HashMap.md)：先理解哈希表与装载率，再读本篇 §3（开放地址法、线性探测）与 §8.2（ThreadLocalMap 阈值 2/3 与 HashMap 0.75 的对比）。
+- [JVM-内存模型](开发语言/Java/JVM/JVM-内存模型.md)：先理解弱引用、GC 与堆引用链，再读本篇 §3（key 弱引用、value 强引用）与 §4、§6（泄漏链条与 jmap 堆转储排查）。
 
 - 汇总与全景：[Java-并发编程](开发语言/Java/并发/Java-并发编程.md)
 - 复用线程的来源：[线程池](开发语言/Java/并发/线程池.md)

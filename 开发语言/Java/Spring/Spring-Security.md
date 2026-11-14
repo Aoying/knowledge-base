@@ -2,7 +2,7 @@
 知识点: Spring Security
 层级: 进阶
 适用版本: Spring Security 5.7 / Spring Boot 2.7
-更新日期: 2026-11-09
+更新日期: 2026-11-14
 关联:
   - Spring-Boot
   - 接口设计与文档
@@ -167,6 +167,97 @@ BCrypt 校验是纯 CPU 计算，不占内存、不等 I/O，多少次并发登�
 - 登录接口的 P95 延迟预算里，给 cost 12 预留约 250 ms 的哈希时间；预算不够就降成本，别让登录超时先爆。
 - 高峰期扛不住时先限流、后降成本：降成本是安全降级，要走变更评审，不能悄悄改一行配置就上线。
 
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新概念，不补新数字，数字一律复用 §9 已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+### 过滤器链的执行顺序与放行机制（§2）
+
+请求先进安全链、再到 Controller，这条主线在 §1 已定下，§2 讲的是链本身怎么组织。Boot 应用里，Servlet 容器只认一个过滤器入口，`DelegatingFilterProxy` 把它桥接到 Spring 管理的安全链上——容器与 Spring 各管一层，桥接是两者之间的接头。原文未展开桥接之外的细节，例如代理如何按 Bean 名查找目标链。
+
+一条请求可能走多条 `SecurityFilterChain`，按 URL 模式匹配，先命中先用。原文的例子是 `/api/**` 一条（无状态、接口口径）、`/admin/**` 一条（表单登录口径）：匹配上的那条链全程负责，没命中的链不参与。这就是“放行”的第一层含义——不是某个过滤器放行，而是请求一开始就被分流到某一条链；配错了 URL 模式，请求进的就不是你以为的那条链。§7 的“接口莫名被拦或莫名放行”正是这个机制的反面：多条链时请求命中了非预期链，匹配顺序按 Bean 定义顺序。
+
+链内的执行顺序是 §2 表格给出的骨干顺序：`SecurityContextPersistenceFilter` 打头，请求开始时从 Session 加载 SecurityContext、结束时存回；`UsernamePasswordAuthenticationFilter` 在中间处理表单登录提交；`ExceptionTranslationFilter` 负责把认证/授权异常翻译成 401 响应或跳登录页；链尾的 `AuthorizationFilter`（5.7 新名，原 `FilterSecurityInterceptor`）做 URL 授权判定，权限不够抛异常，再由前面的 `ExceptionTranslationFilter` 翻译成前端看到的状态码。原文明确标注这只是“骨干，不是全量”，完整的过滤器清单原文未展开。
+
+所以“放行”分三层：第一层是链的选择（先命中先用），第二层是链内每个过滤器按顺序各做一次判断或读写、通过就往下走，第三层是链尾授权判定通过才进 Controller。调试口径也在 §2 给出：启动日志开 `logging.level.org.springframework.security=DEBUG` 能看到实际生效的链顺序；排查“配置没生效”先确认请求命中的是哪条链，而不是先怀疑表达式写错。
+
+### 认证流程中 AuthenticationManager 与认证信息的流转（§3）
+
+§3 的认证流程是四步接力，认证信息每一步换一个形态，但始终是一份 `Authentication` 对象在流转。
+
+第一步，登录请求被认证过滤器拦下，生成一个未认证的 `Authentication`（含用户名、密码凭证）。注意这时它还只是“待认证”——用户名密码都在，但没人验过。
+
+第二步，这份未认证对象交给 `AuthenticationManager`（默认实现 `ProviderManager`），它逐个问链上的 `AuthenticationProvider` 谁能处理。原文未展开“逐个问”的失败处理细节，例如没有一个 Provider 能处理时框架如何收尾，不作定论。
+
+第三步，表单登录走 `DaoAuthenticationProvider`：调 `UserDetailsService.loadUserByUsername` 查用户，用 `PasswordEncoder` 比对密码，成功后组装带权限集合（`GrantedAuthority`）的已认证对象。查用户、比对密码、组装权限是三个不同的职责，分属三个组件：`UserDetailsService` 只管查账号、状态、角色，`PasswordEncoder` 只管比对，Provider 只管把结果拼成已认证对象。
+
+第四步，结果放进 `SecurityContextHolder`（内部是 ThreadLocal），后续授权与业务代码从这里取当前用户。ThreadLocal 决定了这份认证信息的生命周期：它随请求线程传递，换线程就丢——§7 的“异步/定时任务里取不到当前用户”就是这个机制的直接后果，需要在提交任务前显式捕获并传递，或把所需用户信息作为参数传下去。
+
+业务侧实现认证通常只需两件（§3 原文）：自己的 `UserDetailsService` 和密码编码器 Bean，其余流程框架托管。也就是说，认证流程的骨架是固定的，业务只在“查用户”和“编密码”两个点上插自己的实现。
+
+### 授权判定与 Boot 2.7 现行写法的取舍（§4）
+
+授权判定只认 `SecurityContext` 里的已认证对象，不直接关心你怎么登录的（§1 的主线）。判定分两层：URL 级是粗筛，先按路径定大规则；方法级是细筛，到“这个角色能点这个按钮/调这个方法”。
+
+5.7 起官方主推组件式写法（§4、§8）：不再继承 `WebSecurityConfigurerAdapter`（已废弃，见 §8），改成暴露 `SecurityFilterChain` Bean。原文 §4 的示例只给了一种链的写法：
+
+```java
+@Bean
+public SecurityFilterChain apiChain(HttpSecurity http) throws Exception {
+    http.antMatcher("/api/**")
+        .csrf().disable()
+        .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        .and()
+        .authorizeHttpRequests(auth -> auth
+            .antMatchers("/api/public/**").permitAll()
+            .antMatchers("/api/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated());
+    return http.build();
+}
+```
+
+这段配置同时体现了三处取舍。第一，`antMatcher("/api/**")` 定的是这条链的管辖范围，与 §2“先命中先用”的多链分流是同一机制。第二，`csrf().disable()` 只在纯接口、无浏览器表单时才关（§4 原文注释）；带浏览器 Cookie 会话的链不要关，§7 也提醒关了等于拆掉一层真实防护。第三，`sessionCreationPolicy(SessionCreationPolicy.STATELESS)` 配的是无状态口径，与 §2 例子里 `/api/**` 无状态、`admin/**` 表单登录的对照一致。
+
+授权表达式的取舍在 §4 写明：`hasRole` 匹配的是 `ROLE_` 前缀的权限，业务系统里更实用的是按权限点（菜单、按钮、接口）授权，角色只是权限点的集合。细粒度授权用方法级安全：`@EnableMethodSecurity`（5.7 新注解）+ `@PreAuthorize("hasAuthority('loan:approve')")`，权限点用字符串常量集中管理，不要散落在各处手写。`AuthorizationFilter` 在链尾做 URL 授权判定的内部细节原文未展开，不作定论。
+
+### 密码存储为什么用 BCrypt（§5，结合 §9）
+
+§5 的结论是“只用自适应哈希：`BCryptPasswordEncoder` 是默认选择”。“自适应”体现在两点上，一是成本因子可调，二是每个密码自带盐。MD5、SHA-1 裸哈希、以及“自己发明的加盐规则”一律不合格——原文只给了结论，没有展开裸哈希为什么不合格的攻击细节，原文未展开，不作定论。
+
+成本因子可调的意义要结合 §9 的定量算例看。BCrypt 的成本因子 `cost` 是指数：内部轮数是 `2^cost`，`cost` 每加 1，哈希耗时大约翻一倍（§9.1）。§9.1 的实测锚点是 AWS c7i.xlarge（Ubuntu 24.04）上的一组公开实测：cost 10 单次哈希约 62 ms，cost 11 约 125 ms，cost 12 约 249 ms，cost 13 约 498 ms；`new BCryptPasswordEncoder()` 的默认成本因子就是 10。把成本因子从 10 调到 12，单次哈希从约 62 ms 涨到约 249 ms，249 ÷ 62 ≈ 4.0 倍，即 2^2 = 4；再调到 13 则是 498 ÷ 62 ≈ 8.0 倍。所谓“自适应”，就是硬件变快了可以把成本因子往上调，让哈希耗时重新回到可接受的区间，而不是像固定轮数的哈希那样越跑越快、越跑越不安全。
+
+存储格式上，`DelegatingPasswordEncoder` 靠存储前缀分发：密文形如 `{bcrypt}$2a$10$...`，`{noop}` 是明文对比，只允许出现在本地调试，上生产前全局搜一遍清掉（§5）。前缀解决的是迁移问题：新旧算法的密文可以共存，登录时校验老算法、成功后按新格式重写密文，逐步洗库，而不是把编码器改回兼容明文。常见报错 `There is no PasswordEncoder mapped for the id "null"` 就是库里存了无前缀的老密文、与委托编码器对不上的表现（§5）。BCrypt 内部轮数之外的算法细节原文未展开，不作定论。
+
+## 实战案例
+
+### 案例一：登录成功却 403，未登录却跳登录页
+
+现象：用户能正常登录，登录成功后访问 `/api/admin/**` 下的接口却返回 403；另一组用户未登录直接访问受保护接口，浏览器跳登录页、接口调用方拿到的是跳转而不是 401。两个现象看似相反，排查用的是同一套流程（§3、§4）。
+
+排查：第一步先确认请求命中的是哪条链。按 §2 的调试口径开 `logging.level.org.springframework.security=DEBUG`，看日志里“Securing GET /xxx”走的是哪条链——§7 提醒，多条链时请求命中非预期链是最常见的“莫名被拦或莫名放行”，匹配顺序按 Bean 定义顺序。如果请求根本没进预期的 `apiChain`，问题在链的 URL 匹配，不在授权表达式。
+
+第二步，确认链对了之后，再沿 §3 的认证流转查：登录是否真的走完了四步。登录请求被认证过滤器拦下生成未认证 `Authentication`，经 `AuthenticationManager`（默认 `ProviderManager`）交给 `DaoAuthenticationProvider`，调 `UserDetailsService.loadUserByUsername` 查用户、`PasswordEncoder` 比对密码，成功后带权限集合的已认证对象放进 `SecurityContextHolder`。如果登录成功但权限集合里没有 `ROLE_ADMIN`，链尾 `AuthorizationFilter` 按 `.antMatchers("/api/admin/**").hasRole("ADMIN")`（§4 示例）判定必然是 403——登录成功只证明认证过了，不证明权限够了。
+
+第三步，对照 §4 的角色与权限分开的写法查表达式：`hasRole` 匹配的是 `ROLE_` 前缀的权限。如果权限点存的是 `loan:approve` 这种字符串、或角色存的是 `ADMIN` 却用了 `hasAuthority("ADMIN")` 原样比对，表达式与权限集合对不上，同样是 403。方法级 `@PreAuthorize("hasAuthority('loan:approve')")` 不生效时，先查 §4 的开关 `@EnableMethodSecurity` 有没有开——原文 §4 只给了注解名与用法组合，开关缺失时的具体静默表现原文未展开，只按 §4 的写法核对开关是否存在。
+
+第四步，未登录跳登录页的那一半是另一条分支：§7 写明，没认证（或凭证无效）是 401，未认证访问受保护资源时由认证入口点处理；已认证但权限不够是 403，由 AccessDeniedHandler 处理。两者在 `ExceptionTranslationFilter`（§2）里被翻译成不同的响应：浏览器表单链跳登录页是符合 §2 表格描述的正常行为，接口链则应按 §7 的口径与 [REST 接口设计](工程实践/接口设计与文档.md) 的状态码纪律对齐，给前端约定的 401，而不是让前端猜跳转。
+
+结论：登录成功却 403，优先按“链是否命中 → 权限集合里有没有 `ROLE_ADMIN` → 表达式是 `hasRole` 还是 `hasAuthority`”三步查，不要先怀疑登录本身；未登录跳登录页是认证入口点的正常翻译，与 403 的 AccessDeniedHandler 是两条分支，接口返回什么状态码要按 §7 的 401/403 区分约定，而不是把两者混成一种现象处理。
+
+### 案例二：成本因子从 10 调到 12，登录变慢了
+
+现象：上线时把 `BCryptPasswordEncoder` 的成本因子从默认 10 调到 12，登录接口 P95 明显变慢，有人怀疑是过滤器链太长拖慢了接口。按 §9 的三笔账定位。
+
+排查：第一步算哈希本身。§9.1 的表：cost 10 单次哈希约 62 ms，cost 12 约 249 ms，249 ÷ 62 ≈ 4.0 倍，即成本因子每加 1 耗时翻倍、加 2 翻两番（2^2 = 4）。再调到 13 是约 498 ms，498 ÷ 62 ≈ 8.0 倍。
+
+第二步算哈希在登录总耗时里的占比。§9.3 的拆分是查用户（DB 一次点查，约 5 ms）+ 密码哈希 + 其余（会话、响应，约 10 ms）。【算例 2】cost 10 时总耗时 62 + 5 + 10 = 77 ms，哈希占 62 ÷ 77 ≈ 80.5%；cost 12 时总耗时 249 + 5 + 10 = 264 ms，哈希占 249 ÷ 264 ≈ 94.3%。登录慢了约 264 − 77 = 187 ms，其中哈希一项就涨了约 249 − 62 = 187 ms——变慢的全部增量都在 BCrypt 上，DB 查用户那 5 ms 再怎么优化也几乎没有影响。
+
+第三步算过滤器链的开销，验证“链太长”的怀疑。§9.4：默认配置下一条 `SecurityFilterChain` 约有 15 个过滤器，单个过滤器只做一次判断或一次上下文读写，没有循环、没有 I/O，耗时是微秒级。【算例 3】按单个过滤器约 10 μs 估算，15 × 10 μs = 150 μs = 0.15 ms，按每过滤器 5–20 μs 的区间算总开销在 0.07–0.30 ms 之间。对比一次哈希：0.15 ÷ 249 ≈ 0.06%；相对一次 50 ms 的业务处理是 0.15 ÷ 50 ≈ 0.3%。过滤器链的开销连一次哈希的零头都不到，更不到业务耗时的 1%。
+
+第四步看并发容量，确认高峰期会不会更糟。§9.5：单核每秒可验次数 cost 12 是约 4.0 次/秒，cost 10 是约 16.1 次/秒。【算例 4】cost 12、单次 249 ms 时，1 次登录/秒占 0.25 核，5 次/秒占 1.25 核，10 次/秒占约 2.5 核；8 核机器的理论上限是 8 ÷ 0.249 ≈ 32.1 次登录/秒，同样 8 核、cost 10 时上限约 129 次/秒。1 分钟涌入 1000 次登录：cost 12 耗 CPU 约 1000 × 0.249 = 249 秒 ≈ 4.15 核·分钟，cost 10 只要约 62 秒。超过核数时请求不会报错，只会排队，登录接口的 P95 延迟会被 BCrypt 排队拖垮。
+
+结论：登录变慢的瓶颈在 BCrypt，不在过滤器链——cost 12 的一次登录里 94.3% 的时间都在等哈希，15 个过滤器只占 0.15 ms、约 0.06% 的哈希耗时。按 §9.7 的选型口径：默认用 `new BCryptPasswordEncoder()`（cost 10），确认压测通过后再上调到 12，不要一上来就写 12；登录接口的 P95 延迟预算里给 cost 12 预留约 250 ms 的哈希时间；高峰期扛不住时先限流、后降成本，降成本是安全降级，要走变更评审，不能悄悄改一行配置就上线。§9.6 也提醒：本节毫秒数是估算口径，锚点是一台 AWS c7i.xlarge 的公开实测，生产值以实测为准，调成本因子前先在生产同款硬件上跑一遍压测。
+
 ## 小技巧与冷知识
 
 【小技巧】`hasRole("ADMIN")` 和 `hasAuthority("ADMIN")` 不是一回事：`hasRole` 会自动给角色名补 `ROLE_` 前缀，实际匹配的是 `ROLE_ADMIN` 这个权限；`hasAuthority` 是原样比对，不补前缀。权限点存的是 `loan:approve` 这种字符串时用 `hasAuthority`，角色存的是 `ADMIN` 时用 `hasRole`，两者混用是最常见的“明明配了权限却 403”的原因。
@@ -214,6 +305,15 @@ BCrypt 校验是纯 CPU 计算，不占内存、不等 I/O，多少次并发登�
 6. 先看 BCrypt：cost 12 哈希约 249 ms、占登录 94%，cost 10 约 62 ms、占 80%；8 核机 cost 12 上限约 32 次/秒，10 次/秒占 2.5 核，超了会排队；15 个过滤器约 0.15 ms，仅为哈希的 0.06%，调成本前先实测。
 
 ## 11. 关联知识
+
+### 前置知识
+
+- [Spring-Boot](开发语言/Java/Spring/Spring-Boot.md)：本篇适用版本是 Spring Security 5.7 / Spring Boot 2.7（§11 已列为关联知识），Boot 的自动配置与项目基线是理解 §2 安全链如何被装配的前提。
+- [Spring-MVC基础](开发语言/Java/Spring/Spring-MVC基础.md)：§1 讲安全链拦在 DispatcherServlet 之前，§2 的 DelegatingFilterProxy 与链内顺序都建立在 MVC 请求入口分层之上。
+- [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)：§4 的组件式写法本质是暴露 SecurityFilterChain 与 PasswordEncoder 两个 Bean，理解 Bean 装配才能读懂 §4 的配置取舍。
+- [ThreadLocal](开发语言/Java/并发/ThreadLocal.md)：§3 的 SecurityContextHolder 内部是 ThreadLocal，§7 的异步线程取不到当前用户正是 ThreadLocal 换线程就丢的直接后果。
+- [REST 接口设计](工程实践/接口设计与文档.md)：§7 的 401 与 403 区分要与该篇的状态码纪律对齐，接口给前端时两者都要约定清（§11 已列为关联知识）。
+- [国密与加密体系](工程实践/国密与加密体系.md)：§5 的 BCrypt 自适应哈希与密码存储口径，与该篇的加密算法选型与敏感字段落库加密落地相关（§11 已列为关联知识）。
 
 - [Spring-Boot](开发语言/Java/Spring/Spring-Boot.md)：自动配置与项目基线。
 - [REST 接口设计](工程实践/接口设计与文档.md)：401/403 与统一错误口径的设计侧约定。
