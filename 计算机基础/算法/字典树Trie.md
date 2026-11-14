@@ -2,7 +2,7 @@
 知识点: 字典树Trie
 层级: 进阶
 适用版本: 通用
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - 数据结构与算法
   - 字符串算法
@@ -15,6 +15,12 @@
 # 字典树Trie
 
 以 Trie（字典树、前缀树）为主的深篇。主篇 [数据结构与算法](计算机基础/算法/数据结构与算法.md) 只给了提纲（前缀搜索、敏感词过滤）；字符串匹配的另一路 KMP 见 [字符串算法](计算机基础/算法/字符串算法.md)，本篇不重复。
+
+### 前置知识
+
+- [数据结构与算法](计算机基础/算法/数据结构与算法.md)：总纲只给了 Trie 的提纲（前缀搜索、敏感词过滤），本篇是该总纲下的展开，读前先定位 Trie 在数据结构中的位置（引言）。
+- [复杂度分析基础](计算机基础/算法/复杂度分析基础.md)：读懂本篇 O(L)、O(L + 结果规模) 等结论所必需（`## 复杂度与代价：和哈希、排序数组比`）。
+- [DFS与BFS搜索](计算机基础/算法/DFS与BFS搜索.md)：原文 `autocomplete` 用 DFS 枚举子树里的 is_end 路径，读懂这段代码需要先会 DFS 递归遍历（`## 插入、查询、前缀统计`、`## 自动补全与词频场景`）。
 
 ## Trie 是什么
 
@@ -118,6 +124,70 @@ L 是词长，N 是词库规模。Trie 的查询代价与词库规模无关，�
 - 删除词不能只把 is_end 改 False 就完事：还要沿路清理不再被任何词共享的孤链，否则删掉的词的前缀节点一直残留（空间泄漏）；偷懒的做法是只改 is_end，接受残留。
 - 空串：约定空串是否算一个词，插入和查询要一致，否则 search("") 的结果全看实现心情。
 - 前缀统计的 count 语义：是“经过该节点的词数”还是“以该节点为词尾的词数”，写代码前先定死；上面代码用的是前者。
+
+## 实战案例
+
+### 案例一：`search("ap")` 是 False，`count_prefix("ap")` 却是 3
+
+现象：词库只有 4 个词：`apple、app、apricot、banana`（原文 worked 例），词长分别为 5、3、7、6，总字符数 5 + 3 + 7 + 6 = 21。`ap` 明明是其中 3 个词的前缀，为什么 `search("ap")` 返回 False，而 `count_prefix("ap")` 返回 3？
+
+排查：本地运行原文 `## 插入、查询、前缀统计` 的代码，写法与原文完全一致：
+
+```python
+class TrieNode:
+    def __init__(self):
+        self.children = {}
+        self.is_end = False
+        self.count = 0  # 经过该节点的词数
+
+class Trie:
+    def __init__(self):
+        self.root = TrieNode()
+    def insert(self, word):
+        node = self.root
+        for ch in word:
+            node = node.children.setdefault(ch, TrieNode())
+            node.count += 1
+        node.is_end = True
+    def search(self, word):
+        node = self._walk(word)
+        return node is not None and node.is_end
+    def starts_with(self, prefix):
+        return self._walk(prefix) is not None
+    def count_prefix(self, prefix):
+        node = self._walk(prefix)
+        return node.count if node else 0
+    def _walk(self, s):
+        node = self.root
+        for ch in s:
+            node = node.children.get(ch)
+            if node is None:
+                return None
+        return node
+
+t = Trie()
+for w in ["apple", "app", "apricot", "banana"]:
+    t.insert(w)
+print(t.search("app"))          # True
+print(t.search("ap"))           # False
+print(t.starts_with("ap"))      # True
+print(t.count_prefix("ap"))     # 3
+print(t.count_prefix("app"))    # 2
+print(t.count_prefix("ba"))     # 1
+print(t.count_prefix(""))       # 0
+```
+
+本地实测输出与原文一致：`search("app")` 是 True，`search("ap")` 是 False，`starts_with("ap")` 是 True，`count_prefix("ap")` 是 3，`count_prefix("app")` 是 2。派生数（本地实测复算）：`count_prefix("ba")` 是 1（只有 banana 经过 ba 节点，1 = 词库中以 ba 开头的词数）；`count_prefix("")` 是 0，与原文 `## 小技巧与冷知识` 指出的坑一致（根节点 count 从未累加）；节点数（不含根）是 16，总字符数是 21，21 - 16 = 5，即公共前缀共享省下 5 个节点，与原文 `## Trie 是什么`“公共前缀只存一份”的说法一致。
+
+结论：`search` 看的是终点节点的 `is_end`，`ap` 只是前缀、不是词，所以是 False；`count_prefix` 看的是前缀节点的 `count`（经过该节点的词数），apple、app、apricot 都经过 ap 节点，所以是 3，apricot 在第二个 p 后走了 r 分支、不经过 app 节点，所以 `count_prefix("app")` 是 2。原文未展开：删除词后沿路 count 如何变化、孤链清理的具体代码，原文 `## 易错点` 只说了“要沿路清理孤链”，未给代码与 worked 例，此处不作定论。
+
+### 案例二：`autocomplete("ap")` 返回 3 个词，顺序从哪来
+
+现象：同一词库，`autocomplete("ap")` 得到 `['app', 'apple', 'apricot']`，共 3 个；`autocomplete("ba")` 得到 `['banana']`，共 1 个。3 + 1 = 4，正好是词库词数。为什么补全结果恰好是这 3 个，顺序又能不能保证是字典序？
+
+排查：复用案例一的 Trie 与原文 `autocomplete` 代码（`## 插入、查询、前缀统计`，定位到前缀节点后 DFS 枚举子树里所有带 `is_end` 的路径），本地实测：`autocomplete("ap")` 返回 `['app', 'apple', 'apricot']`，`len(...)` 是 3；`autocomplete("ba")` 返回 `['banana']`，`len(...)` 是 1；`autocomplete("app")` 返回 `['app', 'apple']`，`len(...)` 是 2；`autocomplete("xyz")` 返回 `[]`（前缀不存在，`_walk` 返回 None）。核对：`count_prefix("ap")` 是 3，`len(autocomplete("ap"))` 是 3，两者相等是因为两者数的都是同一组词（以 ap 开头的词）；`count_prefix("app")` 是 2，`len(autocomplete("app"))` 是 2，同理。
+
+结论：自动补全就是“前缀定位 + 子树 DFS 枚举 is_end 路径”，与原文 `## 自动补全与词频场景` 的说法一致；返回顺序在本例中是 `['app', 'apple', 'apricot']`，但原文 `## 小技巧与冷知识` 已指出这只是因为插入顺序恰好是字典序，Python 字典按插入顺序迭代，想稳定按字典序返回要在 DFS 时对 `children` 的键排序。原文未展开：按词频排序截断取前 N 个的具体实现，原文只说“截断取前 N 个（按词频排序）”，未给排序代码与 worked 例；词频统计的 `end_count` 也是原文只提思路（“再给 is_end 节点加一个 end_count，插入重复词时累加”），未给代码与 worked 例，两处均不作定论。
 
 ## 小技巧与冷知识
 
