@@ -2,7 +2,7 @@
 知识点: Stream 与 Optional
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Java
 标签:
@@ -76,6 +76,20 @@ String city = Optional.ofNullable(user)
 - **排序稳定性**：对已按某字段排序的流再 `sorted` 其他字段，Stream 对有序流保证稳定排序，List 流就是有序的，这点可以依赖。
 - 性能敏感的大循环还是老 for，Stream 的可读性优先于那点性能——前提是先确认它真是热点，别凭感觉在业务代码里到处回退 for。
 
+
+## 实战案例
+
+### 案例一：toMap 遇到重复 key 直接抛异常，报表接口偶发 500
+
+- 现象：按用户 id 建 Map 的接口平时正常，某天两个同名用户的数据一进来就抛异常，接口直接 500；复现时发现是 `Collectors.toMap(User::getId, u -> u)` 在 key 重复时没有合并函数。
+- 排查：原文第 1 节的规则——toMap 必须处理 key 冲突，否则重复 key 直接抛异常。复用原文第 1 节的例子写法：`Collectors.toMap(User::getId, u -> u, (a, b) -> a)`，冲突保留先出现的；不写第三个参数，重复 key 时收集器没有合并策略，只能抛异常。
+- 结论：toMap 一律写上合并函数，冲突策略按业务定（保留先出现、保留后出现、或合并成列表）。同理，分组统计用原文第 1 节的 `groupingBy(Order::getStatus, Collectors.reducing(BigDecimal.ZERO, Order::getAmount, BigDecimal::add))`，按状态分组统计金额，聚合逻辑写进收集器而不是事后循环累加。
+
+### 案例二：orElse 的默认值每次都先算，空值还调了 get()
+
+- 现象：查用户所在城市的链式调用里，默认值是调一次下游接口算出来的；即使 user 和 address 都有值，下游接口还是每次都被调到，多了一次无意义的调用。另一处代码用 `opt.get()` 取值，空时抛 `NoSuchElementException`，和 NPE 一样难定位。
+- 排查：原文第 3 节的规则——`orElse(默认值)` 的参数会总是先求值，默认值构造贵时用 `orElseGet(() -> ...)` 惰性构造；没有就该报错时用 `orElseThrow(() -> new BizException("..."))`，别调 `get()`。复用原文第 3 节的例子：`Optional.ofNullable(user).map(User::getAddress).map(Address::getCity).orElse("未知")`，默认值是廉价常量 `"未知"` 时用 orElse 没问题，默认值要现算时必须换 orElseGet。
+- 结论：默认值是常量用 orElse，要现算用 orElseGet，该报错用 orElseThrow；`map` 里别再 `return null`，返回 Optional 的 getter 用 flatMap 接，保持链式。组合上还有原文第 3 节的另一条：`filter` 可在链上加条件，`ifPresentOrElse`（JDK 9+）处理“有则消费、无则兜底”。
 
 ## 小技巧与冷知识
 

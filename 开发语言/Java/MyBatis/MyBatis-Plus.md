@@ -2,7 +2,7 @@
 知识点: MyBatis-Plus
 层级: 进阶
 适用版本: MyBatis-Plus 3.5.3.2
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Java
   - Spring-Boot
@@ -84,6 +84,19 @@ orderService.page(page, Wrappers.<Order>lambdaQuery().eq(Order::getStatus, statu
 - [解抵押平台](项目沉淀/解抵押平台.md)：MyBatis-Plus 与 MySQL → Oracle SQL 迁移
 - [神农-e贷-法人版](项目沉淀/神农-e贷-法人版.md)：企业级数据访问实战
 
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新命令/参数，不补新数字，数字一律复用原文已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+- **增强不替代的定位机制**：MyBatis-Plus 是在 MyBatis 之上做增强的工具层，不改 MyBatis 的 XML、注解 SQL 能力，额外提供通用 CRUD（`BaseMapper` 加 `IService`）、条件构造器（Wrapper）和插件体系（分页、乐观锁、防全表更新等拦截器）。定位判断：单表 CRUD 与简单条件查询用 MP 省样板代码；复杂多表关联、报表 SQL 仍写 XML，别硬用 Wrapper 拼，拼出来的链式调用可读性还不如 SQL（原文第 1 节）。
+- **拦截器链的组装机制**：3.4+ 起旧的 `PaginationInterceptor` 已废弃，统一走 `MybatisPlusInterceptor` 加内部拦截器链；拦截器顺序有讲究，分页建议放最后添加（官方建议多租户等改写 SQL 的拦截器在前、分页在后）。PageHelper 和 MP 分页插件二选一，混用会出两套 limit；神农项目栈里 PageHelper 1.4.3 与 MP 并存，落点是存量 XML 查询走 PageHelper、新代码走 MP 分页插件，同一条查询链路上只能出现一种，别叠加（原文第 2 节）。
+- **Lambda 包装器的解析机制**：Lambda 包装器能认出 `User::getName` 对应哪个列，靠的是 `SerializedLambda`——方法引用本质上是一个可序列化的 Lambda 对象，MP 通过 `LambdaUtils.extract` 取出它内部记录的实现方法名 `getName`，再按“去 get 首字母小写”的规则还原出属性名 `name`，最后映射到列。理解这一点就明白：Lambda 包装器不是编译期魔法，而是运行期把方法引用“拆开读”；自己写的方法引用必须指向真实的 getter，写成任意 Lambda 表达式它就解析不出来了（原文小技巧节）。
+- **分页的承载机制**：Service 层 `Page` 同时承载入参（当前页、每页数）与结果（total、records），物理分页由插件在 SQL 层拼 limit；复杂查询可关闭自动 count 后手写。分页对象传到 Controller 返回时，把 MP 的 `Page` 转成项目统一的分页响应结构，不要让前端直接依赖 MP 的 JSON 结构，升级时会被绑住（原文第 4 节）。
+- **逻辑删除与乐观锁的拦截机制**：`@TableLogic` 字段查询自动带 `deleted=0`，自定义 SQL 要自己拼条件；恢复数据、查已删数据的场景要绕开自动条件，别改全局配置迁就个例。乐观锁生效要两个条件缺一不可：实体加 `@Version`，且注册了乐观锁拦截器；更新行数为 0 表示版本冲突，要给业务一个明确的冲突提示与重试策略，而不是笼统报“更新失败”。Flowable 的表不要乱加 MP 乐观锁，引擎自己管版本（原文第 5 节）。
+- **批量插入的攒批机制**：`saveBatch` 默认 1000 一批，调大 batchSize；超大批量考虑原生 JDBC batch。MP 的 saveBatch 本质是攒批提交预编译语句，别期待它和 `rewriteBatchedStatements` 的驱动级批处理完全等价，百万级导入先小批量实测再定方案（原文第 5 节）。
+- **定量算例复用**：`saveBatch` 默认 1000 一批；`IdType.ASSIGN_UUID` 生成的主键是 32 位无横线的字符串（默认实现 `DefaultIdentifierGenerator.nextUUID()` 用的是 `UUID.randomUUID().toString().replace("-", "")`，不是带 4 个横线的标准 36 位形式），建表时主键列按 `varchar(32)` 留长度就够了（原文小技巧节）。本节不引入新数字。
+- **未展开的点**：原文没有给出各拦截器的完整执行顺序表与 Wrapper 生成 SQL 的完整映射规则，本节只拆解了定位、拦截器链、Lambda 解析、分页、逻辑删除与乐观锁、批量插入六条已有结论的机制；具体某条 SQL 为什么这样生成，以 MyBatis 原生篇的插件机制为准。
+
 ## 小技巧与冷知识
 
 【小技巧】`getOne` 查到多条会抛异常，想“只取第一条”用第二个参数：`getOne(wrapper, false)`，多条时不抛异常、直接返回第一条。默认的 `getOne(wrapper)` 等价于传 `true`，结果超过一条就抛 `TooManyResultsException`；按业务唯一键查用默认版兜底，查“最新一条”这类本来就可能多条的场景记得传 `false`，别让本该兜底的查询在线上炸掉。
@@ -121,6 +134,13 @@ orderService.page(page, Wrappers.<Order>lambdaQuery().eq(Order::getStatus, statu
 3. 两个条件缺一不可：实体加 `@Version`，且注册了乐观锁拦截器。更新行数为 0 表示版本冲突，要给业务一个明确的冲突提示与重试策略，而不是笼统报“更新失败”。
 
 ## 关联知识
+
+### 前置知识
+
+- [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)：starter 版本线与 Boot 对齐，MyBatis-Plus、Druid、Flowable 都要换支持 Boot 3（Jakarta）的版本，升级前逐个核对 release notes（原文关联知识节与第 6 节）。
+- [多数据源](开发语言/Java/多数据源.md)：同一套 MyBatis-Plus 代码，`@DS` 一标就切库；Mapper 与 SqlSessionFactory 的绑定关系也在该篇（原文关联知识节与第 6 节）。
+- [Druid](开发语言/Java/Druid.md)：连接池与慢 SQL 定位，批处理连接参数 `rewriteBatchedStatements` 的落点在该篇（原文关联知识节与第 5 节）。
+- [MyBatis 原生](开发语言/Java/MyBatis/MyBatis原生.md)：Plus 覆盖不到的复杂映射、动态 SQL 与插件机制，Wrapper 拼不出来的 SQL 最终都要回 XML（原文关联知识节与第 1 节）。
 
 - [Spring Boot](开发语言/Java/Spring/Spring-Boot.md)
 - [多数据源（dynamic-datasource）](开发语言/Java/多数据源.md)

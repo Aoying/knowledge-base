@@ -2,7 +2,7 @@
 知识点: Spring MVC基础
 层级: 基础
 适用版本: Spring Boot 2.7.3
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Spring-Boot
   - Spring-IOC与AOP
@@ -211,6 +211,32 @@ public class GlobalExceptionHandler {
 ## 7. 版本差异
 
 - Boot 2.7 线用 Spring Framework 5.3，Servlet 规范为 `javax.*`；Boot 3 线起换成 `jakarta.*`，升级时 `javax.servlet` 导入要全量改包名，见 [Spring Boot](开发语言/Java/Spring/Spring-Boot.md) 的升级路线图。
+
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新命令/参数，不补新数字，数字一律复用原文已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+- **请求链的流转机制**：一次请求的完整流程是 Tomcat → DispatcherServlet（前端控制器）→ HandlerMapping（按 URL 加 HTTP 方法找 Handler）→ HandlerAdapter（解析参数、调方法）→ HttpMessageConverter（序列化返回值）。拦截器在 HandlerAdapter 调用前后切入，异常由异常解析链（`@ExceptionHandler` / `@RestControllerAdvice`）接管。记住这条链，就能判断问题出在哪一环：404 是 HandlerMapping 没找到 Handler，参数绑定报错是 HandlerAdapter，返回格式不对是 HttpMessageConverter，统一异常没生效通常是异常解析链的配置问题（原文第 1 节）。
+- **参数绑定的来源机制**：`@PathVariable` 绑 URL 路径段，变量名须与占位符一致；`@RequestParam` 绑查询参数、表单字段，默认 `required = true`，缺参直接 400，可选参数写 `required = false` 或给 `defaultValue`；`@RequestBody` 绑请求体 JSON，只能用一次（输入流已消费），配合 `@Valid` 做校验；`@RequestHeader` 取 token、traceId 这类元数据；`@ModelAttribute` 把查询参数加表单绑定到对象，GET 查询条件封装成对象时用（原文第 2 节）。
+- **三层横切的分工机制**：过滤器在 Servlet 层，只能看到原始请求响应，适合编码、跨域这类与业务无关的事；拦截器能拿到 Handler（知道是哪个 Controller 方法），适合登录、权限这类“按接口区分”的逻辑；AOP 能切任意方法（含 Service 层）。拦截器三个方法的分工：`preHandle`（进 Controller 前，返回 false 即拦截）、`postHandle`（Controller 执行后、渲染前）、`afterCompletion`（整个请求完成后，适合记耗时日志、清理 ThreadLocal）（原文第 3 节）。
+- **全局异常处理的匹配机制**：`@RestControllerAdvice` 加 `@ExceptionHandler` 统一接管异常，`MethodArgumentNotValidException`（校验失败）转统一错误响应，`BizException` 转业务错误，兜底的 `Exception.class` 处理器必须有，否则未知异常会以 Tomcat 默认错误页、白页形式出去。同一个异常有多个 `@ExceptionHandler` 时，最具体的那个先生效，Spring 是按异常类型匹配度选的，不是按方法声明顺序（原文第 4 节与原文小技巧节）。
+- **内容协商的匹配机制**：客户端用 `Accept` 头声明想要的格式，服务端用 `produces` / `consumes` 声明能处理的类型，不匹配时返回 406 / 415；序列化由 `HttpMessageConverter` 负责，JSON 默认 Jackson。接口联调时先看这两个头，别一上来就怀疑业务代码（原文第 3 节）。
+- **定量算例复用**：原文第 3 节文件上传的原数——`max-file-size: 10MB`、`max-request-size: 20MB`，超过限制抛 `MaxUploadSizeExceededException`，同样进全局异常处理；上传路径示例为 `/data/upload`，只是示意，生产要做路径、文件名校验（防路径穿越）。本节不引入新数字。
+- **未展开的点**：原文没有给出 HandlerMapping 的具体匹配算法与内容协商的完整协商表，本节只拆解了流转、绑定、分工、异常与协商五条已有结论的机制；排障时以第 1 节的五步链逐环定位为准。
+
+## 实战案例
+
+### 案例一：404 但 Controller 明明写了，启动日志里没有映射
+
+- 现象：新写的接口调起来 404，Controller 类和方法都写了，代码看起来没问题；换别的老接口又能调通。
+- 排查：原文第 5 节的疑难杂症——先查三点：启动日志里有没有映射上（搜 `Mapped` 日志）、HTTP 方法对不对（GET 调了 POST 接口会 405 不是 404）、类上有没有漏 `@RestController` 或包扫描扫不到（启动类所在包之外）。按原文第 1 节的链定位：404 卡在 HandlerMapping 没找到 Handler，是第 2 步的问题，不是业务代码的问题。
+- 结论：启动日志搜 `Mapped` 确认映射是否注册上；方法不对先对 HTTP 方法（405 与 404 是两回事）；类漏注解或包扫描范围不对时，接口根本没进容器，代码写得再对也调不通。
+
+### 案例二：拦截器里读了 body，后续 Controller 读不到
+
+- 现象：登录校验的拦截器里读了一次请求体做验签，请求进了 Controller 后 `@RequestBody` 绑定失败，报输入流已消费；去掉拦截器的读 body 逻辑就正常。
+- 排查：原文第 5 节的疑难杂症——请求输入流只能读一次，拦截器里要读 body 须包一层可重复读的 RequestWrapper；只做登录校验的拦截器别碰 body。原文第 2 节也写了 `@RequestBody` 只能用一次（输入流已消费），拦截器先读走，Controller 就没得读了。
+- 结论：拦截器只做轻量校验（token、traceId 这类请求头），别碰 body；确实要读 body 时包一层可重复读的 RequestWrapper，让下游能再读一次。拦截器是请求必经之路，重业务（调数据库、调下游接口）放 Service 层，别塞进拦截器。
 
 ## 小技巧与冷知识
 

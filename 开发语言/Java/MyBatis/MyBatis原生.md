@@ -2,7 +2,7 @@
 知识点: MyBatis 原生
 层级: 基础
 适用版本: MyBatis 3.5 / Spring Boot 2.7
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - MyBatis-Plus
   - Java
@@ -152,6 +152,20 @@ try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.BATCH, fals
 - 本项目栈：mybatis-spring-boot-starter 2.2.2（MyBatis 3.5.9 线）+ MyBatis-Plus 3.5.3.2 + PageHelper 1.4.3，跑在 Spring Boot 2.7.3 上，三者版本成套看，别单独升大版本。
 - MyBatis 3.5.x：默认 `aggressiveLazyLoading` 已改为 false；其余小增补不影响存量 XML 写法。
 - PageHelper 的 API（`startPage`/`PageInfo`）在 1.4→2.x 间有变化，升级前先核对分页调用点。
+
+## 实战案例
+
+### 案例一：startPage 后隔了一条查询，分页分到了别人头上
+
+- 现象：列表接口调 `PageHelper.startPage()` 后，先跑了一条查字典的 SQL，再跑真正要分页的列表查询；返回的分页结果里总条数是字典表的，列表数据却没分页，一页把全量数据都吐了出来。
+- 排查：原文第 4 节的原理——PageHelper 本质是一个 MyBatis 插件，拦截 Executor 的 query，在执行前根据 `PageHelper.startPage()` 放进 ThreadLocal 的分页参数改写 SQL（拼 limit）并先跑一条 count 查询。由此可推：`startPage` 后紧跟的第一条查询才被分页，中间隔了别的查询就分错；原文参考答案第 2 条也是这个结论。
+- 结论：`startPage` 必须紧贴在要分页的那条查询之前，中间不隔任何别的查询。异常路径下 ThreadLocal 没清掉会污染同线程下一次查询，分页参数的清理要走 finally。PageHelper 与 Plus 分页拦截器二选一，混用会拼两套 limit；神农项目栈里 PageHelper 1.4.3 与 MP 并存，存量 XML 查询走 PageHelper，新代码走 MP 分页插件，同一条查询链路上只能出现一种。
+
+### 案例二：排序字段直接 ${} 拼接，前端传什么就拼什么
+
+- 现象：列表接口的排序参数 `orderBy` 由前端传，代码里直接写 `${orderBy}` 拼进 SQL；安全扫描报 SQL 注入，传 `id; DROP TABLE loan_apply` 这类值时直接进了 SQL 文本。
+- 排查：原文第 6 节的疑难杂症——前端传的 `orderBy` 直接 `${orderBy}` 拼接被注入。原文第 2 节的规则：`${}` 是字符串直接拼接，只允许用于表名、列名、排序字段这类不能用占位符的位置，且值必须经枚举、白名单校验；`${}` 拼用户输入就是教科书级 SQL 注入。`#{}` 是预编译占位符、走 PreparedStatement 设值，天然防注入，默认永远用它。
+- 结论：排序字段、方向后端用枚举白名单映射，前端只传枚举 key，非法值直接拒绝。复用原文第 6 节的原数口径：批量插入拼出的多值 VALUES 超过 `max_allowed_packet` 时分片提交（每 500 条一刀），不要调大参数硬扛；BATCH 执行器下每 1000 条 flush 加提交一段，别一口气攒百万条。
 
 ## 小技巧与冷知识
 

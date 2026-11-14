@@ -2,7 +2,7 @@
 知识点: Spring Boot
 层级: 进阶
 适用版本: Spring Boot 2.7.3
-更新日期: 2026-10-31
+更新日期: 2026-11-14
 关联:
   - Java
   - MyBatis-Plus
@@ -99,6 +99,31 @@ mybatis-plus:
 
 > 来源（2026-10-20 核验）：[spring-boot-4](https://www.danvega.dev/blog/spring-boot-4-is-here)；[spring-boot-3.5 EOL](https://dev.to/feezan_khattak/spring-boot-35-stopped-getting-patches-in-june-dont-migrate-to-40-4ba)；[boot-4.0.8](https://spring.io/blog/2026/08/20/spring-boot-4-0-8-available-now/)；[SimpleAsyncTaskExecutor Javadoc](https://docs.spring.io/spring/docs/5.3.24/javadoc-api/org/springframework/core/task/SimpleAsyncTaskExecutor.html)；[Flowable 7.0.0](https://www.flowable.com/blog/releases/flowable-open-source-7-0-0-release)
 
+## 原理剖析
+
+本节只把原文已有章节给出的结论拆开讲清机制：不引入新命令/参数，不补新数字，数字一律复用原文已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
+
+- **自动配置的判定机制**：自动配置根据 classpath 上的依赖与已有 Bean 推断并装配默认配置——有 Druid 就配 Druid 数据源、有 Web 依赖就起内嵌 Tomcat。自己定义的 Bean 会让对应自动配置退让（`@ConditionalOnMissingBean`），这是“明明配了却没生效、没配却生效了”类问题的主线。排查手段是启动加 `--debug` 看 Condition Evaluation Report（哪些自动配置生效、没生效及原因），或看 `actuator/conditions` 端点（原文第 1 节）。
+- **配置加载的覆盖机制**：加载顺序是后覆盖前——命令行参数 `--server.port=8081` 最高，其次是 `SPRING_APPLICATION_JSON` 与系统环境变量，再次是 `application-{profile}.yml`，最后是 `application.yml`。多环境用 profile 分文件，`application.yml` 只放公共项，差异项放 `application-{env}.yml`，靠 `spring.profiles.active`（或环境变量 `SPRING_PROFILES_ACTIVE`）切换。同一目录下 `application.properties` 优先级高于 `application.yml`，两种格式混用时改了 yml 不生效，先查有没有同名 properties 在盖它（原文第 2 节）。
+- **事务失效的代理机制**：`@Transactional` 靠代理生效，失效的四个经典场景都是代理没覆盖到——同类自调用（`this` 直接调绕过代理）、private 或 final 方法（代理不了）、异常被吞（try-catch 吃掉异常且没抛，事务以为成功）、checked 异常（默认只回滚 RuntimeException）。补充的两个场景同理：方法不是 public（CGLIB 代理要求 public）、类没被 Spring 管理（自己 new 出来的对象上的注解全都不生效，事务、异步、缓存注解同理）。传播行为里 `REQUIRED` 是默认（有就加入、没有新建），`REQUIRES_NEW` 挂起当前、永远新建，记流水、审计日志独立提交用它；`NESTED` 靠保存点实现内层回滚不牵连外层（原文第 3 节）。
+- **升级链的版本机制**：现实路径是 2.7 → 3.5（JDK 17）→ 4.1，别想一步到位；先在 3.5 上把 deprecation warning 清零（4.0 删掉了所有 3.x 标记废弃的 API）。原文第 5 节的版本表：2.7.x（神农在用）2023-11 起无开源安全补丁；3.5.x 开源支持止于 2026-06-30；4.0.x 2025-11 发布、支持到 2026-12，别停在这；4.1.x 2026-06 发布、支持到 2027-07，升级目标定它。三件硬骨头：JDK 8→17（`--release`、反射与封装 API）、`javax.*` → `jakarta.*` 全量改包名、依赖对齐（Flowable 6.7.2 只能跑 Boot 2.7，上 Boot 3 必须升 Flowable 7.x；MyBatis-Plus、Druid 也要换支持 Boot 3 的版本，升级前逐个核对 release notes）。
+- **定量算例复用**：原文第 2 节配置片段的原数——Tomcat `max-threads: 200`；Druid `initial-size: 5`、`max-active: 50`、`max-wait: 60000`、`time-between-eviction-runs-millis: 60000`；逻辑删除 `logic-delete-value: 1`、`logic-not-delete-value: 0`；优雅停机 `spring.lifecycle.timeout-per-shutdown-phase=30s`。本节不引入新数字。
+- **未展开的点**：原文没有给出各自动配置类的完整清单与条件判定细节，本节只拆解了判定、覆盖、代理与升级四条已有结论的机制；具体某个自动配置为什么没生效，以 `--debug` 的 Condition Evaluation Report 为准。
+
+## 实战案例
+
+### 案例一：同类自调用，事务注解写了等于没写
+
+- 现象：Service 里方法 A 调同类的带 `@Transactional` 的方法 B，B 里写库抛异常后，已写入的数据没有回滚；注解明明写在 B 上，事务却像没生效。
+- 排查：原文第 3 节的第 1 个经典场景——同类自调用时 `this` 直接调，绕过代理。`@Transactional` 靠代理生效，类内直接调走的是对象本身，代理没机会介入，事务根本没开启。
+- 结论：解法是注入自己，或用 `AopContext.currentProxy()`。原文小技巧节补充了第二个解法的前提开关：必须在配置类上加 `@EnableAspectJAutoProxy(exposeProxy = true)`，否则拿到的还是 this，事务照样不生效。自调用失效不只事务一个，`@Async`、`@Cacheable` 都是靠代理生效的，同一个类里 `this` 直接调、注解全部绕过，最稳的办法是把被调方法抽到另一个 Bean 里。
+
+### 案例二：改了 application.yml，配置就是不生效
+
+- 现象：把 `server.port` 改成 8081 后重启，应用还是跑在原来的端口上；yml 文件明明改对了，启动日志里也没有报错。
+- 排查：原文第 2 节的高频坑——同一目录下 `application.properties` 优先级高于 `application.yml`，项目里两种格式混用时，改了 yml 不生效先查有没有同名 properties 在盖它。原文小技巧节补充：这个优先级只在“同目录、同名”时成立，不同位置（classpath 根目录、`classpath:/config/`、当前目录）也有加载顺序，也要看是不是别的目录里有同名文件在盖它。
+- 结论：先查同目录有没有同名 properties，再查其他加载位置的同名文件；项目里只保留一种格式，别让两种格式并存。配置类优先用 `@ConfigurationProperties` 绑定复杂配置（前缀加嵌套对象），比到处 `@Value` 好维护，还能配合 `@Validated` 在启动期就校验配置合法性。
+
 ## 小技巧与冷知识
 
 【小技巧】`--debug` 只在排障时开：它打出的 Condition Evaluation Report 会列出全部自动配置的生效/未生效原因，启动日志会膨胀几倍。本地排障用 `--debug`，线上想看某次启动的判定结果，用 `actuator/conditions` 端点按需查，别长期开着 debug 跑生产。
@@ -138,6 +163,13 @@ mybatis-plus:
 3. 现实路径是 2.7 → 3.5（JDK 17）→ 4.1，别想一步到位；先在 3.5 上把 deprecation warning 清零（4.0 删掉了所有 3.x 标记废弃的 API）。三件硬骨头：① JDK 8→17（`--release`、反射 / 封装 API）；② `javax.*` → `jakarta.*` 全量改包名；③ 依赖对齐——Flowable 6.7.2 只能跑 Boot 2.7，上 Boot 3 必须升 Flowable 7.x，MyBatis-Plus / Druid 也要换支持 Boot 3（Jakarta）的版本，升级前逐个核对 release notes。
 
 ## 关联知识
+
+### 前置知识
+
+- [Java](开发语言/Java/Java.md)：面向对象与 Spring 基础，自动配置、代理、事务这些概念都建立在 Java 语言与 Spring 容器之上（原文关联知识节与第 1 节）。
+- [Druid](开发语言/Java/Druid.md)：数据源配置与监控，原文第 2 节配置片段里的 Druid 参数（initial-size、max-active、max-wait）与生产看 SQL 的落点都在该篇（原文第 2 节与关联知识节）。
+- [多数据源](开发语言/Java/多数据源.md)：事务边界与跨库事务注意点，事务里别调 HTTP、别做文件 IO 的经验要和该篇的跨库事务一起看（原文第 3 节与关联知识节）。
+- [Async-异步](开发语言/Java/Async-异步.md)：优雅停机与 @Async 的停机等待配合，`server.shutdown=graceful` 的收尾时间要覆盖异步任务（原文第 4 节与关联知识节）。
 
 - [Druid 监控与慢 SQL 定位](开发语言/Java/Druid.md)
 - [多数据源（dynamic-datasource）](开发语言/Java/多数据源.md)
