@@ -2,7 +2,7 @@
 知识点: Netty
 层级: 进阶
 适用版本: Netty 4.1.x
-更新日期: 2026-11-14
+更新日期: 2026-11-15
 关联:
   - Java-IO与NIO
   - 计算机网络
@@ -121,14 +121,47 @@ class EchoHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
 （来源：Netty 4.1 官方 API 文档 `io.netty.channel.ChannelConfig` / `WriteBufferWaterMark`，`ChannelOption.WRITE_BUFFER_WATER_MARK` 默认低 32KB、高 64KB；核验日期 2026-11-03）
 
-## 9. 疑难杂症
+## 9. 线程数与内存定量：EventLoop 线程数、直接内存与池化算一算
+
+### 9.1 EventLoop 线程数：默认 2×核数
+
+- 无参 `new NioEventLoopGroup()` 的默认线程数是 `max(1, -Dio.netty.eventLoopThreads, availableProcessors() × 2)`：8 核机器默认 16 条，4 核默认 8 条；boss 另算，§7 示例在 8 核机器上是 boss 1 条 + worker 16 条，共 17 条 Netty 线程。
+- 线程数与连接数是两笔账：16 条线程各管一批连接，连接再多也不会自动加线程；连接数涨只影响每条线程管的连接数，加线程只影响单线程的事件处理量，不解决“连接数多”本身。
+- 覆盖方式：启动参数 `-Dio.netty.eventLoopThreads=N`，或构造器显式传参；容器里核数感知可能与限额不一致时，显式指定最稳妥（见边界条件）。
+
+### 9.2 直接内存上限：默认等于最大堆
+
+- 未设 `-XX:MaxDirectMemorySize` 时，Netty 直接内存上限默认等于 JVM 最大堆（`Runtime.maxMemory()`）：`-Xmx4g` 的服务，直接内存预算约 4 GiB；`-Xmx8g` 则约 8 GiB。
+- 池化 ByteBuf 与 NIO DirectByteBuffer 共用这笔预算：§4 的池化复用、§8 的待发缓冲都从这里出，泄漏时先看这笔预算的占用（排查见 §10）。
+
+### 9.3 池化分块：page 8KB、chunk 16MB/4MB、arena 数
+
+- `PooledByteBufAllocator` 的分块公式：`chunkSize = pageSize × 2^maxOrder`，pageSize 默认 8192。4.1.x 早期 maxOrder 默认 11 → chunk 16 MiB（2048 页）；后续版本默认改为 9 → chunk 4 MiB（512 页）。以所用版本的源码为准，可用 `io.netty.allocator.maxOrder` 覆盖；maxOrder 减 1，chunk 减半。
+- arena 数默认取 `min(2×核数, 直接内存上限 / chunkSize / 2 / 3)`：8 核 + 8 GiB 直接内存 + chunk 16 MiB → min(16, 85) = 16 个直接 arena；64 核同等内存 → min(128, 85) = 85 个。
+- 池子预算校验（源码注释口径：每个 arena 按 3 个 chunk 估、池子不超过直接内存上限的一半）：16 arena × 3 chunk × 16 MiB = 768 MiB ≤ 4 GiB（8 GiB 的一半）；85 arena × 3 × 16 MiB = 4080 MiB，刚好卡在 4 GiB 上限之下——arena 数公式就是按这个约束反推的。
+- 超过 chunkSize 的大对象不走池化，直接分配；小对象按 16 字节对齐归一化（≤496 字节按 16 的倍数取整，如 490 字节归一化为 496）。
+
+### 9.4 待发内存上限：连接数 × 高水位
+
+- 复用 §8 的水位线：10,000 连接 × 64KB 高水位 = 625 MiB；100,000 连接 × 64KB = 6250 MiB ≈ 6.1 GiB。调高水位前先乘，连接数一上来，待发上限比单连接的水位线数字吓人得多。
+- 与直接内存预算对照：待发缓冲走堆外池化内存，计入 §9.2 的直接内存预算。10 万连接 × 64KB 的待发上限 6.1 GiB，已经超过 `-Xmx4g` 时 4 GiB 的直接内存预算——高水位、连接数、直接内存上限三者要成套算，单调一个会顾此失彼。
+
+- **边界条件**：
+  - 容器里 `availableProcessors()` 的返回值受 JDK 版本与 cgroup 配置影响，核数不对时默认线程数跟着错，显式指定 `-Dio.netty.eventLoopThreads` 最稳妥。
+  - chunk 大小有版本差异：maxOrder 默认值在 4.1.x 内从 11 变到 9，抄旧文章的 16MB 会算错新版池子，按所用版本的 `PooledByteBufAllocator` 源码或 `io.netty.allocator.maxOrder` 核对。
+  - Netty 4.2 的默认分配器已换成 `AdaptiveByteBufAllocator`（4.2.0.Final，2025-04 发布），本节的池化算式只适用于 4.1.x 的 `PooledByteBufAllocator`；本篇适用版本见 Frontmatter。
+  - arena 数公式里的 `/2/3` 是源码里的经验约束（每个 arena 3 个 chunk、池子不超一半），不是精确预算，估算用；精确占用以 `PooledByteBufAllocatorMetric` 为准。
+
+（来源：Netty 4.1 源码 `MultithreadEventLoopGroup#DEFAULT_EVENT_LOOP_THREADS`、`PooledByteBufAllocator`（pageSize 8192、maxOrder 默认值、arena 数公式与“每个 arena 3 个 chunk、池子不超过最大内存一半”注释）、`PlatformDependent.maxDirectMemory()`；Netty 官方文档 Analyzing Memory Allocator Behavior（4.2 默认 Adaptive 分配器）；核验日期 2026-11-15）
+
+## 10. 疑难杂症
 
 - **内存只涨不降**：九成是 ByteBuf 引用计数漏放。开启 `-Dio.netty.leakDetection.level=PARANOID`（或 ResourceLeakDetector 的 SIMPLE/ADVANCED 级别）在测试环境定位漏放的分配栈，生产用 SIMPLE 抽样即可，全量 PARANOID 开销大。
 - **连接处理莫名卡顿、全员延迟**：某个 handler 里做了阻塞调用堵住 EventLoop。排查思路：看业务线程与 EventLoop 线程的命名（`nioEventLoopGroup-x-y`）和线程栈，确认耗时逻辑跑在哪条线程上。
 - **收到半包就业务报错**：拆包器没挂或参数配错，handler 直接按完整报文解析。先打印原始字节核对帧边界，不要先怀疑业务代码。
 - **客户端断开服务端不感知**：没配读空闲也没开 TCP keepalive，或 keepalive 的系统默认探测间隔以小时计。长连接一律应用层心跳自己管。
 
-## 10. 常见误区
+## 11. 常见误区
 
 - 误区：Netty 是异步的，所以 handler 里可以随便阻塞。不行，EventLoop 的串行模型决定了阻塞一节、卡死一片。
 - 误区：writeAndFlush 返回了就是对方收到了。它只表示数据进了内核发送缓冲，送达确认要靠应用层 ack。
@@ -245,7 +278,7 @@ public void channelWritabilityChanged(ChannelHandlerContext ctx) {
 
 【冷知识】Epoll 传输是 Linux 下的另一条路：`EpollEventLoopGroup` + `EpollServerSocketChannel` 走 Linux 原生 epoll，比 NIO 实现少一层 Java 层的 Selector 封装，连接量大的服务端常用它。代码层面只换 group 和 channel 类，Pipeline 与 handler 不用动；但它只在 Linux 上能跑，跨平台部署时要按系统选实现，别写死。
 
-## 11. 面试与自测
+## 12. 面试与自测
 
 - 一个 EventLoop 管理多条 Channel 时，线程安全靠什么保证？
 - ChannelPipeline 里入站与出站的传播方向为什么相反？
@@ -254,6 +287,8 @@ public void channelWritabilityChanged(ChannelHandlerContext ctx) {
 - 心跳应该由哪一端发、哪一端判定？阈值怎么配合？
 
 - 下游读得慢时，Netty 的 writeAndFlush 会发生什么？水位线机制怎么用？
+
+- `new NioEventLoopGroup()` 不传参时默认多少线程？直接内存上限默认是多少？池化 chunk 默认多大？
 
 ### 参考答案
 
@@ -265,7 +300,9 @@ public void channelWritabilityChanged(ChannelHandlerContext ctx) {
 
 6. writeAndFlush 是异步的：下游慢时写请求照单全收、攒在 ChannelOutboundBuffer 里等 socket 可写，生产者持续写会让待发缓冲无界增长直至 OOM。水位线机制的做法是：每个 Channel 有一对水位线（ChannelOption.WRITE_BUFFER_WATER_MARK，默认低 32KB、高 64KB），待发字节超高水位时 channel.isWritable() 变 false、排空回落到低水位以下变回 true 并触发 channelWritabilityChanged；标准用法是写前查 isWritable()，不可写时 config().setAutoRead(false) 暂停读上游、可写恢复时再 setAutoRead(true)，转发代理场景把背压沿链路反向传回源头。注意水位线只通知、不拦截：不可写时继续 writeAndFlush 依然入队，必须业务层自己停手；水位线按字节数算，一条 10MB 大消息一次就能冲过高水位，大文件下发要分片写、每片查一次可写性；调大高水位前要按“连接数 × 高水位”算最坏待发内存。
 
-## 12. 关联知识
+7. 默认线程数是 `availableProcessors() × 2`（可 `-Dio.netty.eventLoopThreads` 覆盖）：8 核 16 条、4 核 8 条，boss 另算。直接内存上限默认等于 JVM 最大堆：`-Xmx4g` 时约 4 GiB，池化 ByteBuf 与待发缓冲共用这笔预算。池化 chunk 大小是 `8192 × 2^maxOrder`：4.1.x 早期 maxOrder 默认 11 → chunk 16 MiB，后续版本默认 9 → chunk 4 MiB，按所用版本核对；arena 数默认取 `min(2×核数, 直接内存上限 / chunkSize / 2 / 3)`。本节算式只适用于 4.1.x 的 `PooledByteBufAllocator`，Netty 4.2 默认已换成 Adaptive 分配器。
+
+## 13. 关联知识
 
 ### 前置知识
 
