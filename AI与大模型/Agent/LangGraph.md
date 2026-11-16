@@ -2,7 +2,7 @@
 知识点: LangGraph
 层级: 进阶
 适用版本: LangGraph 1.x（Python）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Agent
   - Tool-Calling
@@ -34,6 +34,17 @@ LangGraph 用一张**有向图**描述 Agent 的执行流程，核心只有四�
 ## 2. 基础知识
 
 最小可运行示例：一个带工具调用的 ReAct 图。
+
+最小 ReAct 图是 agent 与 tools 之间的往复环：
+
+```mermaid
+flowchart TD
+    S[START] --> A[agent 调模型]
+    A --> B{tools_condition}
+    B -->|发起 tool_calls| T[tools 执行工具]
+    T --> A
+    B -->|无工具调用| E[END]
+```
 
 ```python
 from typing import Annotated, TypedDict
@@ -156,6 +167,17 @@ app = b.compile()
 落到小说引擎（承接 Agent 篇「落到你的项目」）：
 
 - **章节分析图**：节点 = 上下文组装（ChapterContextService）→ LLM 抽取 → JSON 校验 → 矛盾检测 → 落库。校验失败走条件边回到抽取节点重试（带 `retry_count`，上限 2 次），而不是整条流水线重跑。
+
+章节分析图是抽取与校验之间的往复环，不是整条流水线重跑：
+
+```mermaid
+flowchart TD
+    A[上下文组装] --> B[LLM 抽取]
+    B --> C[JSON 校验]
+    C -->|通过| D[矛盾检测]
+    C -->|失败 retry_count 上限 2 次| B
+    D --> E[落库]
+```
 - **沙盒推演**：同一初始 State 分出多个 `thread_id` 并行跑不同分支（苏雨存活/死亡/逃脱），最后用对比节点汇总三条时间线的检查点差异——分支和回滚都是 checkpointer 的原生能力，不用自己维护快照表。
 - **终裁分层**：图里可以混用两个模型——常驻小模型节点做高频抽取，条件边只在「检测到疑似矛盾」时才路由到大模型节点做终裁，对应二层架构。
 - 落库类节点必须**幂等**：检查点恢复会重跑当前步，写库前先按业务键查重（章节 ID + 版本），避免恢复一次多一份数据。

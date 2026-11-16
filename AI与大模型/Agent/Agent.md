@@ -2,7 +2,7 @@
 知识点: Agent
 层级: 进阶
 适用版本: 通用
-更新日期: 2026-10-31
+更新日期: 2026-11-16
 关联:
   - AI知识点地图
   - 大模型基础
@@ -21,7 +21,28 @@
 
 一个 Agent = **LLM（推理）+ Tools（行动）+ Memory（记忆）+ 循环控制**。
 
+一个 Agent 由这四个部件拼成：
+
+```mermaid
+flowchart TD
+    A[Agent] --> B[LLM 推理]
+    A --> C[Tools 行动]
+    A --> D[Memory 记忆]
+    A --> E[循环控制]
+```
+
 最经典的循环是 **ReAct**：Thought（思考下一步）→ Action（调工具）→ Observation（看结果），循环直到任务完成。绝大多数 Agent 框架都是这个循环的变体。
+
+ReAct 循环就是想一步、做一步、看一眼结果，再想下一步：
+
+```mermaid
+flowchart TD
+    A[Thought 思考下一步] --> B[Action 调工具]
+    B --> C[Observation 看结果]
+    C --> D{任务完成}
+    D -->|否| A
+    D -->|是| E[结束]
+```
 
 ## 四个关键部件
 

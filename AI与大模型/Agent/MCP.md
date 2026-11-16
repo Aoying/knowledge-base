@@ -2,7 +2,7 @@
 知识点: MCP
 层级: 进阶
 适用版本: MCP 规范 2026-07-28
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Agent
   - Tool-Calling
@@ -23,6 +23,31 @@
 MCP 要解决的是 **M×N 集成问题**：M 个 AI 应用 × N 个外部系统，没有标准时要写 M×N 套对接；有了 MCP，应用实现一次 Client、系统实现一次 Server，组合数降到 M+N。类比：LSP 之于编辑器和语言服务，MCP 之于 AI 应用和外部能力；也常被比作「AI 世界的 USB-C」。
 
 三个角色（官方架构定义）：
+
+MCP 的三个角色与三类能力分工如下：
+
+```mermaid
+classDiagram
+    class Host {
+        承载模型的 AI 应用
+        跑模型循环
+        管用户授权
+        安全边界最终责任方
+    }
+    class Client {
+        Host 内部连接器
+        一个 Client 只连一个 Server
+        协议通信和能力发现
+    }
+    class Server {
+        暴露能力的进程
+        Tools
+        Resources
+        Prompts
+    }
+    Host *-- Client : 内部有多个
+    Client --> Server : 只连一个
+```
 
 - **Host**：承载模型的 AI 应用本身——Claude Desktop、IDE、你自己的 Agent 运行时。它跑模型循环、管用户授权，是安全边界的最终责任方。
 - **Client**：Host 内部的连接器组件，**一个 Client 只连一个 Server**，负责协议通信和能力发现。Host 连了几个 Server，内部就有几个 Client。
@@ -90,6 +115,26 @@ if __name__ == "__main__":
 ## 4. 原理剖析
 
 一次工具调用的完整链路：
+
+一次工具调用的完整链路是这样走的，模型从不直接连 Server：
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant H as Host
+    participant M as 模型
+    participant C as Client
+    participant S as Server
+    U->>H: 提问
+    H->>M: tools/list 结果拼进上下文
+    M->>H: 工具名加 JSON 参数
+    H->>C: tools/call
+    C->>S: JSON-RPC 调用
+    S-->>C: 执行结果
+    C-->>H: 结果回传
+    H->>M: tool 消息喂回模型
+    M-->>U: 继续推理或最终答复
+```
 
 ```text
 用户提问 → Host 把 tools/list 的结果拼进模型上下文

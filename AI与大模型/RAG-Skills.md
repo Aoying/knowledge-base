@@ -2,7 +2,7 @@
 知识点: RAG Skills
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-22
+更新日期: 2026-11-16
 关联:
   - AI知识点地图
   - Skills-索引
@@ -32,6 +32,20 @@
 ## 2. agentic-rag（ch040602）Agentic RAG 脚手架
 
 - **功能**：Codex 兼容的 Agent Skill + 零依赖 Python 脚手架，实现公开的 Agentic RAG 模式：plan → route → rewrite → retrieve → draft → judge sufficiency → iterate → synthesize；可判断检索上下文是否充分、自动生成追问、输出 claim-level 引用。
+
+Agentic RAG 是迭代检索直到证据充分的环：
+
+```mermaid
+flowchart TD
+    A[plan] --> B[route]
+    B --> C[rewrite]
+    C --> D[retrieve]
+    D --> E[draft]
+    E --> F[judge sufficiency]
+    F -->|不充分| G[iterate 自动生成追问]
+    G --> C
+    F -->|充分| H[synthesize]
+```
 - **适用场景**：把 RAG 从"检索一次回答一次"升级为"迭代检索直到证据充分"；claim-level 引用正好服务小说引擎"事实—来源"追溯需求。
 - **来源**：https://github.com/ch040602/agentic-rag
 - **热度/更新**：0 stars（新仓库），2026-06-27 更新，带 CI。
@@ -77,6 +91,19 @@ skill 之外，RAG 落地真正缺的是评测口径。建 golden 集（问题�
 纯向量检索有个毛病：专有名词（人名"林溯"、地名"源石"）embedding 经常拉胯。生产级 RAG 都是混合：
 
 1. **两路召回**：BM25（关键词，Elasticsearch/SQLite FTS5）+ 向量（Chroma），各取 top-20。
+
+混合检索的流水线是两路召回、RRF 融合、rerank 精排：
+
+```mermaid
+flowchart TD
+    A[查询] --> B[BM25 关键词路]
+    A --> C[向量 Chroma 路]
+    B --> D[各取 top-20]
+    C --> D
+    D --> E[RRF 融合排序]
+    E --> F[bge-reranker 重排]
+    F --> G[取 top-5 给 LLM]
+```
 2. **融合排序**：RRF（倒数排名融合）`score = Σ 1/(k+rank)`，k 取 60，不用调权重。
 3. **rerank**：bge-reranker 对融合后的 top-20 重排，取 top-5 给 LLM。
 

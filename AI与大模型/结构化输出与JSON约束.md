@@ -2,7 +2,7 @@
 知识点: 结构化输出与JSON约束
 层级: 进阶
 适用版本: 通用（Ollama / OpenAI 兼容接口）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Tool-Calling
   - Prompt-工程
@@ -18,6 +18,14 @@
 
 > 只要输出要进程序，目标就不是「模型大概会给 JSON」，而是「给不出合规 JSON 就当场失败、可重试、可定位」。约束分三层：提示层（求它给）→ 解码层（逼它给）→ 程序层（验它给的）。三层都上，才叫工程方案。提示怎么写见 [Prompt-工程](AI与大模型/Prompt-工程.md)，本篇讲约束与兜底。
 
+约束分三层，三层都上才叫工程方案：
+
+```mermaid
+flowchart TD
+    A[提示层求它给] --> B[解码层逼它给]
+    B --> C[程序层验它给的]
+```
+
 ## 1. 核心概念
 
 - **JSON Mode**：接口级开关（如 OpenAI 兼容接口的 `response_format: {"type": "json_object"}`、Ollama 的 `format: "json"`）。作用是保证输出**语法**是合法 JSON，仅此而已——字段缺没缺、类型对不对，它不管。
@@ -29,6 +37,18 @@
 
 ```text
 请求（低温度 + JSON mode / schema）
+
+一条可靠的解析管线是这样走的：
+
+```mermaid
+flowchart TD
+    A[请求低温度加 JSON mode 或 schema] --> B[提取 JSON 主体]
+    B --> C[json.loads 解析]
+    C --> D[Schema 或 pydantic 校验]
+    D --> E[业务校验]
+    E -->|任一环节失败| F[带着错误信息重试]
+    E -->|通过| G[输出]
+```
   → 提取（剥掉代码块围栏、前后闲话，只取 JSON 主体）
   → json.loads 解析
   → Schema / pydantic 校验字段与类型
