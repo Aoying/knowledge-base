@@ -314,8 +314,33 @@
 单个插件是工具，组合起来才是工作流：
 
 1. **日记流水线**：calendar（点日期）→ periodic-notes（按配置建日记）→ templater（套每日模板，自动填前后链接）→ tasks（日记里的 `- [ ]` 自动汇总）。
+
+下图是日记流水线四个插件的衔接顺序。
+
+```mermaid
+flowchart LR
+    A["calendar\n点日期"] --> B["periodic-notes\n按配置建日记"]
+    B --> C["templater\n套每日模板，自动填前后链接"]
+    C --> D["tasks\n日记里的待办自动汇总"]
+```
 2. **任务看板**：tasks（写任务）→ dataview（`看板-任务总览` 跨文件汇总未完成）→ kanban（拖拽改状态，写回 markdown）。
+
+下图是任务看板三个插件的衔接顺序。
+
+```mermaid
+flowchart LR
+    A["tasks\n写任务"] --> B["dataview\n看板-任务总览跨文件汇总未完成"]
+    B --> C["kanban\n拖拽改状态，写回 markdown"]
+```
 3. **知识沉淀**：omnisearch（搜）→ auto-link-title（粘 URL 自动取标题）→ excalidraw（画架构图，`![[图]]` 嵌入笔记）。
+
+下图是知识沉淀三个插件的衔接顺序。
+
+```mermaid
+flowchart LR
+    A["omnisearch\n搜"] --> B["auto-link-title\n粘 URL 自动取标题"]
+    B --> C["excalidraw\n画架构图，嵌入笔记"]
+```
 4. **定期回顾**：periodic-notes 周记模板里放 dataview 查询（本周完成任务数/新建笔记数），每周自动出一份回顾。
 
 - 新插件先问自己：它跟现有哪个插件联动？联动不上的多半用三次就吃灰。
