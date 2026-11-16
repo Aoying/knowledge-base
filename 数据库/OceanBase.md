@@ -190,6 +190,48 @@ flowchart TD
 
 > 来源（核验日期 2026-11-08）：`memstore_limit_percentage` 默认值 50、`freeze_trigger_percentage` 默认值 20、`major_compact_trigger` 默认值 0、`enable_major_freeze` 默认值 True，均见 OceanBase 官方文档 V4.2.1《Reference — System management》：<https://obportal.s3.ap-southeast-1.amazonaws.com/doc/product_pdf/oceanbase-database/144/OceanBase-Database-V4.2.1-Reference--System-management.pdf>；MemStore 自适应占比（租户内存 ≤ 8 GB 取 40%、> 8 GB 取 50%）与冻结公式见 V4.3.5《Reference — System management》：<https://obportal.s3.ap-southeast-1.amazonaws.com/doc/product_pdf/oceanbase-database/213/OceanBase-Database-V4.3.5-Reference--System-management.pdf>；选举超时/租期默认值未在上述官方文档中找到，写作“官方文档未公开默认值”；时钟偏差 2 秒引自 OceanBase 社区问答（ask.oceanbase.com），待以官方部署文档复核。
 
+## 9. 事务与查询超时定量：哪条超时先到
+
+> 本节默认值引自 OceanBase 官方文档（注明来源与核验日期），算例按本篇 §5 已有的“每批 500～1000 行”换算。版本口径：默认值在 V4.2.0 Reference 文档与 2026-11-11 更新的参数模板页两处一致；V4.3.3+ 建租户可选参数模板，模板只对新建租户生效。
+
+### 三个超时：单位都是微秒，管的不是同一件事
+
+| 变量 | 默认值（微秒） | 换算 | 管什么 |
+| --- | --- | --- | --- |
+| `ob_query_timeout` | 10,000,000 | 10 秒 | 单条 SQL 的执行时长 |
+| `ob_trx_timeout` | 86,400,000,000 | 86,400 秒 = 24 小时 = 1 天 | 整个事务从开始到提交的总时长 |
+| `ob_trx_idle_timeout` | 86,400,000,000 | 86,400 秒 = 24 小时 = 1 天 | 事务内两条语句之间的空闲间隔 |
+
+- 三条超时的触发条件是“或”关系：哪个先到，哪个先杀。单条 SQL 跑超 10 秒时，`ob_query_timeout` 先到——与事务已经开了多久无关；事务内两条语句间隔太久时，`ob_trx_idle_timeout` 先到；事务总时长拖过 24 小时时，`ob_trx_timeout` 先到。
+- 生产模板推荐值：V4.2.0 文档的生产参数模板建议 `ob_trx_idle_timeout` 取 120,000,000 微秒 = 120 秒（2 分钟），比默认值 24 小时严得多。另有 7 天模板（`ob_query_timeout` 与 `ob_trx_timeout` 均为 604,800,000,000 微秒 = 7 天），供 OLAP/长任务类租户选用；OLTP 默认模板仍是 query 10 秒、trx 1 天。
+
+### 大事务分批：500～1000 行一批，超时账怎么算
+
+本篇 §5 要求批量更新分批提交（每 500～1000 行一批）。按这个口径算 100 万行：
+
+| 分批粒度 | 批次数 | 每批 50ms 时的总耗时 |
+| --- | --- | --- |
+| 500 行/批 | 2000 批 | 100 秒 |
+| 1000 行/批 | 1000 批 | 50 秒 |
+
+- 分批的意义不只是锁与回滚成本，也是把单条语句压进 10 秒内：100 万行塞进一个事务里、一条 UPDATE 全量跑，单条语句超 10 秒就先撞 `ob_query_timeout`，根本等不到 24 小时的事务超时。分批后每批是独立的小事务，每批的单条语句只要在 10 秒内跑完，`ob_trx_timeout` 几乎不会先到。
+- 反过来，交互式会话里“开事务、等人确认、再提交”的写法最容易撞的是 `ob_trx_idle_timeout`：生产推荐 120 秒意味着事务内空闲 2 分钟就被杀，锁随事务一起释放。长事务不要等人，确认逻辑放事务外。
+
+### 单包上限：max_allowed_packet 默认 4 MiB
+
+`max_allowed_packet` 默认 4,194,304 字节 = 4 MiB（官方参数列表页口径），限制单条 SQL 文本/单个数据包的大小。算例：单行平均 1 KB 时，一条批量 INSERT 语句最多约 4096 行（4,194,304 ÷ 1024）；单行平均 4 KB 时最多约 1024 行。
+
+- 与 §5 的 500～1000 行/批对照：包大小不是分批的瓶颈，超时（单条 10 秒）与锁才是。拼包时先算行数再算字节，两个上限取先到者。
+- 会话级放宽只影响当前会话：`SET ob_query_timeout = 20000000`（20 秒）这类写法只改当前连接；全局改要 SUPER 或 ALTER SYSTEM 权限，且对已建立的会话不生效（新会话才取新值）。
+
+### 边界条件
+
+- 边界 1：10 秒是默认值，不是硬上限；DDL、大表回填、长查询这类“单条注定超 10 秒”的操作，要么拆小、要么在会话级显式放宽，不要指望事务超时（24 小时）兜底——单条超时先到。
+- 边界 2：`ob_trx_idle_timeout` 的生产推荐值 120 秒与默认值 24 小时差 720 倍，排障时先 `SHOW VARIABLES LIKE 'ob_%timeout'` 看当前租户的实际取值，不要凭默认值推断行为。
+- 边界 3：V4.3.3+ 的参数模板只在建租户时选，选完不能改模板、只能逐项改变量；老租户沿用建租户时的取值，不会自动跟随新模板变。
+
+> 来源（核验日期 2026-11-16）：三变量默认值见 OceanBase 官方文档 V4.2.0《Reference — System management》（https://obportal.s3.ap-southeast-1.amazonaws.com/doc/product_pdf/oceanbase-database/133/OceanBase-Database-V4.2.0-Reference--System-management.pdf）；生产模板推荐值（`ob_trx_idle_timeout` 120,000,000 微秒）见同文档 §5.2.3；OLTP 默认模板（query 10s、trx 1 天）与 7 天模板见 docs.oceanbase.com 参数模板页（https://docs.oceanbase.com/oceanbase-cloud/parameter-template-overview-byoc，2026-11-11 更新）；`max_allowed_packet` 默认 4,194,304 见官方参数列表页（https://docs.oceanbase.com/oceanbase-cloud/tenant-parameters-byoc）。版本线（同日核验）：V4.4.2 为 LTS 版本；Release Notes 已出到 V4.6.0（文档版 20261028），另有 V5.0.1；云上支持列表列出 V4.5.0 / V4.4.1 / V4.4.0 / V4.3.5 / V4.2.5 / V4.2.1（https://docs.oceanbase.com/oceanbase-cloud/supported-database-versions）。
+
 ## 原理剖析
 
 本节只把原文已有章节给出的结论拆开讲清机制：不引入新概念，不补新数字，数字一律复用 §8 已核验的定量算例；凡原文没展开的点，文中明确标注，不作定论。
@@ -282,6 +324,10 @@ SHOW PARAMETERS LIKE 'memstore_limit_percentage';
 
 【小技巧】集群里有个特殊的 sys 租户，日常业务别连它：sys 租户是 OceanBase 自己的管理租户，建租户、调参数、看集群状态都在它里面做，业务数据都放在业务租户里。排查问题时先确认当前连接是哪个租户——连错租户，查到的表、参数、慢 SQL 全是另一个租户的，排障方向一开始就歪了。
 
+【小技巧】长事务动手前先跑 `SHOW VARIABLES LIKE 'ob_%timeout'` 看三条超时的当前值：单条 SQL 超 10 秒先撞 `ob_query_timeout`，事务内空闲超 120 秒（生产推荐值）先撞 `ob_trx_idle_timeout`，事务总时长 24 小时才轮到 `ob_trx_timeout`。先看值再定分批粒度，不要凭默认值推断。
+
+【小技巧】批量 INSERT 拼包前先算字节上限：`max_allowed_packet` 默认 4 MiB，单行 1 KB 时一条语句最多约 4096 行。拼包超了报的错是包太大，不是超时——先分清是包上限还是 10 秒查询超时，再决定是拆包还是放宽会话级超时。
+
 【小技巧】参数分三级，先认清再改：OceanBase 的参数有集群级、租户级和会话级，`SHOW PARAMETERS` 看到的是当前租户视角的值，改租户级参数用 `ALTER SYSTEM SET ... TENANT = '租户名'`，改会话级只影响当前连接。改之前先确认这个参数是哪一级——在会话里改集群级参数不会生效，在租户里改集群级参数会改到所有租户。
 
 【小技巧】出问题先跑官方诊断工具 obdiag 再手动翻日志：obdiag 是 OceanBase 官方的诊断工具，能一键收集节点日志、配置和性能快照，还能按场景做巡检。自己翻日志容易只看到报错的最后一行，obdiag 收集的是“报错前后一段时间”的完整上下文，提工单、找 DBA 协助时先把 obdiag 的采集包准备好。
@@ -309,6 +355,8 @@ SHOW PARAMETERS LIKE 'memstore_limit_percentage';
 3. 生产应用为什么要连 OBProxy 而不是直连 OBServer？连接串的账号格式各是什么？
 4. 3 副本的 OceanBase 集群容几个节点故障？为什么说“5 副本容 2 个故障”不等于“容 2 个 Zone 故障”？租户每 Zone 内存 16 GB 时，MemStore 的冻结水位是多少（按 V4.2.1 默认值）？
 
+5. 单条 SQL 执行超过 10 秒会触发哪个超时？事务总时长 24 小时与事务空闲超时是什么关系？100 万行按每批 500 行分批要多少批？
+
 ### 参考答案
 
 1. 租户相当于“一台虚拟的数据库服务器”，每个租户有独立的 CPU、内存、IO 配额，互不干扰；一个集群可同时跑 MySQL 模式租户和 Oracle 模式租户，模式在建租户时定、之后不能改。连接数、内存上限、慢 SQL 阈值都是租户级配置，所以排查“资源不够”先看自己租户的配额，不要拿整机指标下结论；压测时先顶满的也是租户 Unit 的 CPU/内存，不是整机。
@@ -316,7 +364,9 @@ SHOW PARAMETERS LIKE 'memstore_limit_percentage';
 3. 生产应用连 OBProxy（ODP，默认端口 2883）而不是直连单个 OBServer（直连默认 2881）。OBProxy 按分区位置把 SQL 路由到持有数据的节点，减少跨节点转发；同时屏蔽节点增减、宕机、Unit 分布与合并等后端变化，连接层不用跟着改。连接串账号格式为 `用户名@租户名#集群名`（直连时为 `用户名@租户名`）；生产只走 OBProxy，不直连单节点。
 4. 3 副本时多数派 quorum = floor(3/2)+1 = 2，可容忍 3-2 = 1 个副本故障；5 副本时 quorum = 3，可容忍 2 个副本故障。5 副本容的是 2 个“副本”故障，不是 2 个 Zone 故障——5 个副本分布在 3 个 Zone 时，一个 Zone 里可能放 2 个副本，一个 Zone 故障就可能同时丢 2 个副本。租户每 Zone 16 GB 时，memstore_limit = 16 × 50% = 8 GB，冻结水位 = 8 × 20% = 1.6 GB。
 
-## 9. 关联知识
+5. 先触发 `ob_query_timeout`（默认 10 秒，管单条 SQL），与事务开了多久无关。`ob_trx_timeout` 默认 24 小时管事务总时长，`ob_trx_idle_timeout` 默认 24 小时管事务内两条语句的空闲间隔（生产模板推荐 120 秒）；三者是“或”关系，哪个先到哪个先杀。100 万行按 500 行一批共 2000 批（1000 行一批则 1000 批）。
+
+## 10. 关联知识
 
 - 兼容经验与项目注意点速览：[MySQL 数据库](数据库/MySQL/MySQL-数据库.md)
 - 分区表与应用层分片的取舍：[分库分表](数据库/分库分表.md)
