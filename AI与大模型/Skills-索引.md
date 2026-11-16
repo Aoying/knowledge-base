@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-11
+更新日期: 2026-11-16
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -22,7 +22,7 @@
 ## 分类索引
 
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
-- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）、davila7/claude-code-templates（Claude Code 组件目录，926 个 SKILL.md）、garrytan/gstack（Garry Tan 的 Claude Code 虚拟工程团队，77 个 SKILL.md）、SuperClaude-Org/SuperClaude_Framework（SuperClaude 配置框架，30 个斜杠命令 + 9 个 SKILL.md）、openai/skills（OpenAI 官方 Codex Skills 目录，44 个 SKILL.md）、gamedev-skills/awesome-gamedev-agent-skills（游戏开发 Agent Skills，78 个 SKILL.md，含 16 个 Godot 专项）、anthropics/claude-plugins-official（Anthropic 官方 Claude Code 插件目录，40 个 SKILL.md）
+- [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）、davila7/claude-code-templates（Claude Code 组件目录，926 个 SKILL.md）、garrytan/gstack（Garry Tan 的 Claude Code 虚拟工程团队，77 个 SKILL.md）、SuperClaude-Org/SuperClaude_Framework（SuperClaude 配置框架，30 个斜杠命令 + 9 个 SKILL.md）、openai/skills（OpenAI 官方 Codex Skills 目录，44 个 SKILL.md）、gamedev-skills/awesome-gamedev-agent-skills（游戏开发 Agent Skills，78 个 SKILL.md，含 16 个 Godot 专项）、anthropics/claude-plugins-official（Anthropic 官方 Claude Code 插件目录，40 个 SKILL.md）、supabase/agent-skills（Supabase 官方 Agent Skills：Supabase 开发 + Postgres 最佳实践）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
 
@@ -419,3 +419,17 @@
 - **热度/更新**：46,845 stars（2026-11-11 核验 GitHub API），2025-11-20 创建，最近推送 2026-11-11（当天仍在更新）。
 - **许可证**：Apache-2.0。
 - **安全注意**：只收集不安装；插件含 hooks，会拦截工具调用，取用前逐个通读目标 SKILL.md 与 hook 脚本，确认无额外权限、后台进程与网络上传要求。
+
+### 45. agent-skills（supabase/agent-skills）Supabase 官方 Agent Skills：Supabase 开发 + Postgres 最佳实践
+
+- **功能**：Supabase 官方出品的 Agent Skills，共 2 个 skill，均遵循 Agent Skills 开放标准（SKILL.md + references/ 结构，兼容 Claude Code、Codex、GitHub Copilot、Cursor、Cline 等 18+ 工具）：
+  - `supabase`（主 skill，约 100 行 SKILL.md，版本 0.1.2）：覆盖全部 Supabase 产品（Database、Auth、Edge Functions、Realtime、Storage、Vectors、Cron、Queues）与客户端集成（supabase-js、@supabase/ssr，Next.js/React/SvelteKit/Astro/Remix）；核心原则是“先查 changelog 再动手、做完要验证、失败 2–3 次就换思路”；内含安全清单（RLS 全表开启、视图默认绕过 RLS 要加 `security_invoker = true`、`SECURITY DEFINER` 慎用、service_role 密钥绝不进前端、Management API 用 scoped token）；CLI 命令一律 `--help` 现查不靠记忆（`supabase db query` 需 CLI v2.79.0+、`supabase db advisors` 需 v2.81.3+）；另有 MCP Server 接入与排障步骤。
+  - `supabase-postgres-best-practices`：Postgres 性能优化与 schema 规范，30 条规则、8 个分类（按影响优先级：查询性能、连接管理、Schema 设计、并发与锁、安全与 RLS、数据访问模式、监控诊断、高级特性）；官方建议：改表结构、迁移、RLS、索引前先加载本 skill，再加载主 skill。
+- **适用场景**：ao 若用 Supabase/Postgres 搭后端或做 RAG 的向量库（pgvector）时直接对口——Postgres 性能与 RLS 规范可对照库内已有的《MySQL-数据库》《MySQL-索引与执行计划》篇看异同；主 skill “先查 changelog 再动手、做完要验证”的纪律与知识库“结论注明来源与日期”的口径同向。注意 ao 的主栈是 MySQL/OceanBase 而非 Supabase/Postgres，本项是“有需要时取用”的参考，不是主栈的必装项；两个 skill 都只含指令 Markdown，不含可执行脚本。
+- **来源**：https://github.com/supabase/agent-skills（公开仓库，Supabase 官方）
+- **热度/更新**：3,092 stars（2026-11-16 核验 GitHub API），2026-01-16 创建，最近推送 2026-11-12，96 次提交，9 个 release，未归档。
+- **许可证**：MIT。
+- **安装方法**：`npx skills add supabase/agent-skills`（装全部 2 个）；单装一个：`npx skills add supabase/agent-skills --skill supabase` 或 `--skill supabase-postgres-best-practices`；Claude Code 插件形态：`claude plugin marketplace add supabase/agent-skills` 后 `claude plugin install supabase@supabase-agent-skills`。
+- **使用示例**：装好后直接对 Agent 说“Optimize this Postgres query”“Review my schema for performance issues”“Help me set up Supabase Auth with Next.js”，Agent 按任务自动加载对应 skill；改表结构前先说“按 supabase-postgres-best-practices 检查这张表”，Agent 会先过 30 条规则再动手。
+- **依赖**：无运行时依赖；用 CLI 功能需 Supabase CLI v2.79.0+（`supabase db query`），用 MCP 功能需 Supabase MCP Server（OAuth 2.1 或 scoped personal access token）。
+- **安全注意**：只收集不安装。已通读主 skill 的 SKILL.md 全文（14,307 字节，2026-11-16 核验）：内容为流程指令与安全清单，无恶意代码、无敏感信息读取、无网络上传、无危险命令；且它本身反向要求“service_role 密钥绝不进前端、Management API 用 scoped token、破坏性操作先确认”，安全姿态是收紧而非放宽。两点使用时注意：① 仓库根目录另有 `scripts/`（发布打包脚本 build-release.ts，走 release-please），取用 skill 时不涉及，勿把仓库脚本当成 skill 的一部分执行；② skill 会让 Agent 去查 `supabase.com/changelog.md` 与官方文档，属正常文档读取，不向第三方上传数据；MCP Server 接入时 token 只给 scoped personal access token，不要用有全部账号权限的 classic token。
