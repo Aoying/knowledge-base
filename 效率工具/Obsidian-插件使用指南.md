@@ -75,7 +75,7 @@
 - 代码块语言选 `dataview`，写查询：
   ```dataview
   TABLE file.mtime as 修改时间
-  FROM "java"
+  FROM "开发语言/Java"
   SORT file.mtime DESC
   LIMIT 10
   ```
