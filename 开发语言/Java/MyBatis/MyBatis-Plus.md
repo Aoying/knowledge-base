@@ -2,7 +2,7 @@
 知识点: MyBatis-Plus
 层级: 进阶
 适用版本: MyBatis-Plus 3.5.3.2
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - Spring-Boot
@@ -20,6 +20,15 @@ MyBatis-Plus（MP）是在 MyBatis 之上做增强的工具层：不改 MyBatis 
 实体映射要点：`@TableName` 指定表名（类名与表名不一致时必标）、`@TableField` 处理字段名不一致与「非表字段」（`exist = false`）；字段填充（创建时间、更新时间、创建人）用 `@TableField(fill = FieldFill.INSERT/INSERT_UPDATE)` + 全局 `MetaObjectHandler` 统一赋值，别在每个 Service 里手写 set。
 
 ## 2. 插件配置（新版写法）
+
+下图是 MybatisPlusInterceptor 内部拦截器链的组装顺序。
+
+```mermaid
+flowchart LR
+  mpi[MybatisPlusInterceptor] --> multi[多租户等改写 SQL 的拦截器在前]
+  multi --> opt[OptimisticLockerInnerInterceptor 乐观锁]
+  opt --> page[PaginationInnerInterceptor 分页在最后]
+```
 
 ```java
 @Configuration
@@ -55,6 +64,16 @@ lambdaQuery().eq(StringUtils.isNotBlank(name), User::getName, name);
 - `list()` 无条件全表拉取是事故高发点：凡是前端可触发的列表查询，必须配分页或强制条件。
 
 ## 4. 分页用法
+
+下图是 Page 承载入参与结果、插件在 SQL 层拼 limit 的分页流程。
+
+```mermaid
+flowchart TD
+  svc[Service 层 Page 当前页 每页数] --> plug[分页插件在 SQL 层拼 limit]
+  plug --> res[结果 total records]
+  plug --> count[复杂查询可关闭自动 count 后手写]
+  res --> resp[转成项目统一分页响应结构]
+```
 
 ```java
 // Service 层：Page 同时承载入参（当前页/每页数）与结果（total/records）

@@ -2,7 +2,7 @@
 知识点: MyBatis 原生
 层级: 基础
 适用版本: MyBatis 3.5 / Spring Boot 2.7
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - MyBatis-Plus
   - Java
@@ -20,6 +20,13 @@
 ## 1. 核心概念
 
 MyBatis 是半自动 ORM：SQL 写在 XML 或注解里，框架只负责参数绑定、结果映射和执行调度（`SqlSession` → `Executor` → `StatementHandler` → JDBC），不生成 SQL，复杂 SQL 的可控性是它的全部价值。
+
+下图是 MyBatis 的执行调度链。
+
+```mermaid
+flowchart LR
+  ss[SqlSession] --> ex[Executor] --> sh[StatementHandler] --> jdbc[JDBC]
+```
 
 与 [MyBatis-Plus](开发语言/Java/MyBatis/MyBatis-Plus.md) 的分工：**Plus 是增强，不是替代**。`BaseMapper`、Wrapper 都建在原生能力之上，动态 SQL、resultMap、插件机制绕不开。落地口径：单表 CRUD 和简单条件走 Plus；多表关联、报表统计写 XML 原生 SQL，不要用 Wrapper 硬拼长链。
 
@@ -103,7 +110,30 @@ MyBatis 是半自动 ORM：SQL 写在 XML 或注解里，框架只负责参数�
 
 **插件/拦截器机制**：MyBatis 只允许拦截四个对象——`Executor`、`StatementHandler`、`ParameterHandler`、`ResultSetHandler`。插件用 `@Intercepts` + `@Signature` 声明拦截点，框架对这四个对象建动态代理，多个插件按注册顺序层层包装成责任链。
 
+下图是四个可拦截对象与插件责任链的组成。
+
+```mermaid
+flowchart TD
+  plugins[多个插件按注册顺序层层包装成责任链] --> ex2[Executor]
+  plugins --> sh2[StatementHandler]
+  plugins --> ph[ParameterHandler]
+  plugins --> rh[ResultSetHandler]
+```
+
 **PageHelper 本质就是一个 MyBatis 插件**：它拦截 `Executor` 的 query，在执行前根据 `PageHelper.startPage()` 放进 ThreadLocal 的分页参数改写 SQL（拼 limit）并先跑一条 count 查询。由此可推两个现象：`startPage` 后紧跟的第一条查询才被分页，中间隔了别的查询就分错；异常路径下 ThreadLocal 没清掉会污染同线程下一次查询。PageHelper 与 Plus 分页拦截器二选一，混用会拼两套 limit。
+
+下图是 PageHelper 经 ThreadLocal 分页参数改写 SQL 的流程。
+
+```mermaid
+flowchart TD
+  startp[startPage] --> tl[分页参数放进 ThreadLocal]
+  tl --> intercept[拦截 Executor 的 query]
+  intercept --> countq[先跑一条 count 查询]
+  intercept --> limit[改写 SQL 拼 limit]
+  countq --> first[紧跟的第一条查询才被分页]
+  limit --> first
+  first --> warn[中间隔了别的查询就分错]
+```
 
 自写插件的典型用途是数据权限（自动追加机构条件）、SQL 审计；只拦截需要的方法，`intercept` 改完参数必须 `invocation.proceed()`，吞掉等于把原执行短路掉。
 

@@ -2,7 +2,7 @@
 知识点: JVM 类加载
 层级: 进阶
 适用版本: JDK 8+（涉及 JDK9 模块化变化时注明）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - JVM-内存模型
@@ -19,6 +19,13 @@
 - 类加载：把 `.class` 字节码读入内存，生成 `java.lang.Class` 对象。
 - 类的唯一性 = 类加载器 + 全限定名共同决定，两者任一不同即为不同类。
 - 生命周期：加载 → 连接 → 初始化 → 使用 → 卸载。
+
+下图是类的生命周期，连接内部又分验证、准备、解析三步。
+
+```mermaid
+flowchart LR
+  load[加载] --> verify[验证] --> prep[准备] --> parse[解析] --> init[初始化] --> use[使用] --> unload[卸载]
+```
 - 连接分三步：验证、准备、解析，三步可交叉，解析可延后到初始化后。
 
 | 阶段 | 做什么 | 关键点 |
@@ -33,6 +40,16 @@
 
 ## 2. 基础知识
 ### 2.1 三层类加载器
+
+下图是三层类加载器的父子关系与加载范围。
+
+```mermaid
+flowchart TD
+  boot[Bootstrap 加载 JDK 核心] --> ext[Extension Platform 加载 ext 目录 平台模块]
+  ext --> app[Application 加载 classpath]
+  boot --> null1[getClassLoader 返回 null]
+  app --> def[默认上下文加载器]
+```
 | 加载器 | 实现 | 加载范围 | getClassLoader() |
 | --- | --- | --- | --- |
 | Bootstrap | C++，JVM 内部 | JDK 核心：`java.*`，JDK8 为 `rt.jar` | `null` |
@@ -98,6 +115,19 @@ public class Singleton {
 
 ## 4. 原理剖析
 ### 4.1 双亲委派：`loadClass` 流程
+
+下图是 loadClass 先查缓存再委派父加载器的流程。
+
+```mermaid
+flowchart TD
+  start[loadClass] --> cache[findLoadedClass 查缓存]
+  cache --> hit[已加载直接返回]
+  cache --> miss[未加载委派父加载器]
+  miss --> parent[父加载器 loadClass]
+  parent --> found[父加载到返回]
+  parent --> notfound[父加载不到自己 findClass]
+  notfound --> define[findClass 加载]
+```
 ```java
 // ClassLoader.loadClass 简化逻辑，勿重写它，优先重写 findClass
 protected Class<?> loadClass(String name, boolean resolve) {

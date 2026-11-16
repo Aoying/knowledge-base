@@ -2,7 +2,7 @@
 知识点: JVM GC 调优
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - Java-并发编程
@@ -19,6 +19,19 @@
 GC 调优不是「背参数」，而是先定目标再选手段。对在线服务通常只有两个目标：**吞吐量**（单位时间处理多少请求）和**停顿时间**（单次 STW 多久），两者天然冲突：堆越大、回收越不频繁，吞吐越好但单次停顿越长。调优的顺序永远是「先观测、再定目标、最后动参数」，反过来调参数基本是在碰运气。
 
 先记住分代假设：绝大多数对象朝生夕死，所以堆分年轻代（Eden + 两个 Survivor）和老年代。Minor GC 只扫年轻代，快；对象熬过多次 Minor GC（默认年龄阈值 15，可由 `-XX:MaxTenuringThreshold` 调整）才晋升老年代；老年代满了触发 Major/Full GC，要扫全堆，最伤停顿。
+
+下图是对象在年轻代与老年代之间的晋升路径。
+
+```mermaid
+flowchart TD
+  newObj[新对象] --> eden[Eden]
+  eden --> minor[Minor GC]
+  minor --> dead[朝生夕死对象回收]
+  minor --> age[年龄达到阈值 15]
+  age --> old[老年代]
+  old --> full[老年代满了触发 Major Full GC]
+  full --> scan[扫全堆 最伤停顿]
+```
 
 ## 2. 常用收集器与选型
 
@@ -53,6 +66,21 @@ jstat -gc <pid> 1000
 ```
 
 看日志抓三个信号：
+
+下图是看日志抓的三个信号与各自的怀疑方向。
+
+```mermaid
+flowchart TD
+  log[看 GC 日志] --> fullGC[Full GC 频繁]
+  log --> pause[单次停顿过长]
+  log --> promote[晋升失败]
+  fullGC --> leak[怀疑内存泄漏或缓存无上限]
+  pause --> evac[看停顿发生在哪个阶段]
+  evac --> ref[Evacuation 之外时间长看引用处理]
+  promote --> survivor[Survivor 放不下]
+  survivor --> early[对象提前晋升顶满老年代]
+  promote --> mid[短时间大量中年对象]
+```
 
 1. **Full GC 频繁**：老年代一直在涨、回收不下去，先怀疑内存泄漏或缓存无上限，而不是加大堆。
 2. **单次停顿过长**：看停顿发生在哪个阶段；G1 日志里 Evacuation 之外的时间长，常见原因是引用处理（软/弱引用、Finalizer 积压）。

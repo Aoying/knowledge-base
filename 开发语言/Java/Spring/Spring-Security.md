@@ -2,7 +2,7 @@
 知识点: Spring Security
 层级: 进阶
 适用版本: Spring Security 5.7 / Spring Boot 2.7
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Spring-Boot
   - 接口设计与文档
@@ -22,6 +22,13 @@ Spring Security 解决两件事：**认证**（你是谁）和**授权**（你�
 
 ## 2. 过滤器链机制
 
+下图是安全链骨干过滤器的执行顺序。
+
+```mermaid
+flowchart LR
+  scp[SecurityContextPersistenceFilter 加载存回 SecurityContext] --> up[UsernamePasswordAuthenticationFilter 处理表单登录提交] --> et[ExceptionTranslationFilter 翻译认证授权异常] --> authf[AuthorizationFilter 链尾做 URL 授权判定]
+```
+
 - Boot 应用里通过 `DelegatingFilterProxy` 把 Servlet 容器的过滤器桥接到 Spring 管理的安全链；一条请求可能走多条 `SecurityFilterChain`（按 URL 模式匹配，先命中先用），如 `/api/**` 一条（无状态、接口口径）、`/admin/**` 一条（表单登录口径）。
 - 链上关键过滤器（按执行顺序的骨干，不是全量）：
 
@@ -35,6 +42,24 @@ Spring Security 解决两件事：**认证**（你是谁）和**授权**（你�
 - 调试口径：启动日志开 `logging.level.org.springframework.security=DEBUG` 能看到实际生效的链顺序；排查「配置没生效」先确认请求命中的是哪条链，而不是先怀疑表达式写错。
 
 ## 3. 认证流程
+
+下图是登录请求经认证过滤器到 SecurityContext 的四步流程。
+
+```mermaid
+sequenceDiagram
+  participant AF as 认证过滤器
+  participant AM as AuthenticationManager
+  participant DAP as DaoAuthenticationProvider
+  participant UDS as UserDetailsService
+  participant PE as PasswordEncoder
+  participant SCH as SecurityContextHolder
+  AF->>AM: 交未认证 Authentication
+  AM->>DAP: 逐个问 AuthenticationProvider
+  DAP->>UDS: loadUserByUsername 查用户
+  DAP->>PE: 比对密码
+  DAP-->>AF: 组装已认证对象
+  AF->>SCH: 放入 SecurityContext
+```
 
 1. 登录请求被认证过滤器拦下，生成一个未认证的 `Authentication`（含用户名、密码凭证）。
 2. 交给 `AuthenticationManager`（默认实现 `ProviderManager`），它逐个问链上的 `AuthenticationProvider` 谁能处理。
@@ -78,6 +103,15 @@ public class SecurityConfig {
 
 - 只用自适应哈希：`BCryptPasswordEncoder` 是默认选择，成本因子可调、每个密码自带盐。MD5、SHA-1 裸哈希、以及「自己发明的加盐规则」一律不合格。
 - `DelegatingPasswordEncoder` 靠存储前缀分发：密文形如 `{bcrypt}$2a$10$...`，`{noop}` 是明文对比，只允许出现在本地调试，上生产前全局搜一遍清掉。
+
+下图是 DelegatingPasswordEncoder 按存储前缀分发编码器的流程。
+
+```mermaid
+flowchart TD
+  cipher[密文带前缀] --> bcrypt2[bcrypt 前缀 走 BCryptPasswordEncoder]
+  cipher --> noop2[noop 前缀 明文对比 只允许本地调试]
+  cipher --> noprefix2[无前缀老密文 与委托编码器对不上]
+```
 - 常见报错 `There is no PasswordEncoder mapped for the id "null"`：库里存的是无前缀的老密文，与委托编码器对不上。迁移路径是登录时校验老算法、成功后按新格式重写密文，逐步洗库，而不是把编码器改回兼容明文。
 
 ## 6. 与 JWT / OAuth2 的关系（概念与选型）

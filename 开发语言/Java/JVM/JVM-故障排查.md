@@ -2,7 +2,7 @@
 知识点: JVM 故障排查
 层级: 进阶
 适用版本: JDK 8 / JDK 11（项目 TongWeb + Spring Boot 2.7.3）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - JVM-GC调优
   - JVM-内存模型
@@ -79,6 +79,18 @@ JDK 9+ 统一日志：`-Xlog:gc*:file=/data/logs/gc-%t.log:time,uptime:filecount
 
 ### CPU 飙高定位流程
 
+下图是 CPU 飙高时从进程到代码行的定位链。
+
+```mermaid
+flowchart TD
+  top[top 找 Java 进程 PID] --> hp[top Hp 找最忙线程 TID]
+  hp --> hex[printf 转十六进制 nid]
+  hex --> stack[jstack 按 nid 看线程在跑什么代码]
+  stack --> loop[栈总停在同一业务方法 死循环或热点计算]
+  stack --> gc[总在 GC 线程 转堆与 GC 日志]
+  stack --> lock[大量线程 BLOCKED 在同一把锁 查持锁线程]
+```
+
 ```bash
 top                              # 1. 找到吃 CPU 的 Java 进程 PID
 top -Hp <pid>                    # 2. 找到最忙线程 TID（十进制）
@@ -92,12 +104,35 @@ Arthas 路径更短：`thread -n 3` 一步给出最忙线程及栈；再 `trace`
 
 ### 内存溢出定位流程
 
+下图是内存溢出时先定类型再取堆快照的定位流程。
+
+```mermaid
+flowchart TD
+  oom[看 OOM 报错类型] --> heap[堆问题 取 HeapDump 或 jmap dump]
+  heap --> mat[MAT 打开 dump]
+  mat --> hist[Histogram 第一名]
+  mat --> dom[Dominator Tree Retained Heap]
+  mat --> leak[Leak Suspects 报告]
+  leak --> root[沿 GC Roots 引用链确认谁在持有]
+```
+
 1. 先看 OOM 报错类型（对照上表）缩小范围，别一上来就 dump。
 2. 堆问题：用自动留下的 `HeapDumpOnOutOfMemoryError` 文件，或手动 `jmap -dump`（大堆 dump 会长时间停顿，生产先报备）。
 3. MAT 打开 dump：看 Histogram 第一名是谁、Dominator Tree 的 Retained Heap、Leak Suspects 报告；沿 GC Roots 引用链确认「谁在持有、本该何时释放」。
 4. 常见真凶：静态集合只加不删、缓存无上限无过期、ThreadLocal 用完不 remove、监听器/回调注册后不注销、大结果集一次全量查回内存（分页缺失）。
 
 ### 频繁 GC / 接口毛刺定位流程
+
+下图是频繁 GC 与接口毛刺的定位流程。
+
+```mermaid
+flowchart TD
+  jstat[jstat 看 YGC FGC 频率与耗时] --> align[GC 日志确认停顿与接口毛刺时点是否对齐]
+  align --> alloc[分配太快 修分配热点]
+  align --> leak2[老年代泄漏式增长 转内存流程]
+  align --> big[单次大对象 导出改流式 分页]
+  alloc --> note[调大堆只是续命]
+```
 
 1. `jstat -gcutil <pid> 1000 20` 看 YGC/FGC 频率与耗时增量。
 2. GC 日志确认停顿与接口毛刺时间点是否对齐（与 [监控告警](工程实践/运维/监控告警.md) 的 GC 指标大盘互相印证）。

@@ -2,7 +2,7 @@
 知识点: Spring Cloud 概览
 层级: 进阶
 适用版本: Spring Cloud 2021.0 / Spring Cloud Alibaba 2021.0（Boot 2.7 对应线）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Spring-Boot
   - 分布式事务
@@ -22,6 +22,24 @@ Spring Cloud 不是单个框架，而是一套**分布式系统基础设施的�
 
 ## 2. 组件全景
 
+下图是六个组件各自解决的分布式问题。
+
+```mermaid
+flowchart TD
+  cloud[Spring Cloud 分布式基础设施标准件集合] --> reg[注册中心 Nacos Eureka]
+  cloud --> cfg[配置中心 Nacos Config Apollo]
+  cloud --> gw[API 网关 Spring Cloud Gateway]
+  cloud --> feign[声明式调用 OpenFeign]
+  cloud --> lb[负载均衡 Spring Cloud LoadBalancer]
+  cloud --> sentinel[限流熔断 Sentinel Resilience4j]
+  reg --> find[调用方按服务名查列表 不再写死 IP 端口]
+  cfg --> uni[多实例 多环境配置统一存放 集中下发]
+  gw --> entry[统一入口 路由转发 鉴权前置 限流 灰度]
+  feign --> http[HTTP 调用写成接口加注解]
+  lb --> pick[从实例列表按策略挑一台 客户端侧均衡]
+  sentinel --> protect[下游变慢或挂掉时保护自己不被拖垮]
+```
+
 | 组件 | 代表实现 | 解决什么问题 |
 |---|---|---|
 | 注册中心 | Nacos、Eureka | 服务实例动态上下线后，调用方如何知道「现在该调哪台」——实例启动时注册、心跳保活，调用方按服务名查列表，不再写死 IP:端口 |
@@ -40,6 +58,17 @@ Spring Cloud 不是单个框架，而是一套**分布式系统基础设施的�
 先说结论：§2 的六个组件没有一个是“多一个功能”，每一个都是把原来进程内默认成立的假设（地址固定、配置随包走、调用一定成功）换成显式的分布式机制。本节只把 §1–§7 已有的结论拆开讲清机制，不引入新组件；数字一律复用 §7 已核验的数字。
 
 ### 服务注册与发现：注册表、心跳与“谁来判定死亡”
+
+下图是注册、保活与判定摘除的三步。
+
+```mermaid
+flowchart TD
+  reg2[实例启动时注册 服务名与地址写进注册表] --> hb[心跳保活 证明还活着]
+  hb --> judge[谁判定死亡 多久摘除]
+  judge --> eureka[Eureka 租约 90 秒到期 驱逐扫描每 60 秒]
+  judge --> nacos[Nacos 临时实例 15 秒标不健康 30 秒删除]
+  judge --> consul[Consul 窗口由检查配置决定]
+```
 
 机制分三步，缺一步都会出 §7 算的那类“还在调死实例”的账：
 
@@ -78,6 +107,20 @@ Spring Cloud 不是单个框架，而是一套**分布式系统基础设施的�
 - **重试的默认行为**：OpenFeign 默认不重试，`Retryer.NEVER_RETRY` 是 Feign 的默认行为，调用失败一次就直接抛异常，不会自动再试（小技巧节）。想重试要显式配，而且重试只对幂等接口安全；§6 说“非幂等接口不要自动重试”，前提是先确认当前到底有没有开重试——默认是没开的，别以为它在默默帮你重试。
 
 ### 熔断降级：滑动窗口与半开
+
+下图是熔断器关闭、打开与半开三个状态的流转。
+
+```mermaid
+stateDiagram-v2
+  state "关闭" as Closed
+  state "打开" as Open
+  state "半开" as HalfOpen
+  [*] --> Closed
+  Closed --> Open : 滑动窗口失败比例高
+  Open --> HalfOpen : 等待时间到 只放少量探测调用
+  HalfOpen --> Closed : 探测成功
+  HalfOpen --> Open : 探测失败
+```
 
 §2 的定性是：下游变慢或挂掉时保护自己不被拖垮，见关联篇《限流熔断与降级》；§4 把它列为拆分后“必须设计”的一环（超时、重试、幂等、限流熔断全部从“不用考虑”变成“必须设计”）。机制上是三段状态机，窗口与半开是其中两个关键概念：
 

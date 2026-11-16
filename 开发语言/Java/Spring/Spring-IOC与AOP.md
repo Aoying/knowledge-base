@@ -2,7 +2,7 @@
 知识点: Spring IOC 与 AOP
 层级: 进阶
 适用版本: Spring Boot 2.7.3 / Spring Framework 5.3
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Spring-Boot
   - Spring-事务
@@ -60,6 +60,20 @@ public class CostLogAspect {
 
 ### 代理机制：JDK 动态代理 vs CGLIB
 
+下图是 JDK 动态代理与 CGLIB 的选择条件：Spring 默认有接口走 JDK 代理，但 Boot 2.7 默认 proxyTargetClass=true，有接口也走 CGLIB。
+
+```mermaid
+flowchart TD
+    q{目标有接口吗} --> yes[有接口 Spring 默认 JDK 动态代理]
+    q --> no[没接口 只能 CGLIB 生成子类]
+    yes --> jdkp[JDK 代理生成实现目标接口的代理类]
+    yes --> boot[Boot 2.7 默认 proxyTargetClass true 有接口也走 CGLIB]
+    no --> cglib[CGLIB 生成目标类的子类]
+    cglib --> finalc[类和方法不能 final]
+    boot --> finalc
+    jdkp --> iface[前提 目标必须有接口]
+```
+
 | 维度 | JDK 动态代理 | CGLIB |
 |---|---|---|
 | 原理 | 生成实现目标接口的代理类 | 生成目标类的子类 |
@@ -80,6 +94,15 @@ public class CostLogAspect {
 
 ### Bean 生命周期
 
+下图是 Bean 从实例化到销毁的七步生命周期。
+
+```mermaid
+flowchart TD
+  i1[1 实例化] --> i2[2 依赖注入] --> i3[3 Aware 回调] --> i4[4 BeanPostProcessor 前置] --> i5[5 初始化] --> i6[6 BeanPostProcessor 后置] --> i7[7 使用与销毁]
+  i6 --> proxy2[AOP 代理在这里生成]
+  i5 --> init2[afterPropertiesSet init-method]
+```
+
 1. **实例化**：容器按 BeanDefinition 反射调用构造器创建对象。
 2. **依赖注入**：填充属性（构造器注入在此步随构造完成）。
 3. **Aware 回调**：`BeanNameAware`、`ApplicationContextAware` 等把容器信息回给 Bean。
@@ -91,6 +114,17 @@ public class CostLogAspect {
 时序记忆法：代理在初始化之后才生成，所以初始化回调里调用自己的事务/切面方法，织入逻辑不会生效。
 
 ### 循环依赖
+
+下图是三级缓存解决单例循环依赖的分工。
+
+```mermaid
+flowchart TD
+  circ[循环依赖 A 依赖 B B 依赖 A] --> l1[一级 singletonObjects 成品 Bean]
+  circ --> l2[二级 earlySingletonObjects 半成品早期引用]
+  circ --> l3[三级 singletonFactories 半成品工厂]
+  l3 --> early[需要早期暴露时提前生成代理]
+  early --> inj[注入的是代理而不是原始对象]
+```
 
 A 依赖 B、B 依赖 A 时，Spring 用三级缓存解决**单例 + 字段/Setter 注入**的循环：
 

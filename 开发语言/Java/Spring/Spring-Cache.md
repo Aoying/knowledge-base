@@ -2,7 +2,7 @@
 知识点: Spring Cache 缓存抽象
 层级: 进阶
 适用版本: Spring Boot 2.7.3 / Spring Framework 5.3
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Spring-Boot
   - Redis
@@ -18,6 +18,17 @@
 ## 1. 核心概念
 
 Spring Cache 是**声明式缓存抽象**：用注解把「查缓存 → 回源 → 写缓存」的模板从业务代码里抽走，业务方法只管查数据库。存储可换：接口是 `CacheManager` / `Cache`，实现可以是本地 `ConcurrentHashMap`、Caffeine、Redis、EhCache，切换不动业务代码。
+
+下图是 Cache Aside 读路径查缓存、回源再写缓存的流程。
+
+```mermaid
+flowchart TD
+  call[调用 Cacheable 方法] --> checkc[调用前查缓存]
+  checkc --> hit[命中直接返回不进方法]
+  checkc --> miss[未命中执行方法查数据库]
+  miss --> write[结果回写缓存]
+  write --> ret[返回结果]
+```
 
 边界先说清：它只管**单次读写的缓存套路**，不管一致性深水区（双写、订阅 binlog）和穿透击穿雪崩的系统对策——那些在 [Redis 缓存问题与分布式锁](数据库/Redis/Redis-缓存问题与分布式锁.md) 里，本篇负责注解侧的正确用法。典型落点：字典码值、机构与产品参数、地区树等读多写少、容忍分钟级延迟的数据；强一致数据（余额、额度）不要套这层抽象。
 
@@ -97,6 +108,18 @@ public class CacheConfig {
 ## 4. 一致性：注解侧能做的与不能做的
 
 - 读路径是标准的 Cache Aside：`@Cacheable` 查不到才查库回写。写路径的纪律：**先更新数据库，再删缓存**（`@CacheEvict` 放在写方法上），不要用 `@CachePut` 去「同步更新缓存」当一致性手段——高并发下两个写请求交错时 Put 的顺序可能与 DB 提交顺序相反，缓存里反而留下旧值。`@CachePut` 只适合单写、低并发的配置型数据。
+
+下图是写路径先更新数据库再删缓存的纪律。
+
+```mermaid
+flowchart TD
+  writepath[写路径] --> upd[先更新数据库]
+  writepath --> put[CachePut 同步更新缓存]
+  upd --> evict[CacheEvict 删缓存]
+  evict --> read2[下次读按 Cache Aside 回源重建]
+  put --> wrong[高并发下顺序可能与 DB 提交顺序相反 留下旧值]
+  put --> only[只适合单写 低并发配置型数据]
+```
 - **与事务的顺序坑**：`@CacheEvict` 默认在方法返回后执行，但如果方法在事务里，缓存删除发生的时点可能早于事务提交——删完到提交之间有读请求进来，又把旧值回写进缓存。两种解法：把 evict 动作注册到事务提交后（`TransactionSynchronizationManager` 的 `afterCommit` 里执行），或给缓存切面与事务切面排 order 并接受最终一致。做不到这两点就老实接受「短暂不一致 + TTL 兜底」，并在选型时就排除强一致数据。
 - **自调用失效**：同类内 `this.getItem()` 不走 AOP 代理，`@Cacheable` 静默不生效——和 `@Transactional` 自调用是同一个病根，解法同样是注入自身代理或拆类，见 [Spring 事务](开发语言/Java/Spring/Spring-事务.md)。
 
@@ -160,6 +183,19 @@ spring.cache.caffeine.spec=maximumSize=10000,expireAfterWrite=10m,recordStats
 ### 7.3 淘汰策略：近似 LRU（Window TinyLFU）
 
 一句话原理：新条目先进一个很小的 LRU 窗口（只看新近性），窗口挤出的受害者由 TinyLFU 用 Count-Min Sketch 估算历史访问频率来裁决——频率高于主缓存受害者才准入主缓存（分段 LRU），否则直接丢弃；既留得住刚来的热点，也防得住一波流的冷数据把高频旧条目挤走。
+
+下图是 Window TinyLFU 新条目经窗口与频率裁决的淘汰流程。
+
+```mermaid
+flowchart TD
+  newe[新条目] --> win[先进很小的 LRU 窗口]
+  win --> victim[窗口挤出受害者]
+  victim --> tiny[TinyLFU 用 Count-Min Sketch 估算历史访问频率]
+  tiny --> higher[频率高于主缓存受害者 准入主缓存]
+  tiny --> lower[频率不高 直接丢弃]
+  higher --> keep[留住刚来的热点]
+  lower --> cold[防一波流冷数据挤走高频旧条目]
+```
 
 推论（非官方原文，凭上述机制得出）：`maximumSize` 设多小直接决定这套策略的腾挪空间——设得太小，窗口和主缓存都装不下工作集，命中率上不去；调参没有通用最优值，看 `recordStats` 的命中率说话。
 

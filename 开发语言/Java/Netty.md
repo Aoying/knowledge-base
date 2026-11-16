@@ -2,7 +2,7 @@
 知识点: Netty
 层级: 进阶
 适用版本: Netty 4.1.x
-更新日期: 2026-11-15
+更新日期: 2026-11-16
 关联:
   - Java-IO与NIO
   - 计算机网络
@@ -31,6 +31,18 @@
 ## 2. 线程模型：EventLoop 与无锁化
 
 - `EventLoopGroup` 是线程池：服务端典型配两个，boss 只负责 accept 新连接，worker 负责已建立连接的读写。连接数远小于 EventLoop 数时，一个 EventLoop 同时管成百上千条 Channel。
+
+下图是 boss 与 worker 的分工及一条 Channel 只绑一个 EventLoop 的规则。
+
+```mermaid
+flowchart TD
+  boss[boss 只负责 accept 新连接] --> worker[worker 负责已建立连接的读写]
+  worker --> bind[一条 Channel 只由一个 EventLoop 线程处理]
+  bind --> serial[所有 IO 事件和 handler 回调串行执行]
+  serial --> nolock[同一连接数据天然无并发 不用加锁]
+  bind --> block[handler 里绝不能阻塞]
+  block --> stall[堵住一个 EventLoop 挂在上面的所有连接一起卡死]
+```
 - 绑定规则是理解 Netty 并发模型的关键：**一条 Channel 从创建到关闭，只由一个 EventLoop 线程处理**。所有 IO 事件和 handler 回调都在这一个线程里串行执行，所以 handler 里处理同一连接的数据天然无并发，不用加锁。
 - 代价：**绝不能在 handler 里做阻塞操作**（查数据库、调远程接口、Thread.sleep）。堵住一个 EventLoop，挂在它上面的所有连接一起卡死。耗时业务要扔到业务线程池，或用 `DefaultEventExecutorGroup` 把某个 handler 单独绑到另一组线程上执行。
 - 普通任务（execute）和定时任务（schedule）都进 EventLoop 的任务队列，与 IO 事件在同线程穿插执行，所以定时任务里同样不能阻塞。
@@ -38,6 +50,20 @@
 ## 3. Pipeline 与 Handler
 
 - Pipeline 是双向链表：入站事件从 head 往 tail 传，出站操作（write）从 tail 往 head 反着走；顺序由 addLast 的先后决定。
+
+下图是 Pipeline 入站与出站相反的传播方向。
+
+```mermaid
+flowchart LR
+  ord[顺序由 addLast 先后决定] --> ih[head]
+  ord --> ot[tail]
+  ih --> id[解码]
+  id --> ib[业务]
+  ib --> it[tail]
+  ot --> ob[业务]
+  ob --> oe[编码]
+  oe --> oh[head]
+```
 - 事件靠手动接力：入站 handler 处理完要调 `ctx.fireChannelRead(msg)` 才传给下一节，不调就到此为止；异常往 tail 冒泡到 `exceptionCaught`。写数据用 `ctx.writeAndFlush`（从当前节往 head）还是 `channel.writeAndFlush`（从 tail 全程），结果可能不同，排查编解码没生效时先看这个。
 - 常用基类：`ChannelInboundHandlerAdapter`（自己管消息释放）、`SimpleChannelInboundHandler`（处理完自动 release，业务 handler 默认用它）、`ByteToMessageDecoder`（攒字节做解码，见第 5 节）。
 - 无状态 handler 加 `@ChannelHandler.Sharable` 才能多连接共用一个实例；带成员变量的必须每连接 new 一个，这是新手最常见的并发 bug 来源。
@@ -113,6 +139,19 @@ class EchoHandler extends SimpleChannelInboundHandler<ByteBuf> {
 - **问题**：`writeAndFlush` 是异步的，下游读得慢时 Netty 不会替你挡——写请求照单全收，攒在 `ChannelOutboundBuffer` 里等 socket 可写。生产者（上游读得快）持续写，待发缓冲会无界增长，直到 OOM。这是长连接网关、代理转发最常见的内存事故形态。
 - **水位线机制**：每个 Channel 有一对水位线，`ChannelOption.WRITE_BUFFER_WATER_MARK`，默认值低水位 32KB、高水位 64KB。待发字节超过高水位，`channel.isWritable()` 变 false；排空回落到低水位以下，变回 true 并触发 `channelWritabilityChanged` 事件到 pipeline。
 - **标准用法**：在 handler 里写之前先查 `isWritable()`，不可写时 `config().setAutoRead(false)` 暂停读上游（停止从 socket 拿新数据，也就停止产生新写请求）；`channelWritabilityChanged` 里可写恢复时再 `setAutoRead(true)`。转发代理场景同理：出站 Channel 不可写时，停掉入站 Channel 的 AUTO_READ，可写恢复后再开——背压就沿着链路反向传回了源头。
+
+下图是水位线不可写时停读、可写恢复时重开的背压流程。
+
+```mermaid
+flowchart TD
+  check[写之前查 isWritable] --> unw[不可写 超过高水位 64KB]
+  check --> w[可写 正常写]
+  unw --> stop[setAutoRead false 暂停读上游]
+  stop --> evt[channelWritabilityChanged]
+  evt --> resume[排空回落到低水位 32KB 以下 可写恢复]
+  resume --> reopen[setAutoRead true]
+  reopen --> check
+```
 - **三个边界条件**：
   - 水位线只管「通知」，不管「拦截」：不可写时继续 `writeAndFlush` 依然会入队，内存照涨；必须业务层自己停手，框架不会替你丢数据。
   - 水位线按待发字节数算，不是按消息条数：一条 10MB 的大消息一次就能冲过高水位；大文件下发要分片写，每片写完查一次可写性。

@@ -2,7 +2,7 @@
 知识点: Spring 事务
 层级: 进阶
 适用版本: Spring Boot 2.7.3 / Spring Framework 5.3
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Spring-Boot
   - Spring-IOC与AOP
@@ -52,6 +52,26 @@ public class LoanApplyService {
 
 ### 传播行为
 
+下图是七种传播行为按有无事务的分支。
+
+```mermaid
+flowchart TD
+  prop2[传播行为] --> has[已有事务]
+  prop2 --> nohas[没有事务]
+  has --> req2[REQUIRED 加入]
+  has --> sup[SUPPORTS 加入]
+  has --> mand[MANDATORY 加入 否则抛异常]
+  has --> never[NEVER 有则抛异常]
+  has --> new2[REQUIRES_NEW 挂起当前 永远新建]
+  has --> notsup2[NOT_SUPPORTED 挂起当前 非事务执行]
+  has --> nested2[NESTED 同一事务内开保存点]
+  nohas --> reqnew[REQUIRED 新建]
+  nohas --> supno[SUPPORTS 非事务执行]
+  new2 --> audit2[审计日志 操作流水 独立提交]
+  new2 --> indep[独立连接 独立提交]
+  nested2 --> save[内层回滚只到保存点]
+```
+
 | 传播行为 | 行为 | 典型用途 |
 |---|---|---|
 | `REQUIRED` | 有事务加入，没有新建 | 默认，绝大多数业务方法 |
@@ -68,6 +88,18 @@ public class LoanApplyService {
 - `NESTED` 与外层共用一个连接、一个事务，只是多一个保存点；驱动必须支持 savepoint（OceanBase MySQL 模式支持），且只有最外层提交才真正提交。
 
 ### 与 Flowable 流程事务的衔接
+
+下图是业务表与 Flowable 流程表同事务提交的前提。
+
+```mermaid
+flowchart TD
+  cfg2[SpringProcessEngineConfiguration] --> sameMgr[setTransactionManager 与业务同一个]
+  sameMgr --> bound[流程命令绑到当前 Spring 事务]
+  bound --> together[流程推进写 ACT 表与业务表写入同事务提交 同事务回滚]
+  together --> wait[流程到达等待状态 当前命令事务即提交]
+  together --> async[异步执行器在独立线程 独立事务中跑]
+  async --> comp[异步失败靠失败重试与业务补偿]
+```
 
 Flowable 在 Spring 环境下使用 `SpringTransactionInterceptor`，把流程命令（`startProcessInstance`、`complete` 等）绑到当前 Spring 事务上，前提是 Flowable 的 `ProcessEngineConfiguration` 用的事务管理器与业务一致（`setTransactionManager(...)` 注入同一个 `PlatformTransactionManager`）：
 
@@ -89,6 +121,18 @@ config.setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE)
 ## 4. 原理剖析
 
 声明式事务 = AOP 代理 + 事务拦截器：
+
+下图是声明式事务经代理与拦截器到线程绑定连接的流程。
+
+```mermaid
+flowchart TD
+  proxy3[Spring 为标注 Transactional 的 Bean 生成代理] --> inter2[外部调用先进入 TransactionInterceptor]
+  inter2 --> mgr[PlatformTransactionManager 开启事务]
+  mgr --> ds2[DataSourceTransactionManager 取连接 关自动提交]
+  ds2 --> bind2[连接绑定到当前线程 ThreadLocal]
+  bind2 --> same[MyBatis SqlSessionTemplate 每步取同一连接]
+  same --> commit[正常返回 提交 抛异常且命中回滚规则 回滚]
+```
 
 1. Spring 为标注 `@Transactional` 的 Bean 生成代理（机制见 [Spring IOC 与 AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)）。
 2. 外部调用先进入 `TransactionInterceptor`，按注解配置通过 `PlatformTransactionManager` 开启事务。

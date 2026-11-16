@@ -2,7 +2,7 @@
 知识点: Spring MVC基础
 层级: 基础
 适用版本: Spring Boot 2.7.3
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Spring-Boot
   - Spring-IOC与AOP
@@ -21,6 +21,18 @@
 Spring MVC 是 Spring 的 Web 层框架，职责是「把 HTTP 请求翻译成 Java 方法调用，再把返回值翻译回 HTTP 响应」。Spring Boot 项目里只要引入 `spring-boot-starter-web`，内嵌 Tomcat 与 MVC 基础设施就由自动配置装配好，不用手写 web.xml 或 DispatcherServlet 注册。
 
 一次请求的完整流程（排障时按这个顺序定位）：
+
+下图是一次请求经 DispatcherServlet 链路的五个步骤。
+
+```mermaid
+flowchart TD
+  tom[请求到达内嵌 Tomcat] --> ds[DispatcherServlet 前端控制器接住]
+  ds --> hm[HandlerMapping 按 URL 加 HTTP 方法找到 Controller 方法]
+  hm --> ha[HandlerAdapter 解析参数 执行方法]
+  ha --> conv[HttpMessageConverter 序列化成 JSON 或走视图解析]
+  ha --> inter[拦截器在步骤 3 前后切入]
+  ha --> exc[异常由异常解析链接管]
+```
 
 1. 请求到达内嵌 Tomcat，被 `DispatcherServlet`（前端控制器）接住。
 2. `HandlerMapping` 按 URL + HTTP 方法找到对应的 Controller 方法（Handler）。
@@ -123,6 +135,15 @@ public class WebConfig implements WebMvcConfigurer {
 
 三个方法的分工：`preHandle`（进 Controller 前，返回 false 即拦截）、`postHandle`（Controller 执行后、渲染前）、`afterCompletion`（整个请求完成后，适合记耗时日志、清理 ThreadLocal）。
 
+下图是拦截器三个方法在请求中的切入时点。
+
+```mermaid
+flowchart TD
+  pre[preHandle 进 Controller 前 返回 false 即拦截] --> ctrl[Controller 执行]
+  ctrl --> post[postHandle Controller 执行后 渲染前]
+  post --> after[afterCompletion 整个请求完成后 记耗时日志 清理 ThreadLocal]
+```
+
 拦截器、过滤器、AOP 的选型界线：过滤器（Servlet 层）只能看到原始请求响应，适合编码、跨域这类与业务无关的事；拦截器能拿到 Handler（知道是哪个 Controller 方法），适合登录、权限这类「按接口区分」的逻辑；AOP 能切任意方法（含 Service 层），见 [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)。
 
 ### 内容协商与 REST
@@ -161,6 +182,20 @@ spring:
 - 上传路径、文件名校验（防路径穿越）是生产必做项，示例里的 `/data/upload` 只是示意。
 
 ## 4. 实战应用：全局异常处理
+
+下图是全局异常处理按异常类型匹配的流程。
+
+```mermaid
+flowchart TD
+  adv[RestControllerAdvice] --> ex3[校验失败 MethodArgumentNotValidException]
+  adv --> ex4[业务异常 BizException]
+  adv --> ex5[未知异常 Exception]
+  ex3 --> handler1[转统一错误响应]
+  ex4 --> handler1
+  ex5 --> handler2[兜底 Exception 处理器]
+  handler1 --> res2[返回统一 Result]
+  handler2 --> res2
+```
 
 ```java
 @Slf4j  // 需 Lombok；不用 Lombok 时自行定义 Logger

@@ -2,7 +2,7 @@
 知识点: Spring Boot
 层级: 进阶
 适用版本: Spring Boot 2.7.3
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - MyBatis-Plus
@@ -22,6 +22,16 @@ Spring Boot 的价值是「约定优于配置」：自动配置（AutoConfigurat
 起步依赖（starter）是预配好的依赖包：版本由 Boot 的 BOM 统一管理，别自己拼单个 jar 的版本；第三方库（MyBatis-Plus、Druid、Flowable）要查它们声明支持的 Boot 版本线。
 
 ## 2. 配置加载顺序（后覆盖前）
+
+下图是配置加载后覆盖前的优先级顺序。
+
+```mermaid
+flowchart TD
+  cmd[命令行参数] --> env[SPRING_APPLICATION_JSON 系统环境变量]
+  env --> prof[application profile yml]
+  prof --> app[application yml]
+  prop[application properties 优先级高于 yml] --> app
+```
 
 1. 命令行参数 `--server.port=8081`
 2. `SPRING_APPLICATION_JSON` / 系统环境变量
@@ -71,6 +81,21 @@ mybatis-plus:
 
 ### 事务传播常用组合
 
+下图是 REQUIRED、REQUIRES_NEW 与 NESTED 的传播差别。
+
+```mermaid
+flowchart TD
+  prop2[传播行为] --> req[REQUIRED 有就加入 没有新建]
+  prop2 --> new[REQUIRES_NEW 挂起当前 永远新建]
+  prop2 --> nested[NESTED 靠保存点 内层回滚不牵连外层]
+  prop2 --> notsup[NOT_SUPPORTED 非事务方式跑并挂起已有事务]
+  req --> def[默认]
+  new --> audit[记流水 审计日志独立提交]
+  new --> iso[内部抛异常不影响外部已提交事务]
+  nested --> batch[批处理逐条容错]
+  notsup --> bigq[大查询不占事务资源]
+```
+
 - `REQUIRED`（默认）：有就加入，没有新建。
 - `REQUIRES_NEW`：挂起当前，永远新建——记流水、审计日志独立提交用它。
 - 注意：`REQUIRES_NEW` 内部抛异常不影响外部已提交的事务（已挂起隔离）。
@@ -94,6 +119,19 @@ mybatis-plus:
 | 4.1.x | 2026-06 发布，支持到 2027-07，升级目标定它 |
 
 - **现实路径**：2.7 → 3.5（JDK 17）→ 4.1，别想一步到位；先在 3.5 上把 deprecation warning 清零（4.0 删掉了所有 3.x 标记废弃的 API）。
+
+下图是 2.7 经 3.5 到 4.1 的现实升级路径。
+
+```mermaid
+flowchart LR
+  v27[2.7 JDK 8] --> hard[三件硬骨头]
+  hard --> v35[3.5 JDK 17]
+  v35 --> v41[4.1 升级目标]
+  v35 --> clean[先把 deprecation warning 清零]
+  hard --> jdk[JDK 8 到 17]
+  hard --> jakarta[javax 改 jakarta 全量改包名]
+  hard --> dep[依赖对齐 Flowable 升 7]
+```
 - **三件硬骨头**：① JDK 8→17（`--release`、反射/封装 API）；② `javax.*` → `jakarta.*` 全量改包名；③ 依赖对齐——Flowable 6.7.2 只能跑 Boot 2.7，上 Boot 3 必须升 Flowable 7.x；MyBatis-Plus / Druid 也要换支持 Boot 3（Jakarta）的版本，升级前逐个核对 release notes（待验证）。
 - **收益对得上神农这种 IO 密集型**：Boot 3.2+ 虚拟线程一键开（`spring.threads.virtual.enabled=true`），Tomcat 请求线程换虚拟线程，调 OceanBase/下游接口的等待不再占平台线程——和笔记里"虚拟线程"一节呼应。
 
