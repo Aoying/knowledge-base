@@ -2,7 +2,7 @@
 知识点: Kafka 消息队列
 层级: 进阶
 适用版本: Kafka 4.x
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - RocketMQ
   - Kafka-消费者组与Rebalance
@@ -26,9 +26,30 @@
 
 ## 全景导读
 
+下图是 Kafka「分布式提交日志」的心智模型：消息追加写进分区尾部，消费靠 offset 书签往后读。
+
+```mermaid
+flowchart TD
+    A["生产者：消息按顺序追加写进分区尾部、永不修改"] --> B["分区：topic 的分片，并行和顺序性的基本单位"]
+    B --> C["消费者：拿着书签（offset）从某个位置往后读"]
+    C --> D["读过不删，到保留期才整段清掉"]
+    D --> E["和传统队列取出即删是两种世界观"]
+    A --> F["为什么快三件套：顺序追加写磁盘、页缓存、零拷贝 sendfile"]
+```
+
 - **心智模型**：Kafka 是「分布式提交日志」——消息按顺序追加写进分区尾部、永不修改，消费就是拿着书签（offset）从某个位置往后读，读过不删，到保留期才整段清掉。和传统队列「取出即删」是两种世界观。
 - **为什么快**，三件套：顺序追加写磁盘（避开随机 IO）+ 页缓存（读写走 OS cache，不吃 JVM 堆）+ 零拷贝 sendfile（文件直接进网卡）。推论：给 Kafka 的机器内存比 CPU 更重要，堆别调太大，留给页缓存。
 - **投递语义三档**（记定义，别只记名字）：at-most-once（可能丢）、at-least-once（可能重复，Kafka 默认实际效果）、exactly-once（要幂等 + 事务 + 消费端配合才成立）。绝大多数业务的正确答案是 at-least-once + 消费端幂等，机制对比与选型清单见 [消息可靠性](消息队列/消息可靠性.md)。
+
+下图是投递语义三档的取舍：能接受丢选至多一次，不能丢选至少一次加幂等，恰好一次只在三项条件齐全时成立。
+
+```mermaid
+flowchart TD
+    A{"消息丢了能不能接受"} -->|能接受丢| B["至多一次 at-most-once：可能丢"]
+    A -->|不能丢| C["至少一次 at-least-once：可能重复，Kafka 默认实际效果"]
+    C --> D["绝大多数业务的正确答案：at-least-once + 消费端幂等"]
+    C --> E["恰好一次 exactly-once：要幂等 + 事务 + 消费端配合才成立"]
+```
 - **拉模式（pull）**：消费者按自己的节奏 poll，天然削峰；poll 本身是长轮询，没数据时不用再 sleep 忙等。
 
 ## 核心概念一句话
@@ -183,6 +204,18 @@ docker compose up -d
 原文未展开：key 到分区的具体映射算法、扩分区后 key 重映射影响的定量评估方法，原文正文没展开，不作定论。
 
 ### 副本与 ISR：不丢数据的确认链
+
+下图是 acks=all 的确认链：等 ISR 同步才确认，ISR 不足直接拒写，掉队副本不能靠当选 leader 把已确认的数据丢掉。
+
+```mermaid
+flowchart TD
+    A["生产者 acks=all：leader + 全部 ISR 副本同步才确认"] --> B["每个分区一个 leader 处理读写，若干 follower 被动复制"]
+    B --> C["与 leader 保持同步的副本集合叫 ISR"]
+    C --> D["leader 挂了只能从 ISR 里选新 leader"]
+    A --> E["不丢三件套：acks=all + min.insync.replicas=2 + unclean.leader.election.enable=false"]
+    E --> F["ISR 少于 2 时直接拒绝写入，宁可失败也不假成功；非 ISR 副本不许当选 leader"]
+    E --> G["示例：副本数 3，min.insync.replicas=2，保留期 retention.ms=604800000 即 7 天"]
+```
 
 原文 §2 核心概念给出副本模型：每个分区一个 leader 处理读写，若干 follower 被动复制；与 leader 保持同步的副本集合叫 ISR，leader 挂了只能从 ISR 里选新 leader。拆开看，“只能从 ISR 里选”是这条链的第一环：只有跟上进度的副本才有资格接任，掉队副本不在可选范围内。原文 §7 的两条服务端配置是同一条链的后两环：`unclean.leader.election.enable=false`，原文 §7 的注释是宁可短暂不可用，不丢数据，即可用性让位于不丢数据；`min.insync.replicas=2`，原文 §7 注明和生产者 acks=all 配套。数字只复用原文 §7 建 topic 的示例：副本数 3，`min.insync.replicas=2`，保留期 `retention.ms=604800000` 即 7 天。副本数 3 与 `min.insync.replicas=2` 配在一起的意思是：确认写入时至少要有 2 个同步中的副本持有这条消息，单台 broker 挂掉后仍有同步中的副本在 ISR 里，可接任的 leader 仍在。
 

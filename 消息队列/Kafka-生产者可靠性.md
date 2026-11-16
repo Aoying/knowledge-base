@@ -2,7 +2,7 @@
 知识点: Kafka 生产者可靠性
 层级: 进阶
 适用版本: Kafka 4.x
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Kafka-消息队列
   - Kafka-消费者组与Rebalance
@@ -18,6 +18,17 @@
 
 ## 1. acks：确认到什么程度才算发成功
 
+下图是 acks 三档的语义与风险：acks=all 单独开没用，必须和 broker 侧参数配套才叫不丢。
+
+```mermaid
+flowchart TD
+    A{"acks 确认到什么程度才算发成功"} --> B["acks=0：发出即不管，broker 没收到也认为成功，生产别用"]
+    A --> C["acks=1：leader 落盘即确认，leader 刚确认就宕机、follower 没同步到，丢"]
+    A --> D["acks=all（-1）：leader + 全部 ISR 副本同步才确认，最稳，必须与 broker 侧参数配套"]
+    D --> E["不丢三件套：acks=all + min.insync.replicas（≥2）+ unclean.leader.election.enable=false"]
+    E --> F["ISR 少于 min.insync.replicas 时直接拒绝写入，宁可失败也不假成功；非 ISR 副本不许当选 leader"]
+```
+
 | `acks` | 语义 | 风险 |
 |---|---|---|
 | `0` | 发出即不管 | broker 没收到也认为成功，生产别用 |
@@ -28,6 +39,17 @@
 - 代价是延迟：等多个副本确认必然比 `acks=1` 慢，重要链路认这个成本，日志类链路可以放宽。
 
 ## 2. 重试与它带来的两个副作用
+
+下图是重试的两个固有副作用与消除办法：重复靠幂等消除，乱序靠幂等序列号重排或把在途数设为 1。
+
+```mermaid
+flowchart TD
+    A["重试配置：acks=all，retries=Integer.MAX_VALUE，delivery.timeout.ms=120000，enable.idempotence=true"] --> B["重复：消息已落盘、确认在路上丢了，生产者以为失败而重试，broker 收两份"]
+    A --> C["乱序：多批在途时先发的批次失败重试，后发的先落盘，分区内顺序就反了"]
+    B --> D["靠幂等生产者消除重复"]
+    C --> E["开幂等后 Kafka 用序列号在 broker 侧重排，乱序一并解决；不开幂等时把 max.in.flight.requests.per.connection 设为 1 来规避"]
+    A --> F["delivery.timeout.ms 是总预算，超时才真正报失败；业务发送接口的超时要比它大"]
+```
 
 ```properties
 acks=all
@@ -47,6 +69,22 @@ enable.idempotence=true            # 幂等生产者（见下节），开启后 
 - 边界：生产者重启换了新 PID，序列号体系重来，跨会话的重复它管不了；那种重复只能靠事务或业务幂等兜底。
 
 ## 4. 事务消息（概念）
+
+下图是 Kafka 事务消息的流程：跨分区原子写与消费位点包进同一个事务，消费端配 read_committed 才看不到已回滚的消息。
+
+```mermaid
+sequenceDiagram
+    participant P as 生产者
+    participant B as Broker
+    participant C as 消费者
+    P ->> B: initTransactions
+    P ->> B: beginTransaction
+    P ->> B: send record1
+    P ->> B: sendOffsetsToTransaction 把消费位点纳入同一事务
+    P ->> B: commitTransaction 或 abortTransaction 回滚
+    C ->> B: isolation.level=read_committed 只读已提交消息
+    Note over P,C: 解决跨分区原子写 + 消费位点与产出消息的原子性
+```
 
 ```properties
 transactional.id=orders-producer-1   # 稳定的事务 id，同一业务身份重启后保持不变

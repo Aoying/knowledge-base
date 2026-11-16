@@ -2,7 +2,7 @@
 知识点: RocketMQ
 层级: 进阶
 适用版本: 通用
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - 数据库知识点地图
   - Kafka-消息队列
@@ -66,6 +66,21 @@ consumer.start();
 ## 事务消息（半消息二阶段）
 
 1. Producer 发 Half 消息（暂不投递）；2. 执行本地事务；3. 发 Commit/Rollback。
+
+下图是事务消息的半消息二阶段与回查兜底：Half 消息暂不投递，本地事务定结果，长期无确认由 Broker 回查。
+
+```mermaid
+sequenceDiagram
+    participant P as Producer
+    participant B as Broker
+    participant C as Consumer
+    P ->> B: 发 Half 消息，暂不投递
+    P ->> P: 执行本地事务
+    P ->> B: 发 Commit 投递或 Rollback 丢弃
+    B ->> P: 长时间没收到确认，发起回查 checkLocalTransaction
+    Note over P,B: 单条半消息默认最多回查 15 次，Broker 约每 60 秒轮询一次，覆盖 15 分钟
+    B ->> C: Commit 后半消息转为可投递
+```
 Broker 长时间没收到确认会**回查**（默认 15 次）→ 保证最终一致。适合"本地 DB 事务 + 发消息"场景，比本地消息表方案开发成本低。
 
 > 横向专题：[消息队列/消息可靠性.md](消息队列/消息可靠性.md)（三档语义边界、Kafka/RocketMQ 机制对比、消费端幂等三种模式、回查 checklist）。
@@ -138,6 +153,16 @@ consumer.registerMessageListener((MessageListenerOrderly) (msgs, ctx) -> {
 ```
 
 - 顺序消息 = "分区有序"：全局有序靠单队列，吞吐低；一般用"业务 key 分区有序"就够了。
+
+下图是顺序消息的两段式结构：发送端按业务键选队列，消费端单队列单线程消费，卡住一条会堵住整个队列。
+
+```mermaid
+flowchart TD
+    A["发送端：MessageQueueSelector 按业务键路由到同一 queue"] --> B["消费端：MessageListenerOrderly，同一 queue 单线程消费"]
+    B --> C["前一条没成功，后一条不处理：分区有序"]
+    A --> D["全局有序：单 queue 单 consumer，吞吐低"]
+    C --> E["一个消息卡住会堵住整个队列：消费逻辑必须幂等 + 快速失败"]
+```
 - 有序消费时一个消息卡住会堵住整个队列，消费逻辑必须幂等 + 快速失败。
 - 和 Kafka 对比：Kafka 用 key 分区天然有序，RocketMQ 要显式选队列，两者思想一样。
 
@@ -223,6 +248,17 @@ Push 消费的真相：`DefaultMQPushConsumer` 名字叫推、底层是客户端
 ### 关键机制速览
 
 一条消息的旅程（排障按这条链逐段定位）：
+
+下图是一条消息的旅程：排障按这条链逐段定位，先查路由，再查 Broker 状态，最后查消费进度和堆积。
+
+```mermaid
+flowchart TD
+    A["Producer 启动时向 NameServer 拉 Topic 路由，之后定时刷新"] --> B["发送时按负载均衡挑一个队列，把消息发给对应 Broker"]
+    B --> C["Broker 把消息顺序写进 CommitLog，按 flushDiskType 决定何时刷盘，回执发回 Producer"]
+    C --> D["Consumer 启动时同样拉路由，订阅的队列被分配到组内各成员"]
+    D --> E["Consumer 长轮询拉消息，处理后返回消费状态，Broker 据此推进度"]
+    E --> F["任一步对不上号：先查路由，再查 Broker 状态，最后查消费进度和堆积"]
+```
 
 1. Producer 启动时向 NameServer 拉 Topic 路由（哪个 Broker 有哪些队列），之后定时刷新。
 2. 发送时按负载均衡挑一个队列，把消息发给对应 Broker。
