@@ -2,7 +2,7 @@
 知识点: Flowable基础入门
 层级: 基础
 适用版本: Flowable 6.7.2
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Flowable
   - 工程实践知识点地图
@@ -67,6 +67,17 @@
 
 ## 第一个请假流程：从画图到审批
 
+请假流程按天数分流：3 天以内走经理审批，3 天以上走总监审批。
+
+```mermaid
+flowchart TD
+    A[开始事件] --> B[排他网关 天数判断]
+    B --> C[经理审批 days 小于等于 3]
+    B --> D[总监审批 days 大于 3]
+    C --> E[结束事件]
+    D --> E
+```
+
 流程：员工提交 → 天数 ≤ 3 天经理批，> 3 天总监批 → 结束。BPMN 核心片段：
 
 ```xml
@@ -94,6 +105,20 @@
 注意两点：条件表达式用 `${}` 写 EL；XML 里 `<`、`>` 要转义成 `&lt;`、`&gt;`，直接写 `<` 会导致 BPMN 解析失败。
 
 链路四步，代码按顺序贴：
+
+部署、启动、查待办、审批完成四步，分别落在三个 Service 上。
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant R as RepositoryService
+    participant T as RuntimeService
+    participant K as TaskService
+    U->>R: 部署 leave 流程定义
+    U->>T: 按 key 启动实例 传 days 变量
+    U->>K: 按办理人查待办
+    U->>K: 完成任务 传 approved 变量
+```
 
 ```java
 // 1. 部署：资源名须以 .bpmn 或 .bpmn20.xml 结尾才会被解析为流程定义

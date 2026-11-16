@@ -2,7 +2,7 @@
 知识点: Shell脚本编程
 层级: 基础
 适用版本: Bash 4+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Linux与Shell
 标签:
@@ -267,6 +267,17 @@ while read -r line; do echo "$line"; done < <(grep ERROR app.log)  # 不进子 s
 
 ## 11. trap、调试与错误处理
 
+先写 cleanup 再写逻辑：临时文件与子进程靠 trap 清理，调试靠三板斧定位。
+
+```mermaid
+flowchart TD
+    A[mktemp 生成临时目录] --> B[trap cleanup EXIT 脚本退出时都清掉]
+    B --> C[trap INT TERM 被中断时退出]
+    C --> D[bash -n 只查语法不执行]
+    D --> E[bash -x 逐行打印]
+    E --> F[set -euo pipefail 任一失败立即退出]
+```
+
 先写 cleanup 再写逻辑，临时文件与子进程才不会泄漏：
 
 ```bash
@@ -313,6 +324,17 @@ trap 'echo "失败于行号 $LINENO，退出码 $?"' ERR
 - ERR trap 同样不进 if 条件与 `||` 右侧；它只帮定位，不替代 `set -e`。
 
 ## 12. 综合示例：带清理与重试的部署检查
+
+部署检查按环境选健康地址，循环重试，失败即退出，全程有 EXIT 清理兜底。
+
+```mermaid
+flowchart TD
+    A[set -euo pipefail] --> B[mktemp 临时目录 trap EXIT 清理]
+    B --> C[按环境选 URL prod 8080 test 8081]
+    C --> D[curl 健康检查 重试 3 次]
+    D --> E[通过 记录完成]
+    D --> F[失败 记录失败 返回 1]
+```
 
 ```bash
 #!/bin/bash

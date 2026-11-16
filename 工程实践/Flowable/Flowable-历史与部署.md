@@ -2,7 +2,7 @@
 知识点: Flowable-历史与部署
 层级: 进阶
 适用版本: Flowable 6.7.2
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Flowable
   - 工程实践知识点地图
@@ -17,6 +17,16 @@
 > 汇总与全景见 [工程实践/Flowable.md](工程实践/Flowable.md)。本篇管流程的「身后事」：历史数据留多少、怎么清，流程定义怎么发版、出问题怎么退。
 
 ## 历史级别：留多少痕是上线前定的
+
+历史级别四档，级别越高 ACT_HI 表里写得越多，常用档位是 audit。
+
+```mermaid
+flowchart TD
+    A[none] --> B[什么都不记 无审计能力 生产别用]
+    C[activity] --> D[历史流程实例加活动实例 查不到变量]
+    E[audit] --> F[再加历史任务变量表单明细 常用档位]
+    G[full] --> H[再加变量每次变更明细 表涨得最快]
+```
 
 `flowable.history-level` 四档，级别决定 `ACT_HI_*` 表里写什么：
 
@@ -59,6 +69,17 @@ ProcessDefinition def = repositoryService.createProcessDefinitionQuery()
 `database-schema-update` 生产纪律：设 `false`，引擎表升级走官方 SQL 脚本人工执行；开发环境用 `true` 图省事即可。
 
 ## 回退与 rollback 的现实做法
+
+Flowable 没有一键 rollback，回退按场景选三种做法：旧图重部署、令牌跳转、实例迁移。
+
+```mermaid
+flowchart TD
+    A[新实例回退到旧图] --> B[旧图重新部署 以最新版本号成为默认启动版本]
+    C[在途实例退回某个节点] --> D[ChangeActivityStateBuilder 动态跳转]
+    E[在途实例迁到新图] --> F[迁移 API 新老 activity id 对应]
+    D --> G[跳转后 addComment 写驳回意见]
+    F --> H[迁之前备份 ACT 表 先小批量验证再全量]
+```
 
 Flowable 没有「定义版本一键 rollback」按钮，所谓回退是三件事的组合，按场景选：
 

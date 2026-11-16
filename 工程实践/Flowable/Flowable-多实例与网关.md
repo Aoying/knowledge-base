@@ -2,7 +2,7 @@
 知识点: Flowable-多实例与网关
 层级: 进阶
 适用版本: Flowable 6.7.2
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Flowable
   - 工程实践知识点地图
@@ -46,6 +46,19 @@
 
 ### 会签与或签的配方
 
+会签与或签只差完成条件：全票、六成通过、一人通过各有一种配方。
+
+```mermaid
+flowchart TD
+    A[并行多实例 会签审批] --> B{完成条件求值}
+    B --> C[全票 nrOfCompletedInstances 等于 nrOfInstances]
+    B --> D[比例通过 完成数除以总数大于等于 0.6]
+    B --> E[或签 nrOfCompletedInstances 等于 1]
+    C --> F[其余活实例销毁 令牌离开节点]
+    D --> F
+    E --> F
+```
+
 - **会签（全票）**：并行多实例 + `${nrOfCompletedInstances == nrOfInstances}`，或干脆不写完成条件。
 - **会签（比例通过）**：`${nrOfCompletedInstances/nrOfInstances >= 0.6}`，六成完成即结束，剩余待办被销毁。注意统计的是「完成数」不是「同意数」——按同意票数判断要在完成条件里对结论变量另行统计，或改用监听器汇总（见 [工程实践/Flowable/Flowable-事件与监听器.md](工程实践/Flowable/Flowable-事件与监听器.md)）。
 - **或签（一人通过即过）**：并行多实例 + `${nrOfCompletedInstances == 1}`。一人办完其余实例全部销毁，其他人的待办随之消失——这是设计如此，不是 bug。
@@ -58,6 +71,16 @@
 - 运行时改已部署定义的条件只能走 `DynamicBpmnService` 改内存模型（不落库、重启丢）；正经做法是改图发新版本，见 [工程实践/Flowable/Flowable-历史与部署.md](工程实践/Flowable/Flowable-历史与部署.md)。
 
 ## 网关：分路与汇聚
+
+四种网关的分路与汇聚语义各不相同，排他走一条、并行全走、包容走满足条件的、事件网关等谁先触发。
+
+```mermaid
+flowchart TD
+    A[排他网关] --> B[按顺序求值 走第一条为 true 的]
+    C[并行网关] --> D[分叉无条件全部分支 汇聚等所有入边到齐]
+    E[包容网关] --> F[满足条件的分支都走 汇聚等可能到达的分支]
+    G[事件网关] --> H[后接中间捕获事件 谁先触发走谁]
+```
 
 | 网关 | 分路语义 | 汇聚语义 |
 |---|---|---|
@@ -72,6 +95,17 @@
 - 事件网关后接中间捕获事件（定时、消息、信号），用于「等结果或等超时，谁先来走谁」的竞速场景，落败分支自动取消。
 
 ## 节点授权：任务到底归谁
+
+候选任务要先查池子、再签收、再办结，查池子不能用 assignee 条件。
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant T as TaskService
+    U->>T: taskCandidateUser 查池子
+    U->>T: claim 签收
+    U->>T: complete 办结
+```
 
 多实例和网关决定「走几条路」，授权决定「每条路上的人工任务归谁办」，三个概念别混：
 

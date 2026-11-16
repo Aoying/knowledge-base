@@ -2,7 +2,7 @@
 知识点: Logback 与日志规范
 层级: 进阶
 适用版本: Logback 1.2 / Spring Boot 2.7.3
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Spring-Boot
   - 监控告警
@@ -23,6 +23,16 @@
 - 日志是可观测性三支柱之一：指标发现问题、链路缩小范围、**日志定位根因**——规范的全部目的就是让这一步快，见 [监控告警](工程实践/运维/监控告警.md)。
 
 ## 2. 参考配置：滚动 + 异步
+
+日志先经异步队列再落滚动文件：业务线程只塞队列，落盘由后台线程做，滚动按天加大小双保险。
+
+```mermaid
+flowchart LR
+    A[Logger 按类名分层] --> B[AsyncAppender 业务线程只塞队列]
+    B --> C[FILE RollingFileAppender]
+    C --> D[按天加按大小双滚动 maxFileSize 100MB]
+    D --> E[maxHistory 30 天 totalSizeCap 20GB]
+```
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -87,6 +97,22 @@
 - 入口打受理、出口打结果，中间过程只在 DEBUG；异常日志必须带业务主键（申请号、脱敏后的客户号），没有主键的错误日志等于没打。
 
 ## 4. MDC 与 traceId 链路
+
+入口过滤器生成 traceId 放入 MDC，请求结束清理；异步场景要复制 MDC，跨服务靠请求头透传。
+
+```mermaid
+sequenceDiagram
+    participant C as 客户端
+    participant F as TraceFilter
+    participant M as MDC
+    participant B as 业务线程
+    participant D as 下游服务
+    C->>F: 请求
+    F->>M: 生成 traceId 放入 MDC
+    F->>B: 放行请求
+    B->>D: traceId 放进 HTTP 头透传
+    F->>M: 请求结束 MDC clear
+```
 
 - MDC（Mapped Diagnostic Context）底层是 ThreadLocal 的键值表，值放进去后 pattern 里用 `%X{traceId}` 就能每行自动带上——这是日志能按链路串起来的机制基础。
 - 落法：入口过滤器/拦截器为每个请求生成 traceId 放入 MDC，请求结束 `MDC.clear()`（不清会串到同线程的下个请求，是线程池复用的经典污染）：

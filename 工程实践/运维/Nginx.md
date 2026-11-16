@@ -2,7 +2,7 @@
 知识点: Nginx
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - 工程实践知识点地图
   - Docker
@@ -16,6 +16,16 @@
 > 每晚 20:30 自动补充完善。
 
 ## 反向代理最小可用
+
+反向代理只决定请求发给谁，proxy_set_header 三件套决定后端看到的请求头是什么。
+
+```mermaid
+flowchart LR
+    A[客户端] --> B[Nginx server 监听 80]
+    B --> C[proxy pass 到 127.0.0.1 8080]
+    C --> D[后端]
+    B -. proxy set header Host X-Real-IP X-Forwarded-For .-> D
+```
 
 ```nginx
 server {
@@ -47,6 +57,15 @@ server { location / { proxy_pass http://backend; } }
 - 默认轮询；`weight` 加权；后端挂了自动剔除（`max_fails`/`fail_timeout` 可调）。
 
 ## location 匹配顺序（面试常考）
+
+location 匹配优先级不是书写顺序：精确匹配先于前缀截胡，前缀截胡先于正则，正则先于普通前缀。
+
+```mermaid
+flowchart TD
+    A[精确匹配] --> B[前缀匹配 截胡 不再看正则]
+    B --> C[正则匹配 区分或不区分大小写]
+    C --> D[普通前缀 通用斜杠]
+```
 
 1. `=` 精确匹配
 2. `^~` 前缀匹配（不再看正则）
@@ -128,6 +147,17 @@ server {
 - `rate=10r/s` 每秒 10 个；`burst=20 nodelay` 允许突发 20 个立即处理，超了 503。
 
 ## 反向代理缓存（proxy_cache）
+
+反向代理缓存先看 X-Cache-Status 是 HIT 还是 MISS，成功响应缓存 5 分钟。
+
+```mermaid
+flowchart TD
+    A[请求到 Nginx] --> B{proxy cache 命中}
+    B --> C[HIT 直接返回]
+    B --> D[MISS 回源到后端]
+    D --> E[成功响应缓存 5 分钟]
+    E --> F[下次请求命中]
+```
 
 ```nginx
 proxy_cache_path /data/nginx-cache levels=1:2 keys_zone=api:50m max_size=1g inactive=60m;

@@ -2,7 +2,7 @@
 知识点: Maven与依赖管理
 层级: 基础
 适用版本: Maven 3.x（通用）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - CICD
   - Docker
@@ -25,6 +25,16 @@
 - **pom 是声明式模型**：`dependencies` 只声明「要什么坐标」，实际拿到哪个版本由调解规则决定（第 3 节）——这是「我明明写的是 A 版本，跑起来却是 B」的根源。
 
 ## 2. 基础知识：生命周期与常用命令
+
+default 生命周期按序执行：执行某个 phase 时它之前的 phase 一起执行。
+
+```mermaid
+flowchart LR
+    A[compile] --> B[test surefire 跑单元测试]
+    B --> C[package] --> D[verify failsafe 跑集成测试]
+    D --> E[install 装进本地仓库]
+    E --> F[deploy 推私服]
+```
 
 三套生命周期互相独立：**clean**（清理）、**default**（构建部署，主线）、**site**（站点文档）。default 的阶段按序排列（compile → test → package → verify → install → deploy），执行某个 phase 时它之前的 phase 一起执行；分工上 surefire 在 test 阶段跑单元测试、failsafe 在 verify 阶段跑集成测试，install 把产物装进本地仓库，deploy 才推私服。
 
@@ -64,6 +74,16 @@ mvn -o package                  # 离线模式，验证本地缓存是否完整
 ## 4. 实战应用：冲突排查与多模块
 
 ### 冲突排查流程
+
+依赖冲突九成在运行时才爆，排查顺序是先看树、再剪路径或钉版本、再确认、再跑测试。
+
+```mermaid
+flowchart TD
+    A[dependency tree 看目标库几个版本从哪进来] --> B[定位期望版本应走的路径]
+    B --> C[引入点 exclusions 剪掉错误路径 或 dependencyManagement 钉死版本]
+    C --> D[重跑 dependency tree 确认只剩一个版本]
+    D --> E[跑测试验证]
+```
 
 症状多在运行时才爆：`NoSuchMethodError`、`ClassNotFoundException`——编译能过、跑起来缺方法，九成是类被加载成了错误版本。
 

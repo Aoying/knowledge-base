@@ -2,7 +2,7 @@
 知识点: Docker
 层级: 基础
 适用版本: 通用
-更新日期: 2026-10-31
+更新日期: 2026-11-16
 关联:
   - 工程实践知识点地图
   - Nginx
@@ -64,6 +64,16 @@ ENTRYPOINT ["java","-jar","app.jar"]
 5. **JVM 内存**：容器里设 `-Xmx` 别超过容器 limit；JDK 8u191+ 才识别 cgroup 内存限制，老版本会按宿主机内存算直接 OOM。
 
 ## docker-compose 常用
+
+compose 一条命令拉起整套服务：MySQL 与 Redis 各自挂端口与数据卷，容器互访用服务名。
+
+```mermaid
+flowchart TD
+    A[docker compose up -d] --> B[mysql 镜像 3306 数据卷 mysql-data]
+    A --> C[redis 镜像 6379]
+    B -. 容器互访用服务名 .-> C
+    D[docker compose down 停加删容器 数据卷默认保留]
+```
 
 ```yaml
 version: "3.8"
@@ -130,6 +140,16 @@ docker compose down -v    # 连数据卷一起删，慎用
 
 ## 生产发布：tag 规范与滚动更新
 
+生产 tag 用 git short sha，永远别用 latest：回滚就是 up 上一个 tag，5 秒完成。
+
+```mermaid
+flowchart TD
+    A[docker build 打 tag 为 git short sha] --> B[docker push 推到仓库]
+    B --> C[docker compose pull 加 up -d 滚动更新]
+    C --> D[健康检查 healthy 才切流量]
+    D --> E[回滚 up -d 上一个 tag 5 秒完成]
+```
+
 ```bash
 # tag 规范：git short sha，永远别用 latest 当生产 tag
 docker build -t registry/app:$(git rev-parse --short HEAD) .
@@ -144,6 +164,17 @@ docker compose pull && docker compose up -d --no-deps app
 - 健康检查写上（`healthcheck`），compose 等容器 healthy 才切流量，不然刚启动就接请求直接 500。
 
 ## 多阶段构建实战（Java 版）
+
+多阶段构建把编译和运行分离：构建阶段只要 Maven 与源码，运行阶段只要 JRE 与 jar。
+
+```mermaid
+flowchart TD
+    A[阶段 1 构建 maven 镜像] --> B[COPY pom 先下依赖 利用层缓存]
+    B --> C[COPY src 打包]
+    C --> D[阶段 2 运行 JRE 镜像]
+    D --> E[COPY from build 只要 jar]
+    E --> F[镜像从 800MB 压到 200MB]
+```
 
 ```dockerfile
 # 阶段1：构建

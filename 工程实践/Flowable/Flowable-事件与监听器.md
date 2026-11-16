@@ -2,7 +2,7 @@
 知识点: Flowable-事件与监听器
 层级: 进阶
 适用版本: Flowable 6.7.2
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Flowable
   - 工程实践知识点地图
@@ -73,6 +73,17 @@ public class AuditEventListener extends AbstractFlowableEngineEventListener {
 
 ## 信号、消息与 trigger：从外部唤醒流程
 
+三种外部刺激作用域不同：trigger 推单个执行，消息绑指定实例，信号全局广播。
+
+```mermaid
+flowchart TD
+    A[流程停在等待点] --> B{外部刺激}
+    B --> C[trigger 单个执行 推过接收任务]
+    B --> D[消息 指定实例 先查到在等消息的执行]
+    B --> E[信号 全局广播 所有在等该信号的实例一起唤醒]
+    D --> F[消息可启动流程 上游来单才建流程]
+```
+
 流程停在等待点（接收任务、事件子流程、中间捕获事件）时，靠三类外部刺激推进：
 
 | 方式 | 作用域 | API | 语义 |
@@ -86,6 +97,18 @@ public class AuditEventListener extends AbstractFlowableEngineEventListener {
 - 消息可**启动**流程（消息启动事件）：`startProcessInstanceByMessage(name, businessKey, vars)`，适合「上游来单才建流程」。
 
 ## 异步、定时与死信
+
+异步节点落 job 由执行器捞起执行，失败重试 3 次耗尽进死信表，修好后放回重试。
+
+```mermaid
+flowchart TD
+    A[节点标 async] --> B[落一条 job 到 ACT_RU_JOB]
+    B --> C[异步执行器捞起执行]
+    C --> D{执行失败}
+    D --> E[自动重试 默认 3 次]
+    E --> F[耗尽进 ACT_RU_DEADLETTER_JOB]
+    F --> G[修好后 moveDeadLetterJobToExecutableJob 放回重试]
+```
 
 - 节点标 `flowable:async="true"` 后落一条 job 到 `ACT_RU_JOB`，由异步执行器捞起执行——长耗时调用（外部 HTTP、批量计算）都走异步，别堵办理人的请求线程。
 - 定时器同样靠执行器到点触发；执行器没开（`async-executor-activate`）或线程池打满，表现就是「时间到了流程不动」。
