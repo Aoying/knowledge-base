@@ -2,7 +2,7 @@
 知识点: Redis
 层级: 进阶
 适用版本: Redis 7
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - 数据库知识点地图
   - MySQL-数据库
@@ -101,6 +101,16 @@ RDB 定时快照（恢复快、丢快照后的数据）；AOF 记录写命令，
 
 ```bash
 XADD orders * user 1001 amount 99          # 生产
+
+下图是 Stream 消费者组的实战流程。
+
+```mermaid
+flowchart TD
+    A[XADD 生产] --> B[XGROUP CREATE 建消费组]
+    B --> C[XREADGROUP 消费]
+    C --> D[XACK 确认]
+    C --> E[XPENDING 查未确认]
+```
 XGROUP CREATE orders g1 0 MKSTREAM        # 建消费组（0=从头消费）
 XREADGROUP GROUP g1 c1 COUNT 10 BLOCK 5000 STREAMS orders >   # 消费
 XACK orders g1 <message-id>                # 确认
@@ -120,6 +130,15 @@ XPENDING orders g1                         # 查未确认的（掉线消费者�
 - 来源：https://redis.io/docs/latest/develop/whats-new/8-0/
 
 ## Cluster 槽位与扩缩容（导读）
+
+下图是 Cluster 槽位与扩缩容的路线。
+
+```mermaid
+flowchart TD
+    A[16384 槽] --> B[加节点]
+    B --> C[reshard 迁槽]
+    C --> D[rebalance]
+```
 
 16384 槽按 CRC16(key) % 16384 分配，多 key 同槽靠 `{tag}`；扩缩容走加节点 → `reshard` 迁槽 → `rebalance`。完整机制见专题篇：[Redis 集群与哨兵](数据库/Redis/Redis-集群.md)。
 

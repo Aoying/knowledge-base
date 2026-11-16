@@ -2,7 +2,7 @@
 知识点: SQL基础与窗口函数
 层级: 基础
 适用版本: MySQL 8.0+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - MySQL-数据库
   - MySQL-索引与执行计划
@@ -17,6 +17,34 @@
 > 分工说明：本篇只管“怎么写对”——语法、语义、易错点。写得对之后怎么变快（索引、执行计划、慢查询闭环）见专题篇，不在本篇重复。DML 四件套、JOIN 三连、聚合分组的速记版在总纲篇，[MySQL 数据库](数据库/MySQL/MySQL-数据库.md)；本篇是在速记版之上的完整讲法与边界情况。
 
 示例表（虚构电商库 shop，全篇共用）：
+
+下图是全篇共用的三张示例表的关系。
+
+```mermaid
+erDiagram
+    t_user {
+        BIGINT id
+        VARCHAR name
+        VARCHAR city
+    }
+    t_order {
+        BIGINT id
+        BIGINT user_id
+        VARCHAR order_no
+        DECIMAL amount
+        TINYINT status
+        DATETIME create_time
+    }
+    t_order_item {
+        BIGINT id
+        BIGINT order_id
+        VARCHAR product_name
+        INT qty
+        DECIMAL price
+    }
+    t_user ||--o{ t_order : has
+    t_order ||--o{ t_order_item : has
+```
 
 ```sql
 CREATE TABLE t_user (
@@ -161,6 +189,16 @@ LEFT JOIN t_order o ON o.user_id = u.id AND o.status = 1;
 ```
 
 - 口诀：ON 定“怎么连”，WHERE 定“连完留哪些行”。左连接下，右表条件放 WHERE 会把右表为 NULL 的行（即左表无匹配的行）一起滤掉。
+
+下图是左连接下条件放 ON 与放 WHERE 的区别。
+
+```mermaid
+flowchart TD
+    A[左连接条件] --> B[放 ON 定怎么连]
+    A --> C[放 WHERE 定连完留哪些行]
+    B --> D[左表全保留 右表补 NULL]
+    C --> E[右表为 NULL 的行被滤掉 退化成内连接]
+```
 - 多表连接时先想驱动关系：从“必须全出”的表出发画 LEFT 链；能用内连接就不用左连接（内连接给优化器的选择更多）。
 
 ### 半连接与反连接：IN / EXISTS 的选择
@@ -331,6 +369,20 @@ FROM t_order;
 书写顺序：SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY → LIMIT。
 
 逻辑执行顺序（决定语义的顺序）：
+
+下图是 SQL 的逻辑执行顺序。
+
+```mermaid
+flowchart TD
+    A[FROM JOIN] --> B[ON]
+    B --> C[WHERE]
+    C --> D[GROUP BY]
+    D --> E[HAVING]
+    E --> F[SELECT]
+    F --> G[DISTINCT]
+    G --> H[ORDER BY]
+    H --> I[LIMIT]
+```
 
 ```
 FROM / JOIN → ON → WHERE → GROUP BY → HAVING → SELECT → DISTINCT → ORDER BY → LIMIT

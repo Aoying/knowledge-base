@@ -2,7 +2,7 @@
 知识点: OceanBase
 层级: 基础
 适用版本: OceanBase 4.x（MySQL 模式）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - MySQL-数据库
   - 分库分表
@@ -22,6 +22,16 @@
 OceanBase 是原生分布式数据库：一份数据多副本分布在多台机器上，对应用呈现为**一个逻辑数据库**。与「MySQL + 分片中间件」路线的根本区别是分布能力长在数据库内部：应用不需要感知分片，扩容靠加节点和副本调度，而不是改代码、迁数据。
 
 概念链条：**集群（Cluster）→ Zone（机房/可用区）→ OBServer（节点）→ 租户（Tenant）→ 数据库**。
+
+下图是 OceanBase 的概念链条。
+
+```mermaid
+flowchart TD
+ A[集群 Cluster] --> B[Zone]
+ B --> C[OBServer 节点]
+ C --> D[租户 Tenant]
+ D --> E[数据库]
+```
 
 - 每个 Zone 一份完整副本，副本间用 Paxos 协议同步，多数派提交才算成功，单 Zone 故障不丢数据。
 - 存储引擎是 LSM-Tree（增量数据在内存、基线数据在磁盘，定期合并），与 InnoDB 的 B+ 树原地更新不同：写入友好，空间放大和合并开销是它的代价。
@@ -103,6 +113,14 @@ CREATE TABLE t_flow (
 
 一个分区（Partition）的多个副本组成一个 Paxos 组，写操作要得到多数派（quorum）确认才算提交成功。多数派的算术是：
 
+下图是多数派提交的算术。
+
+```mermaid
+flowchart TD
+ A[3 副本] --> B[多数派 2 可容忍 1]
+ C[5 副本] --> D[多数派 3 可容忍 2]
+```
+
 ```text
 quorum = floor(n / 2) + 1，可容忍故障数 = n - quorum
 ```
@@ -136,6 +154,15 @@ memstore_limit = 租户内存 × memstore_limit_percentage（默认值 50）
 ```
 
 算例（租户每 Zone 内存 16 GB）：memstore_limit = 16 × 50% = 8 GB，冻结水位 = 8 × 20% = 1.6 GB，即活动 MemTable 用到 1.6 GB 就触发冻结。版本差异注意：V4.3.5 文档称，未显式配置时 MemStore 占比按租户内存自适应——租户内存 ≤ 8 GB 时取 40%，> 8 GB 时取 50%。按此规则，8 GB 租户的 memstore_limit = 8 × 40% = 3.2 GB，冻结水位 = 3.2 × 20% = 0.64 GB。两个版本的默认值表述不同，排障时以所用版本的 `SHOW PARAMETERS LIKE 'memstore_limit_percentage'` 实测值为准。
+
+下图是 MemStore 的冻结水位换算。
+
+```mermaid
+flowchart TD
+ A[租户每 Zone 内存 16 GB] --> B[memstore_limit 8 GB]
+ B --> C[冻结水位 1.6 GB]
+ C --> D[触发冻结 转储为 SSTable]
+```
 
 **大合并触发**：`enable_major_freeze` 默认值为 True（开启全局大合并）；`major_compact_trigger`（触发一次大合并所需的小合并次数）V4.2.1 文档默认值为 0，文档示例建议值 50。默认值 0 的确切语义（是否表示“按其他条件触发”）待验证，本节不展开；调大合并相关参数前先确认当前集群的实际取值与合并进度，不要凭默认值推断行为。
 

@@ -2,7 +2,7 @@
 知识点: MySQL binlog
 层级: 进阶
 适用版本: MySQL 5.7 / 8.x
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - MySQL-数据库
   - RocketMQ
@@ -28,6 +28,14 @@
 | undo log | InnoDB 层 | 修改前的数据版本 | 事务回滚、MVCC |
 
 - 一致性靠**两阶段提交**：事务提交时先写 redo（prepare）→ 写 binlog → redo 标记 commit，保证 binlog 和 redo 要么都有要么都没有——主从数据一致、崩溃恢复不丢已提交事务的前提。
+
+下图是两阶段提交的三步。
+
+```mermaid
+flowchart TD
+    A[写 redo prepare] --> B[写 binlog]
+    B --> C[redo 标记 commit]
+```
 - 从库侧对应的是 **relay log**（中继日志）：从库 IO 线程把主库 binlog 拉回来落盘成 relay log，SQL 线程再重放。
 
 ### 三种格式
@@ -40,6 +48,16 @@
 
 - MySQL 8.x 默认 ROW，新项目不要改。ROW 下还有 `binlog_row_image`：FULL（完整行镜像，默认，闪回靠它）/ MINIMAL（只记主键 + 变更列，省空间但闪回信息不足）/ NOBLOB。
 - ROW 格式的事件链：`GTID_EVENT` → `QUERY_EVENT`(BEGIN) → `TABLE_MAP_EVENT` → `WRITE/UPDATE/DELETE_ROWS_EVENT` → `XID_EVENT`(COMMIT)。
+
+下图是 ROW 格式的事件链。
+
+```mermaid
+flowchart LR
+    A[GTID_EVENT] --> B[QUERY_EVENT BEGIN]
+    B --> C[TABLE_MAP_EVENT]
+    C --> D[WRITE UPDATE DELETE ROWS EVENT]
+    D --> E[XID_EVENT COMMIT]
+```
 
 ### 关键参数（my.cnf demo，逐行注释）
 
@@ -107,6 +125,17 @@ canal.mq.topic = db_sync
 - 场景：MySQL → ES（搜索）、MySQL → Redis（缓存更新）、MySQL → 数仓，业务代码零侵入。
 - Canal 伪装成从库拉 binlog，挂了从上次位点续拉，不丢（前提是位点还在且对应 binlog 未被 purge；位点丢了或 binlog 已过期删除，续拉就断档，只能重做快照；下游消费必须做幂等）。
 - 典型链路：binlog → Canal → [RocketMQ](消息队列/RocketMQ.md) → 消费者更新 [Elasticsearch](数据库/ES/Elasticsearch.md) / [Redis](数据库/Redis/Redis.md)。
+
+下图是 CDC 的典型链路。
+
+```mermaid
+flowchart LR
+    A[binlog] --> B[Canal]
+    B --> C[RocketMQ]
+    C --> D[消费者]
+    D --> E[Elasticsearch]
+    D --> F[Redis]
+```
 - OceanBase 也有自己的增量同步（OMS），MySQL 那套照搬过去先看兼容性。
 - 同类工具：Debezium（Kafka Connect 生态）、Flink CDC（流处理一体）。
 

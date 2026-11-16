@@ -2,7 +2,7 @@
 知识点: MySQL 事务与 MVCC
 层级: 进阶
 适用版本: MySQL 5.7 / 8.x（InnoDB）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - MySQL-数据库
   - MySQL-索引与执行计划
@@ -50,6 +50,18 @@ SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
 | binlog | 主从复制、归档恢复 | 逻辑变更，server 层产生，见《MySQL-binlog》 |
 
 两阶段提交（redo prepare → 写 binlog → redo commit）保证两个日志不打架，细节知道结论即可：**redo 决定事务算不算提交成功，binlog 必须与之对齐**。
+
+下图是 redo 与 binlog 的两阶段提交。
+
+```mermaid
+sequenceDiagram
+    participant T as 事务
+    participant R as redo log
+    participant B as binlog
+    T->>R: 写 redo prepare
+    T->>B: 写 binlog
+    T->>R: 写 redo commit
+```
 
 ## 4. WAL 深入原理
 
@@ -114,6 +126,14 @@ Last checkpoint at   1234500000   -- 检查点 LSN：小于它的修改都已进
 
 实例崩溃重启时，InnoDB 按固定顺序恢复，不需要人工干预：
 
+下图是崩溃恢复的固定顺序。
+
+```mermaid
+flowchart TD
+    A[从检查点开始前滚] --> B[对未提交事务回滚]
+    B --> C[恢复完成才对外服务]
+```
+
 1. **从检查点开始前滚**：从 `Last checkpoint at` 对应的 LSN 起，按 LSN 顺序重放 redo，把已提交事务的修改重新写回数据页。页 LSN 已大于日志 LSN 的跳过（幂等保证）。
 2. **对未提交事务回滚**：重放完成后，靠 undo log 把崩溃时没提交的事务反向滚掉，数据页回到事务开始前的状态。
 3. **恢复完成才对外服务**：恢复结束的点，就是“所有已提交事务都在、所有未提交事务都不在”的状态，和崩溃前客户端看到的已提交结果一致。
@@ -157,6 +177,21 @@ redo 不能做主从复制（它是物理的、循环覆盖的）；binlog 不�
 ## 5. MVCC 可见性判断
 
 每行隐藏两个字段：`DB_TRX_ID`（最后修改的事务 ID）、`DB_ROLL_PTR`（指向 undo 里的旧版本）。快照读时拿当前事务的 ReadView 判断：
+
+下图是 ReadView 的可见性判断。
+
+```mermaid
+flowchart TD
+    A[版本 trx_id] --> B{是自己吗}
+    B -->|是| C[可见]
+    B -->|否| D{小于 min_trx_id 吗}
+    D -->|是| C
+    D -->|否| E{大于等于 max_trx_id 吗}
+    E -->|是| F[不可见 沿链回溯]
+    E -->|否| G{在活跃列表里吗}
+    G -->|是| F
+    G -->|否| C
+```
 
 1. 版本的 trx_id 就是自己 → 可见。
 2. trx_id 小于 ReadView 的最小活跃事务 ID（min_trx_id）→ 在快照生成前已提交，可见。

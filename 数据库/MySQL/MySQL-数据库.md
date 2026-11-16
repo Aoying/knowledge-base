@@ -2,7 +2,7 @@
 知识点: MySQL 数据库
 层级: 进阶
 适用版本: MySQL 5.7 / 8.x
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - 数据库知识点地图
   - MySQL-binlog
@@ -82,6 +82,15 @@
 
 链条是集群 > 租户 > 数据库，不等于 MySQL 的"实例 > 库"：租户是资源隔离单位（配额独立），资源单元（UNIT）是最小粒度，扩容 = 加 UNIT。神农连的是 MySQL 模式租户，`SHOW VARIABLES` 是租户级变量（如 `ob_trx_timeout` 只影响当前租户）；排障先看 `DBA_OB_UNITS` 配额与租户水位。完整展开见专题篇：[OceanBase](数据库/OceanBase.md)。
 
+下图是 OceanBase 的概念链条。
+
+```mermaid
+flowchart TD
+    A[集群] --> B[租户]
+    B --> C[数据库]
+    B --> D[资源单元 UNIT]
+```
+
 ## 分库分表中间件选型
 
 | 方案 | 类型 | 特点 |
@@ -105,6 +114,15 @@ EXPLAIN FORMAT=TREE SELECT * FROM a JOIN b ON a.id=b.a_id;
 ```
 
 - **Nested Loop**：小表驱动大表，`b.a_id` 必须有索引，不然每次全表扫。
+
+下图是三种 join 算法的选择。
+
+```mermaid
+flowchart TD
+    A[join] --> B[Nested Loop 小表驱动大表]
+    A --> C[Hash Join 无索引等值 join]
+    A --> D[BNL 没索引时的保底]
+```
 - **Hash Join**（8.0.18+）：无索引等值 join 的救星，内存够就快，`join_buffer_size` 给大点。
 - **BNL**（Block Nested Loop）：没索引时的保底，慢，看到它就去加索引。
 - `EXPLAIN` 看到 `Using filesort` + 大数据量：加复合索引让"排序"变"顺序读"。
@@ -235,6 +253,16 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON shop.* TO 'app'@'%';  -- 按最小权限
 
 - 存储引擎：默认 InnoDB——支持事务、行锁、外键；MyISAM 无事务、只有表锁，只在只读老系统里见到，新表一律 InnoDB。
 - 一条查询的旅程：连接器鉴权 → 查询缓存（8.0 已移除）→ 解析/优化器选执行计划 → 执行器按计划调存储引擎取行 → 返回。慢查询多数卡在优化器选错索引或引擎扫太多行。
+
+下图是一条查询的旅程。
+
+```mermaid
+flowchart TD
+    A[连接器鉴权] --> B[查询缓存 8.0 已移除]
+    B --> C[解析 优化器选执行计划]
+    C --> D[执行器调存储引擎取行]
+    D --> E[返回]
+```
 - 连接与会话：每个连接是一个会话，`SET` 的变量分会话级和全局级；连接池的意义是复用连接，避免频繁三次握手 + 鉴权。
 - 自增 ID 的本质：表级计数器，保证本表单调递增，不保证连续（回滚、删除都会留空洞），更不能当业务序号用。
 

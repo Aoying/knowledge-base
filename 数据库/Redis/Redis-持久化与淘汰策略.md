@@ -2,7 +2,7 @@
 知识点: Redis 持久化与淘汰策略
 层级: 进阶
 适用版本: Redis 7.x
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Redis
   - Redis-缓存问题与分布式锁
@@ -42,6 +42,15 @@ appendfsync everysec        # always 最安全但最慢；no 靠操作系统刷�
 - **fork 的代价**：RDB 生成和 AOF 重写都要 fork，靠写时复制；写入越频繁，复制的页越多，极端时内存接近翻倍。大内存实例要给机器留冗余，`vm.overcommit_memory=1` 是官方建议的系统设置。
 
 选型结论：纯缓存、可重建数据 → 只开 RDB 甚至都不开，靠集群高可用；Redis 里有不可丢数据（队列、会话）→ AOF everysec + RDB 兜底，并把文件定时备份到异机。
+
+下图是持久化的选型结论。
+
+```mermaid
+flowchart TD
+ A[数据可重建 纯缓存] --> B[只开 RDB 甚至不开]
+ C[不可丢数据 队列 会话] --> D[AOF everysec 加 RDB 兜底]
+ D --> E[文件定时备份到异机]
+```
 
 ## 2. maxmemory 与淘汰策略
 
@@ -140,6 +149,14 @@ MEMORY USAGE key                 # 单个 key 的实际占用
 ### 6.3 AOF 自动重写触发定量
 
 【官方/原文已有】默认值 `auto-aof-rewrite-percentage 100`、`auto-aof-rewrite-min-size 64MB`；两个条件须同时满足才自动触发：当前文件比上次重写后的大小增长 100%，且当前文件大于 64MB。
+
+下图是 AOF 自动重写的两个触发条件。
+
+```mermaid
+flowchart TD
+ A[当前文件比上次重写后增长 100%] --> C[自动触发重写]
+ B[当前文件大于 64MB] --> C
+```
 
 【手算】取“上次重写后文件为 64MB”这一例：
 

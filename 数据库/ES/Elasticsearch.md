@@ -2,7 +2,7 @@
 知识点: Elasticsearch
 层级: 进阶
 适用版本: Elasticsearch 7 / 8
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - ES-倒排索引与查询
   - 数据库知识点地图
@@ -70,6 +70,15 @@ curl -X GET "localhost:9200/books/_search" -H 'Content-Type: application/json' -
 
 典型架构：MySQL 存主数据 → 同步到 ES → 搜索走 ES。
 
+下图是 MySQL 与 ES 的典型分工。
+
+```mermaid
+flowchart LR
+    A[MySQL 主数据] --> B[同步]
+    B --> C[ES 搜索副本]
+    C --> D[搜索走 ES]
+```
+
 ## Java 客户端
 
 - 7.x：`RestHighLevelClient`（已废弃，但存量项目多）
@@ -113,6 +122,16 @@ FROM logs-*
 ```
 
 - `FROM` → `WHERE` → `STATS` → `SORT` → `LIMIT`，和写 shell 管道一个感觉。
+
+下图是 ES|QL 的管道式写法。
+
+```mermaid
+flowchart LR
+    A[FROM] --> B[WHERE]
+    B --> C[STATS]
+    C --> D[SORT]
+    D --> E[LIMIT]
+```
 - 支持 `LOOKUP JOIN` 跨索引关联，`TS` 命令查时序数据。
 - Kibana Discover 里直接切 ES|QL 模式就能跑，不用记 DSL 的 JSON 嵌套。
 - 9.x 另有 BBQ（Better Binary Quantization）让向量检索快 5 倍，做 RAG 语义检索时值得关注。
@@ -122,6 +141,15 @@ FROM logs-*
 
 ```json
 PUT _ilm/policy/logs-30d {
+
+下图是索引生命周期的三个阶段。
+
+```mermaid
+flowchart TD
+    A[hot 写] --> B[rollover 7天或50GB]
+    B --> C[warm 缩分片到1]
+    C --> D[delete 30天删]
+```
   "policy": { "phases": {
     "hot":   { "actions": { "rollover": { "max_age": "7d", "max_size": "50gb" } } },
     "warm":  { "min_age": "7d",  "actions": { "shrink": { "number_of_shards": 1 } } },
