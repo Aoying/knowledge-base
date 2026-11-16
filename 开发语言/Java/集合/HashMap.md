@@ -2,7 +2,7 @@
 知识点: HashMap
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - ConcurrentHashMap
@@ -34,6 +34,21 @@
 ### 数据结构：数组 + 链表 + 红黑树
 
 - JDK 8 结构：桶数组 `table` + 链表 + 红黑树。
+
+下图是 HashMap 的三层结构：桶数组定位，桶内链表挂节点，冲突多了转红黑树。
+
+```mermaid
+classDiagram
+    HashMap --> Node : table 桶数组
+    Node --> Node : next 链表
+    TreeNode --|> Node : 继承
+    class Node {
+        int hash
+        Object key
+        Object value
+        Node next
+    }
+```
 - 桶内冲突少时用链表，冲突多且容量足够时转红黑树。
 - `table` 懒初始化：构造时不分配，第一次 `put` 时才建数组。
 
@@ -112,14 +127,30 @@ int index = (n - 1) & hash;
 
 ### put 流程
 
-1. `table` 为空则先 `resize()` 初始化。
-2. 计算 `hash`，用 `(n - 1) & hash` 定位桶。
-3. 桶为空：直接插入新 `Node`。
-4. 桶不为空且首节点 key 相同（hash 相等且 `equals`）：直接覆盖 value。
-5. 首节点是 `TreeNode`：走红黑树插入，平衡后可能调整树结构。
-6. 否则走链表：尾插新节点，途中遇到相同 key 就覆盖并结束。
-7. 插入后桶内节点数 > 8：调用 `treeifyBin`，容量 < 64 先扩容，否则转红黑树。
-8. 插入后 `size > threshold`：扩容。
+下图是 put 的完整流程：先定位桶，空桶直插，首节点相同就覆盖，树节点走红黑树，链表尾插，插满 8 个看容量决定树化还是扩容。
+
+```mermaid
+flowchart TD
+    A[put] --> B[表为空吗]
+    B -->|是| C[resize 初始化]
+    B -->|否| D[算 hash 定位桶]
+    D --> E[桶为空吗]
+    E -->|是| F[直接插入新 Node]
+    E -->|否| G[首节点 key 相同吗]
+    G -->|是| H[直接覆盖 value]
+    G -->|否| I[首节点是 TreeNode 吗]
+    I -->|是| J[走红黑树插入]
+    I -->|否| K[走链表尾插新节点 途中遇相同 key 覆盖并结束]
+    K --> L[桶内节点数大于 8 吗]
+    L -->|是| M[容量小于 64 先扩容 否则转红黑树]
+    L -->|否| N[size 大于 threshold 吗]
+    M --> N
+    F --> N
+    H --> N
+    J --> N
+    N -->|是| O[扩容]
+    N -->|否| P[结束]
+```
 
 ```java
 map.put(k, v); // 覆盖已有 key 时 size 不变，也不触发扩容判断之外的逻辑
@@ -137,6 +168,18 @@ map.put(k, v); // 覆盖已有 key 时 size 不变，也不触发扩容判断之
 - 触发：`size > threshold`，或懒初始化、树化前容量不足。
 - 结果：容量翻倍，`threshold` 翻倍，老数组元素迁移到新数组。
 - JDK 8 迁移优化：不重新计算 `hash`，只看新增的那一位。
+
+下图是扩容的高低位拆分：新容量翻倍只多看一位，为 0 留原位，为 1 移到原索引加旧容量。
+
+```mermaid
+flowchart TD
+    A[扩容 容量翻倍] --> B[看 hash 的新增一位]
+    B -->|该位为 0| C[留在原索引 j 低位链表]
+    B -->|该位为 1| D[移到索引 j 加旧容量 高位链表]
+    C --> E[两条链表分别保持原相对顺序尾插]
+    D --> E
+    E --> F[不重算 hash 只做一次按位与判断]
+```
 
 ```java
 // oldCap 为旧容量，判断 hash 的第 oldCap 位

@@ -2,7 +2,7 @@
 知识点: ArrayList与扩容
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - HashMap
   - LinkedHashMap与LRU
@@ -54,6 +54,19 @@ list.remove("a");   // 按对象删，删第一个匹配项
 
 - 无参构造用共享空数组，第一次 `add` 时才扩到默认容量 10。
 - 扩容公式：`newCapacity = oldCapacity + (oldCapacity >> 1)`，即 1.5 倍；一次 `addAll` 装不下就直接用所需最小容量。
+
+下图是扩容流程：先判满，满了按 1.5 倍扩，批量装不下直接给最小容量。
+
+```mermaid
+flowchart TD
+    A[调用 add] --> B[数组满了吗]
+    B -->|没满| C[直接放入]
+    B -->|满了| D[第一次 add 扩到默认容量 10]
+    D --> E[以后按 1.5 倍扩容]
+    E --> F[Arrays.copyOf 拷贝旧数组]
+    F --> C
+    G[调用 addAll 装不下] --> H[直接用所需最小容量 一次扩容到位]
+```
 - 接近上限走 `hugeCapacity`：最大长度 `Integer.MAX_VALUE - 8`。
 
 ```java
@@ -67,11 +80,33 @@ elementData = Arrays.copyOf(elementData, newCapacity);
 ### fail-fast
 
 - 结构性修改（add/remove/clear）递增 `modCount`；迭代器创建时记下 `expectedModCount`，`next()` / `remove()` 前校验，不一致抛 `ConcurrentModificationException`。
+
+下图是 fail-fast 校验：集合改了计数就变，迭代器下次校验对不上就抛异常。
+
+```mermaid
+flowchart TD
+    A[结构性修改 add 或 remove 或 clear] --> B[modCount 加一]
+    C[创建迭代器] --> D[记下 expectedModCount]
+    D --> E[next 或 remove 前校验]
+    E -->|一致| F[继续遍历]
+    E -->|不一致| G[抛 ConcurrentModificationException]
+    B --> E
+```
 - 这是尽早暴露 bug 的检测手段，不是同步机制：并发下不能依赖它，并发写用 [CopyOnWriteArrayList](开发语言/Java/集合/CopyOnWriteArrayList.md) 或外部加锁。
 
 ### subList 是视图，不是新列表
 
 - `subList(from, to)` 读写直接落到原列表对应区间，不拷贝；原列表在视图之外结构性修改后，再用它抛 `ConcurrentModificationException`。
+
+下图是 subList 视图关系：视图不拷贝，读写都落在原列表上，原列表一改视图就失效。
+
+```mermaid
+flowchart TD
+    A[subList 取一段] --> B[视图 不拷贝]
+    B --> C[读写直接落原列表对应区间]
+    D[原列表在视图之外结构性修改] --> E[再用视图抛异常]
+    B --> F[需独立保留时拷贝成新列表]
+```
 - 内存坑：subList 持有原列表引用，对大列表取一小段长期保存会拖住整个底层数组；需独立保留时拷贝：`new ArrayList<>(list.subList(0, 10))`。
 
 ## 5. 实战应用

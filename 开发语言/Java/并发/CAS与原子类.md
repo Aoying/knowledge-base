@@ -2,7 +2,7 @@
 知识点: CAS与原子类
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java-并发编程
   - AQS
@@ -57,12 +57,37 @@ public int incr(AtomicInteger v) {
 ```
 
 - **ABA 问题**：线程读到值 A，期间别人把 A 改成 B 又改回 A，本线程 CAS 仍会成功——值没变，但「过程」变了。若值承载了状态历史（如栈顶指针、引用复用），就会误判。对策：`AtomicStampedReference` 给值配一个版本号（邮戳），值与版本一起 CAS，A→B→A 时版本已变，CAS 失败。
+
+下图是 ABA 的往返过程：值回到了 A，但版本号已经变了，所以带版本的 CAS 会失败。
+
+```mermaid
+flowchart LR
+    A[本线程读到值 A] --> B[别人把 A 改成 B]
+    B --> C[别人又把 B 改回 A]
+    C --> D[CAS 只比值相等仍成功]
+    D --> E[误判过程没变过]
+    E --> F[对策 值加版本号一起 CAS]
+    F --> G[版本已变 CAS 失败]
+```
 - **自旋成本**：失败重试烧 CPU。缓解手段：重试加退避（短暂让步/随机延迟）、限制重试次数后降级为加锁、或直接选对工具（高并发计数换 LongAdder）。
 
 ## 4. LongAdder：高并发计数的正解
 
 - 痛点：`AtomicLong` 高并发下所有线程 CAS 同一个变量，缓存行反复失效，大部分尝试都在失败重试。
 - 做法：把计数分散到多个 `Cell` 上（按线程哈希落到不同 Cell，Cell 之间填充隔离避免伪共享），各自 CAS 累加；`sum()` 时再把 base 与所有 Cell 加总。
+
+下图是 LongAdder 的分段计数：先争 base，争不过再散到 Cell，读时汇总。
+
+```mermaid
+flowchart TD
+    A[累加请求] --> B[先对 base 做 CAS]
+    B -->|成功| C[完成]
+    B -->|失败出现竞争| D[建 Cell 表 初始 2 个]
+    D --> E[按线程哈希落到不同 Cell]
+    E --> F[各 Cell 独自 CAS 累加]
+    F --> G[Cell 表翻倍扩到核数上限]
+    H[读 sum] --> I[base 加全部 Cell 汇总]
+```
 - 取舍：`sum()` 不是强一致快照（读取瞬间可能还有更新在途），它换的是写入吞吐。统计 QPS、累计金额笔数、埋点计数这类「只增、容忍读到近似值」的场景用它；需要精确读-改-写的场景不要用。
 - 落点：限流计数、接口调用统计、批处理进度；`ConcurrentHashMap` 的计数与扩容协助也用了同样的分段思想，见 [ConcurrentHashMap](开发语言/Java/集合/ConcurrentHashMap.md)。
 
@@ -70,6 +95,19 @@ public int incr(AtomicInteger v) {
 
 ```java
 // 无锁状态流转：任务状态只允许 INIT -> RUNNING -> DONE，CAS 保证只有一个线程能推进
+
+下图是无锁任务状态机：只有抢到 CAS 的线程能把状态推进一步。
+
+```mermaid
+stateDiagram-v2
+    [*] --> INIT
+    INIT : INIT 初始
+    RUNNING : RUNNING 运行中
+    DONE : DONE 完成
+    INIT --> RUNNING : compareAndSet 抢到才执行
+    RUNNING --> DONE : compareAndSet 推进完成
+    DONE --> [*]
+```
 class Job {
     enum S { INIT, RUNNING, DONE }
     private final AtomicReference<S> state = new AtomicReference<>(S.INIT);

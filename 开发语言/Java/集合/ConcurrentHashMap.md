@@ -2,7 +2,7 @@
 知识点: ConcurrentHashMap
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - HashMap
   - Java-并发编程
@@ -84,6 +84,16 @@ for (Map.Entry<String, Integer> e : map.entrySet()) {
 ### 4.1 JDK 7：Segment 分段锁
 
 - 结构：`Segment[]` + 每段内部一个 `HashEntry[]`，每段是一个继承 `ReentrantLock` 的小 HashMap。
+
+下图是 JDK 7 的分段锁结构：默认 16 段，每段一把锁，写不同段可以并行。
+
+```mermaid
+classDiagram
+    ConcurrentHashMap --> Segment : 含 16 个 Segment
+    Segment --|> ReentrantLock : 继承
+    Segment --> HashEntry : 含 HashEntry 数组
+    HashEntry --> HashEntry : next 链表
+```
 - 默认 16 段，并发度 = 段数 = 16，理想情况下最多 16 个线程同时写不同段。
 - 定位：先按 hash 高位选 Segment，再按段内 hash 选桶；`get` 走 volatile 读基本无锁，`put` 只锁目标段。
 
@@ -112,6 +122,21 @@ static class Node<K, V> implements Map.Entry<K, V> {
 
 - 写入流程（`putVal` 伪代码）：
 
+下图是 putVal 的写入分支：空表先初始化，空桶 CAS 插，扩容中先协助，冲突才锁桶头。
+
+```mermaid
+flowchart TD
+    A[putVal] --> B[表为空吗]
+    B -->|是| C[initTable 初始化]
+    B -->|否| D[定位桶 桶为空吗]
+    D -->|是| E[CAS 无锁插入]
+    D -->|否| F[桶是 ForwardingNode 吗]
+    F -->|是| G[helpTransfer 协助扩容]
+    G --> D
+    F -->|否| H[synchronized 只锁桶头]
+    H --> I[遍历链表或红黑树插入或更新]
+```
+
 ```java
 if (tab == null) initTable();
 else if ((f = tabAt(tab, i)) == null) {
@@ -129,6 +154,20 @@ else if ((f = tabAt(tab, i)) == null) {
 
 - 触发：元素数超过 `容量 * 0.75`，或链表转树时容量不足。
 - 已迁移的桶放 `ForwardingNode`（hash = `MOVED = -1`）；其他线程读写命中它时不等待，调用 `helpTransfer` 一起搬。
+
+下图是扩容协助：命中已迁移桶的线程不等待，直接加入搬表，搬完再到新表操作。
+
+```mermaid
+sequenceDiagram
+    participant T as 读写线程
+    participant Old as 旧表
+    participant New as 新表
+    T->>Old: 读写命中已迁移桶
+    Old->>T: 返回 ForwardingNode 不等待
+    T->>Old: helpTransfer 一起搬剩余桶
+    Old->>New: 按步长分工搬移 每线程至少 16 个桶
+    T->>New: 搬完到新表操作
+```
 - `transfer` 按步长分工，默认每线程至少负责 16 个桶，避免抢同一段活。
 - `sizeCtl` 总控字段：
 

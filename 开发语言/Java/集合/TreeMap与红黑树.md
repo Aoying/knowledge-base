@@ -2,7 +2,7 @@
 知识点: TreeMap与红黑树
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - HashMap
   - LinkedHashMap与LRU
@@ -27,6 +27,18 @@
 TreeMap<Integer, String> map = new TreeMap<>();
 map.put(30, "c"); map.put(10, "a"); map.put(20, "b");
 map.keySet();            // 10, 20, 30，与插入顺序无关
+
+下图是按 30、10、20 的顺序 put 进去后的有序树：遍历即 10、20、30，与插入顺序无关。
+
+```mermaid
+flowchart TD
+    R[20 根] --> L[10 左子树]
+    R --> RR[30 右子树]
+    F[按序遍历得 10 20 30] --> G[floorKey 25 得 20]
+    G --> H[ceilingKey 25 得 30]
+    H --> I[higherKey 20 得 30]
+    I --> J[firstKey 10 lastKey 30]
+```
 map.firstKey();          // 10
 map.lastKey();           // 30
 map.floorKey(25);        // ≤25 的最大 key：20
@@ -52,6 +64,16 @@ map.descendingMap();     // 逆序视图
 ### Comparator 与 equals 一致性
 
 - TreeMap 判断「同一个 key」只看比较结果是否为 0，**不看 equals**。
+
+下图是按长度比较时的覆盖事故：ab 与 cd 长度相同，比较结果为 0，就被当成同一个 key。
+
+```mermaid
+flowchart TD
+    A[put ab 长度 2] --> B[put cd 长度 2]
+    B --> C[比较结果为 0]
+    C --> D[视为同一 key 覆盖为 2]
+    D --> E[key 仍是 ab size 仍为 1]
+```
 - 《Map》接口建议比较与 equals 保持一致，但不强制。不一致时的典型事故：
 
 ```java
@@ -79,6 +101,23 @@ m.put("cd", 2);   // 比较结果 0，被当成同一 key，覆盖为 2，且 ke
 ### 实现要点
 
 - 节点 `Entry` 含 `key`、`value`、`left`、`right`、`parent`、`color` 五个字段，父引用让插入后回溯修复（变色 + 左右旋）不需要栈。
+
+下图是红黑树节点的五个字段：key、value、左右子节点、父节点与颜色。
+
+```mermaid
+classDiagram
+    class Entry {
+        Object key
+        Object value
+        Entry left
+        Entry right
+        Entry parent
+        boolean color
+    }
+    Entry --> Entry : left 左子节点
+    Entry --> Entry : right 右子节点
+    Entry --> Entry : parent 父节点
+```
 - 插入新节点默认涂红（对性质 5 无影响），再按叔叔节点颜色分情况修复；删除修复更复杂，是源码里最长的一段。
 - 注意区分：HashMap 树化用的 `TreeNode` 是另一套独立实现，只是同为红黑树思想，不要混为一谈（`TreeNode` 继承自 [LinkedHashMap](开发语言/Java/集合/LinkedHashMap与LRU.md) 的 Entry）。
 

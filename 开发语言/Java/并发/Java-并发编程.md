@@ -2,7 +2,7 @@
 知识点: Java 并发编程
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java知识点地图
   - Java
@@ -22,12 +22,33 @@
 
 并发编程要解决的问题只有一句：多个线程读写同一份状态时，如何保证结果正确，同时别把性能让锁吃光。围绕这句话，知识分四层：
 
+下图是并发知识的四层结构：语义打底，工具动手，底座撑起 JUC，容器封装成型。
+
+```mermaid
+flowchart TD
+    A[语义层 原子性 可见性 有序性] --> B[工具层 锁 原子类 线程池 ThreadLocal]
+    B --> C[底座层 AQS 与 CAS]
+    C --> D[容器层 ConcurrentHashMap 等并发容器]
+```
+
 1. **语义层**：什么是线程安全、竞态从哪来——原子性、可见性、有序性三大问题，以及判断可见性的 happens-before 规则。入口：[volatile与JMM](开发语言/Java/并发/volatile与JMM.md)。
 2. **工具层**：锁（互斥）、原子类（无锁）、线程池（执行载体）、ThreadLocal（不共享的另一条路）。这是日常编码真正动手的部分。
 3. **底座层**：[AQS](开发语言/Java/并发/AQS.md) 与 CAS 撑起整个 JUC——读懂这一层，所有同步工具的源码都变成同一套模板的填空题。
 4. **容器层**：[ConcurrentHashMap](开发语言/Java/集合/ConcurrentHashMap.md) 等并发容器，把上面的机制封装成现成的数据结构。
 
 学习顺序建议：本篇精华 → volatile与JMM → synchronized与锁 → 线程池 → CAS与原子类 → AQS → ThreadLocal；容器篇可随时插入。
+
+下图是建议的学习顺序：先建全景，再按语义、锁、池、无锁、底座、隔离的次序深挖。
+
+```mermaid
+flowchart LR
+    A[本篇精华] --> B[volatile与JMM]
+    B --> C[synchronized与锁]
+    C --> D[线程池]
+    D --> E[CAS与原子类]
+    E --> F[AQS]
+    F --> G[ThreadLocal]
+```
 
 ## 独立文件索引
 
@@ -55,6 +76,27 @@
 ### 线程生命周期与基本功
 
 - 6 状态：NEW → RUNNABLE → BLOCKED（等锁）/ WAITING / TIMED_WAITING → TERMINATED。
+
+下图是 Java 线程的 6 种状态流转。
+
+```mermaid
+stateDiagram-v2
+    [*] --> NEW
+    NEW : NEW 新建
+    RUNNABLE : RUNNABLE 可运行
+    BLOCKED : BLOCKED 等锁
+    WAITING : WAITING 等待
+    TIMED_WAITING : TIMED_WAITING 限时等待
+    TERMINATED : TERMINATED 终止
+    NEW --> RUNNABLE : start
+    RUNNABLE --> BLOCKED : 等锁
+    RUNNABLE --> WAITING : 等待通知或 park
+    RUNNABLE --> TIMED_WAITING : 限时等待
+    BLOCKED --> RUNNABLE : 拿到锁
+    WAITING --> RUNNABLE : 被唤醒
+    TIMED_WAITING --> RUNNABLE : 超时或被唤醒
+    RUNNABLE --> TERMINATED : 运行结束
+```
 - 必须调 `start()` 才有新线程，直接调 `run()` 只是普通方法；重复 `start()` 抛异常。
 - `sleep` 不释放锁，`wait` 释放锁（且必须在 synchronized 里、配 notify 使用）。
 - 中断是协作式的：`interrupt()` 只置标志并让阻塞方法抛 `InterruptedException`，catch 后要么恢复标志要么退出，吞掉等于线程停不下来。

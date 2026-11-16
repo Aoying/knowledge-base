@@ -2,7 +2,7 @@
 知识点: ThreadLocal
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java-并发编程
   - 线程池
@@ -47,12 +47,40 @@ try {
 ## 3. 原理剖析
 
 - 数据不在 `ThreadLocal` 对象里，而是挂在**每个 `Thread` 对象自己的 `threadLocals` 字段**（`ThreadLocalMap`）上：key 是 ThreadLocal 实例（弱引用），value 是实际值。`get/set` 都先取当前线程的 map 再查。
+
+下图是 ThreadLocal 的存储结构：数据挂在每个线程自己的 map 里，不在 ThreadLocal 对象里。
+
+```mermaid
+classDiagram
+    Thread --> ThreadLocalMap : threadLocals 字段
+    ThreadLocalMap --> Entry : 数组槽位
+    Entry --> ThreadLocal : key 弱引用
+    Entry --> Object : value 强引用
+    class Thread {
+        ThreadLocalMap threadLocals
+    }
+    class Entry {
+        ThreadLocal key
+        Object value
+    }
+```
 - `ThreadLocalMap` 是开放地址法哈希表（线性探测），没有链表；哈希冲突靠往后挪格解决。所以 ThreadLocal 数量很多时它的表现不如 HashMap，别往一个线程里塞成百上千个。
 - key 用弱引用的原因：ThreadLocal 对象本身没人引用时可以被 GC，不至于永远占着 map 的槽位；但 value 不是弱引用——这正是泄漏的来源。
 
 ## 4. 内存泄漏与线程池的坑（本篇重点）
 
 - **泄漏链条**：线程（池里常驻，不死）→ ThreadLocalMap → Entry 的 key 已被回收变 null、value 还在 → 这条 Entry 永远取不到、删不掉，value 挂着对象无法回收。set/get 时有启发式清理能顺手扫掉一部分过期 Entry，但不能指望它兜底。
+
+下图是泄漏链条：池线程不死，key 变 null 后 value 就永远挂在 map 里。
+
+```mermaid
+flowchart LR
+    A[池线程常驻不死] --> B[ThreadLocalMap]
+    B --> C[Entry 的 key 被回收变 null]
+    C --> D[value 还在 强引用]
+    D --> E[Entry 取不到也删不掉]
+    E --> F[value 挂着对象无法回收]
+```
 - **更现实的事故是串数据而不是 OOM**：[线程池](开发语言/Java/并发/线程池.md)复用线程，上一个请求 set 的用户信息没 `remove()`，下一个请求复用同一线程且入口漏 set 时，就会读到上一个用户的值——这是权限与隐私级事故，比泄漏更常见。
 - 铁律：**凡 set 必有 finally remove**，收口放在过滤器/拦截器/切面统一做，不靠业务代码自觉。
 
@@ -72,6 +100,19 @@ pool.execute(() -> {
 
 - 问题：`InheritableThreadLocal` 只在**新建线程**时继承，而线程池的线程是复用的、早建好了，父线程提交任务时的上下文根本传不进池线程；异步一跳，trace id、用户信息全丢。
 - 解法（阿里 TTL）：用 `TransmittableThreadLocal` 存值，再用 `TtlExecutors.getTtlExecutorService(pool)` 包装线程池——提交任务时捕获当前线程的全部 TTL 值、执行前回放到工作线程、执行后恢复，把池线程当一次性线程用。
+
+下图是 TTL 跨线程传递的三个动作：提交时捕获，执行前回放，执行后恢复。
+
+```mermaid
+sequenceDiagram
+    participant PT as 父线程
+    participant Pool as 包装后的线程池
+    participant WT as 工作线程
+    PT->>Pool: 提交任务 捕获全部 TTL 值
+    Pool->>WT: 执行前回放 TTL 值
+    WT->>WT: 执行业务
+    WT->>Pool: 执行后恢复原值
+```
 
 ```java
 static final TransmittableThreadLocal<String> TRACE = new TransmittableThreadLocal<>();

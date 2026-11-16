@@ -2,7 +2,7 @@
 知识点: synchronized与锁
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java-并发编程
   - AQS
@@ -39,6 +39,14 @@ class Counter {
 - 锁对象必须固定且共用：`synchronized (new Object())` 每次都是新锁等于没锁；锁字符串字面量、Integer 缓存对象同理危险。
 - 底层：对象头 Mark Word 记录锁状态，JDK 6 起有偏向锁 → 轻量级锁（CAS 自旋）→ 重量级锁（阻塞进操作系统互斥量）的升级路径；注意 JDK 15 起偏向锁默认禁用、JDK 18 已废弃，不要再拿它当调优手段。
 
+下图是锁的升级路径：无竞争时轻，有竞争才逐步变重，升级单向不可逆。
+
+```mermaid
+flowchart LR
+    A[偏向锁] -->|出现竞争 撤销偏向| B[轻量级锁 CAS 自旋]
+    B -->|自旋失败 膨胀| C[重量级锁 阻塞进互斥量]
+```
+
 ## 3. ReentrantLock 与 Condition
 
 ```java
@@ -58,6 +66,16 @@ if (lock.tryLock(200, TimeUnit.MILLISECONDS)) {   // 可超时：防死等，也
 比 `synchronized` 多出来的能力：
 
 - `tryLock()` / 带超时：抢不到就走降级逻辑，而不是无限 BLOCKED。
+
+下图是 tryLock 的两条出路：抢到就进临界区，抢不到就走降级逻辑。
+
+```mermaid
+flowchart TD
+    A[调用 tryLock] --> B[抢到锁了吗]
+    B -->|抢到| C[进临界区]
+    C --> D[finally 里 unlock]
+    B -->|抢不到| E[走降级逻辑 不无限等待]
+```
 - 可中断加锁 `lockInterruptibly()`：等待时能响应中断取消。
 - 公平锁选项：按排队顺序拿锁，防线程饿死，代价是吞吐下降，默认非公平。
 - 多个 `Condition`：一个锁配多个等待队列（如队列「非空」「非满」分开唤醒），`synchronized` 只有一个 wait 集合只能 `notifyAll` 乱醒。
@@ -67,6 +85,18 @@ if (lock.tryLock(200, TimeUnit.MILLISECONDS)) {   // 可超时：防死等，也
 ## 4. 死锁：成因与排查
 
 死锁四条件：互斥、持有并等待、不可剥夺、循环等待。破坏任意一条即可，工程上最常用「全局固定加锁顺序」破坏循环等待、「tryLock 带超时」破坏无限等待。
+
+下图是转账互锁的等待环：双方各持一把锁、再等对方的锁，首尾相接就死锁。
+
+```mermaid
+flowchart TD
+    A[线程 A 持有账户 a 的锁] --> B[线程 A 等账户 b 的锁]
+    C[线程 B 持有账户 b 的锁] --> D[线程 B 等账户 a 的锁]
+    B --> C
+    D --> A
+    E[破坏循环等待 按账户 id 固定加锁顺序] --> A
+    F[破坏无限等待 tryLock 带超时拿不齐就释放重试] --> A
+```
 
 ```java
 // 经典互锁：转账双方各锁自己的账户再锁对方的

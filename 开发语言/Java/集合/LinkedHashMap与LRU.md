@@ -2,7 +2,7 @@
 知识点: LinkedHashMap与LRU
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - HashMap
   - TreeMap与红黑树
@@ -35,6 +35,15 @@ ins.keySet().forEach(System.out::println);
 Map<String, Integer> acc = new LinkedHashMap<>(16, 0.75f, true);
 acc.put("a", 1); acc.put("b", 2); acc.put("c", 3);
 acc.get("a");
+
+下图是访问顺序的移位：get 到 a 后，a 挪到链尾，链头就变成最久未访问的 b。
+
+```mermaid
+flowchart LR
+    A[put a b c 插入顺序 a b c] --> B[get a]
+    B --> C[a 挪到链尾 顺序变 b c a]
+    C --> D[链头 b 最久未访问 链尾 a 最新]
+```
 acc.keySet().forEach(System.out::println);
 ```
 
@@ -78,6 +87,18 @@ class LruCache<K, V> extends LinkedHashMap<K, V> {
 ## 4. 原理剖析
 
 - 节点类型 `LinkedHashMap.Entry` 继承 `HashMap.Node`，多 `before`、`after` 两个引用；全表节点串成一条双向链表，`head` 是最旧端，`tail` 是最新端。
+
+下图是双向链表的顺序链：每个节点多 before 和 after 两个引用，head 是最旧端，tail 是最新端。
+
+```mermaid
+flowchart LR
+    H[head 最旧端] --> A[节点 a]
+    A --> B[节点 b]
+    B --> C[节点 c]
+    C --> T[tail 最新端]
+    C --> B
+    B --> A
+```
 - 哈希表部分（桶数组、扰动、扩容、树化）完全复用 HashMap；扩容只搬桶数组，不影响链表顺序。
 - 一个细节：`HashMap.TreeNode` 正是继承自 `LinkedHashMap.Entry`，因为树化节点也要能挂进这条顺序链。
 
@@ -169,6 +190,17 @@ class LruCache<K, V> extends LinkedHashMap<K, V> {
 2. removeEldestEntry 在插入新节点后被调用（afterNodeInsertion 回调），且一次插入只调用一次，所以一次 put 最多淘汰一个；返回 true 就删链头。LRU 写法：accessOrder = true + 重写该方法为 size() > capacity。
 3. 访问顺序模式下 get 会把节点移到链尾，属于结构性修改，modCount 递增；正在进行的迭代器校验失败，抛 ConcurrentModificationException。插入顺序模式下 get 不移位，遍历时 get 安全。修复：遍历期间不要 get，需要边遍历边查时先复制一份 key 列表。
 4. 手推：容量 3，put 1、2、3 → 顺序 [1, 2, 3]；get 1 → 1 挪到链尾 → [2, 3, 1]；put 4 → 超容，淘汰链头 2 → 最终内容 [3, 1, 4]，链头 3 最久未访问、链尾 4 最新。
+
+下图是容量 3 的 LRU 手推全过程：先插满，再摸 1 变新，最后插 4 淘汰链头 2。
+
+```mermaid
+flowchart TD
+    A[put 1 2 3 顺序 1 2 3] --> B[get 1 挪到链尾]
+    B --> C[顺序变 2 3 1]
+    C --> D[put 4 超容]
+    D --> E[淘汰链头 2]
+    E --> F[最终内容 3 1 4]
+```
 5. 本质区别：TreeMap 按 key 的值排序（自然顺序 Comparable 或构造时 Comparator），顺序与插入/访问无关；LinkedHashMap 按插入顺序或访问顺序排列，与 key 本身的大小无关。只要顺序不要范围查询用 LinkedHashMap；需要按值排序、范围查询用 TreeMap。
 
 ## 11. 关联知识

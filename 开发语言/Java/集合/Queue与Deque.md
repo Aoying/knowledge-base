@@ -2,7 +2,7 @@
 知识点: Queue与Deque
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - ConcurrentHashMap
   - CopyOnWriteArrayList
@@ -26,6 +26,18 @@
 | 看队头 | `element` | `peek`（空则 null） |
 
 - `Deque` 是双端队列，继承 Queue，两头都能进出（方法名带 `First`/`Last`）。只操作一端是栈，两端分工就是普通队列。
+
+下图是 Queue 三组方法的失败语义：抛异常版和返回特殊值版只差在失败时怎么办。
+
+```mermaid
+flowchart TD
+    A[入队] --> B[add 满抛异常]
+    A --> C[offer 满返回 false]
+    D[出队] --> E[remove 空抛异常]
+    D --> F[poll 空返回 null]
+    G[看队头] --> H[element 空抛异常]
+    G --> I[peek 空返回 null]
+```
 - 选型总览：普通队列/栈 → `ArrayDeque`；优先级 → `PriorityQueue`；并发阻塞 → `BlockingQueue` 家族（见第 3 节）。
 
 ## 2. 基础知识
@@ -44,6 +56,17 @@ q.poll();                    // "x"，移除
 ### ArrayDeque
 
 - 循环数组实现：`head`、`tail` 两个下标在数组上环形移动，满时翻倍扩容。
+
+下图是 ArrayDeque 的循环数组：head 和 tail 在数组上环形移动，出入队只动下标不搬元素。
+
+```mermaid
+flowchart TD
+    A[循环数组] --> B[入队 tail 前进]
+    A --> C[出队 head 前进]
+    B --> D[到数组尾绕回开头]
+    C --> D
+    D --> E[满时翻倍扩容 按顺序拷贝并重置 head 为 0]
+```
 - 不允许 `null` 元素：`poll`/`peek` 用 null 表示空队列，存 null 会产生歧义，与 [ConcurrentHashMap](开发语言/Java/集合/ConcurrentHashMap.md) 禁 null 是同一个理由。
 - 做栈和队列都比 `LinkedList` 快（连续内存、无节点对象），也比老 `Stack`（继承 Vector、全方法 synchronized）干净。官方文档明确推荐用 Deque 替代 Stack。
 
@@ -55,6 +78,19 @@ q.poll();                    // "x"，移除
 ## 3. 进阶知识：BlockingQueue 家族
 
 `BlockingQueue` 继承 Queue 并加阻塞语义：队列空时 `take` 阻塞等待，队列满时 `put` 阻塞等待——它就是生产者-消费者模型的标准件：
+
+下图是生产者与消费者的阻塞配合：空了 take 等，满了 put 等，一方动了就唤醒另一方。
+
+```mermaid
+sequenceDiagram
+    participant P as 生产者
+    participant Q as 阻塞队列
+    participant C as 消费者
+    P->>Q: 队列满时 put 阻塞等待
+    C->>Q: 队列空时 take 阻塞等待
+    P->>Q: put 成功 唤醒等 take 的线程
+    Q->>C: take 成功 唤醒等 put 的线程
+```
 
 | 实现 | 结构 | 容量 | 特点 |
 |---|---|---|---|

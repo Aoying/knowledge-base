@@ -2,7 +2,7 @@
 知识点: Set集合基础
 层级: 基础
 适用版本: Java 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - HashMap
   - TreeMap与红黑树
@@ -29,6 +29,16 @@
 | 实现 | 底层结构 | 遍历顺序 | 复杂度 | null 元素 |
 |---|---|---|---|---|
 | `HashSet` | `HashMap`（value 是固定占位对象） | 不固定 | 增删查平均 O(1) | 允许 1 个 |
+
+下图是四种 Set 实现的底层：HashSet 和 TreeSet 都是薄壳，里面各包了一个 Map。
+
+```mermaid
+classDiagram
+    HashSet --> HashMap : 元素当 key value 是固定占位对象
+    TreeSet --> TreeMap : 元素当 key value 是固定占位对象
+    LinkedHashSet --|> HashSet : 继承
+    EnumSet --> BitVector : 位向量
+```
 | `LinkedHashSet` | 哈希表 + 双向链表 | 插入顺序 | 增删查平均 O(1) | 允许 1 个 |
 | `TreeSet` | 红黑树 | 按比较器排序 | 增删查 O(log n) | 不允许（无比较器时抛异常） |
 | `EnumSet` | 位向量（`long` 或 `long[]`） | 枚举声明顺序 | 增删查接近 O(1) | 不允许 |
@@ -55,11 +65,31 @@
 
 - `TreeSet` 不看 `hashCode`，只看比较器：构造时传 `Comparator`，或元素实现 `Comparable`（自然排序）。
 - 比较器返回 0 即视为相等：`TreeSet.add` 会拒绝加入，哪怕两个对象的 `equals` 并不相等。比较逻辑与相等逻辑不一致时，去重行为会出乎意料。
+
+下图是 TreeSet 的去重判定：只看比较器返回是不是 0，不看 equals。
+
+```mermaid
+flowchart TD
+    A[TreeSet add 元素] --> B[比较器返回 0 吗]
+    B -->|是| C[视为相等 拒绝加入]
+    B -->|否| D[加入集合]
+    C --> E[哪怕 equals 并不相等也会被去重]
+```
 - 比较器必须满足自反、反对称、传递三性；比较逻辑里混用多个字段时注意溢出（整数相减可能溢出，优先用 `Integer.compare`）。
 
 ### 3.3 EnumSet 的位向量
 
 - `EnumSet` 不用哈希也不用红黑树：枚举常量个数固定，直接用位向量表示“在不在集合里”，一个 `long` 可表示 64 个枚举值。
+
+下图是 EnumSet 的位向量：枚举个数固定，一位代表一个常量在不在集合里。
+
+```mermaid
+flowchart TD
+    A[枚举常量个数固定] --> B[一位代表一个常量在不在集合里]
+    B --> C[一个 long 表示 64 个枚举值]
+    C --> D[增删查都是位运算]
+    D --> E[比 HashSet 更省内存更快]
+```
 - 因此它比 `HashSet` 更省内存、更快，但只能装同一枚举类型的常量，且不允许 `null`。
 - 创建用静态工厂：`EnumSet.of(...)`、`EnumSet.allOf(...)`、`EnumSet.noneOf(...)`，没有公开构造器。
 

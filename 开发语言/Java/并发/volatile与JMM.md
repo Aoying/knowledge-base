@@ -2,7 +2,7 @@
 知识点: volatile与JMM
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java-并发编程
   - JVM-内存模型
@@ -56,6 +56,15 @@ class Worker {
 int data = 0;
 volatile boolean ready = false;
 // 线程 A: data = 42; ready = true;      （volatile 写禁止前面的写被排到它后面）
+
+下图是 volatile 发布模式：先写数据、再写标志位，读到标志的线程一并看到数据。
+
+```mermaid
+flowchart LR
+    A[线程 A 写 data 42] --> B[线程 A 写 ready true]
+    B --> C[线程 B 读 ready 为 true]
+    C --> D[线程 B 读 data 得 42]
+```
 // 线程 B: if (ready) use(data);         // 能读到 42，靠 hb 传递性 + 顺带刷新
 ```
 
@@ -81,6 +90,19 @@ public class AppConfig {
 ```
 
 - 原理：`new` 分三步——分配内存、调用构造初始化、引用指向内存。没有 volatile 时后两步可重排：另一个线程在第一次判空时可能拿到「引用非 null 但对象未初始化完」的半成品。
+
+下图是 DCL 的双重判空：外层判空省锁，内层判空防重复创建，volatile 禁止后两步重排。
+
+```mermaid
+flowchart TD
+    A[getInstance] --> B[第一次判空 instance 为空吗]
+    B -->|不为空| C[直接返回 instance]
+    B -->|为空| D[加锁]
+    D --> E[第二次判空 instance 为空吗]
+    E -->|不为空| C
+    E -->|为空| F[分配内存 调用构造 引用指向内存]
+    F --> C
+```
 - volatile 写屏障禁止这种重排，把 DCL 从「看起来对」修成「真的对」。这也是 [单例](开发语言/Java/设计模式/单例.md) 篇里 DCL 写法要求字段必须 volatile 的原因，两边讲的是同一个坑。
 - 现代替代：静态内部类 Holder 写法靠类加载的加锁初始化保证安全与懒加载，不想写 DCL 时优先它。
 
@@ -151,6 +173,22 @@ class ContendedCounters {
 3. volatile 的贵不在“每次都去主内存”：原文冷知识已讲过，它靠屏障 + 缓存一致性协议工作，读仍可命中缓存；贵的是屏障禁掉的优化与一致性流量，不是内存往返本身。
 
 ### 7.3 happens-before 传递性链：三线程手算
+
+下图是三线程的 happens-before 链：T1 的写经两块 volatile 标志接力传到 T3。
+
+```mermaid
+sequenceDiagram
+    participant T1 as 线程 T1
+    participant T2 as 线程 T2
+    participant T3 as 线程 T3
+    T1->>T1: 写 data 42
+    T1->>T1: 写 ready true
+    T1->>T2: ready 写 happens-before 读
+    T2->>T2: 读到 ready true 读 data 得 42
+    T2->>T2: 写 done true
+    T2->>T3: done 写 happens-before 读
+    T3->>T3: 读到 done true 读 data 得 42
+```
 
 只用原文第 2 节的规则（程序顺序、volatile 规则、传递性）手算，不引入新规则。场景：
 

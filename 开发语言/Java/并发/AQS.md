@@ -2,7 +2,7 @@
 知识点: AQS
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java-并发编程
   - synchronized与锁
@@ -19,6 +19,19 @@
 
 - AQS（`AbstractQueuedSynchronizer`）是 JUC 的同步器框架：ReentrantLock、Semaphore、CountDownLatch、ReentrantReadWriteLock 的等待队列，乃至 `FutureTask`，底层都基于它。理解 AQS 等于拿到一把读所有 JUC 同步工具源码的钥匙。
 - 它只做两件事：**管理一个状态整数 `state`** + **维护一个 FIFO 等待队列**。具体同步器只定义「state 怎么变才算拿到/放行」，排队、阻塞、唤醒的脏活全由 AQS 承包。
+
+下图把 AQS 的两件套画出来：state 管能不能过，FIFO 队列管过不了时怎么等。
+
+```mermaid
+flowchart TD
+    AQS[AQS 同步器框架] --> S[state 同步状态整数]
+    AQS --> Q[FIFO 等待队列]
+    S --> T1[tryAcquire 抢 state]
+    S --> T2[tryRelease 还 state]
+    Q --> P1[抢不到入队尾]
+    Q --> P2[park 挂起不占 CPU]
+    Q --> P3[释放者 unpark 唤醒下一个]
+```
 
 ## 2. 核心结构
 
@@ -86,6 +99,21 @@ class Mutex extends AbstractQueuedSynchronizer {
 ## 6. 原理剖析要点
 
 - **模板方法骨架**：`acquire` 的流程是「tryAcquire 失败 → 建 Node 入队 → 循环检查前驱是不是头节点且能 tryAcquire → park 挂起 → 被唤醒后重试，头节点成功后出队接任」。读源码抓这条主线即可，其余是中断处理与节点状态的细节。
+
+下图是 acquire 的主线流程：先试抢，抢不到才入队挂起，醒来再试。
+
+```mermaid
+flowchart TD
+    A[调用 acquire] --> B[tryAcquire 抢 state]
+    B -->|成功| C[持有锁执行业务]
+    B -->|失败| D[建 Node 入队尾]
+    D --> E[前驱是头节点吗]
+    E -->|是| F[再试 tryAcquire]
+    E -->|否| G[park 挂起]
+    F -->|成功| H[出队接任头节点]
+    F -->|失败| G
+    G -->|被 unpark 唤醒| E
+```
 - **为什么被唤醒后要看前驱**：只有前驱是头节点（即自己排在最前）才有资格尝试获取，保证 FIFO 公平性骨架；非公平锁是在入队之前多给一次直接抢的机会。
 - **取消与超时**：`acquire` 的可中断、带超时变体在 AQS 内统一处理节点取消（标记 CANCELLED 并从队列摘除），这也是 `tryLock(timeout)` 能实现的原因，见 [synchronized与锁](开发语言/Java/并发/synchronized与锁.md)。
 
@@ -102,6 +130,26 @@ class Mutex extends AbstractQueuedSynchronizer {
 **版本口径（重要）**：本节的 waitStatus 取值与入队/唤醒步骤名是经典版 AQS 的实现（JDK 8–17，与本文原文小技巧节一致）。JDK 21 起 AQS 已重写：`Node.waitStatus` 被 `status` 位字段取代（`WAITING=1`、`COND=2`、`CANCELLED=0x80000000`），`SIGNAL`/`CONDITION`/`PROPAGATE` 常量与 `shouldParkAfterFailedAcquire`/`unparkSuccessor` 方法名不再存在；17u/21u 的后续更新也已合入重写（17.0.12 已合入，2026-11-08 实取 jdk17u 源码核验）。排队、park/unpark、公平性结论不受影响，变的是内部字段与方法名；读 JDK 21+ 或最新 17u/21u 源码时以 `status` 位字段为准。
 
 ### 8.1 CLH 队列节点状态机：四个值怎么流转
+
+下图是 Node 的 waitStatus 流转：状态说的是后继节点需要什么，不是本节点自己的状态。
+
+```mermaid
+stateDiagram-v2
+    [*] --> S0
+    S0 : 初始 0
+    SSIGNAL : SIGNAL 负一
+    SCANCELLED : CANCELLED 1
+    SCONDITION : CONDITION 负二
+    SPROPAGATE : PROPAGATE 负三
+    S0 --> SSIGNAL : 后继节点 CAS 置 SIGNAL
+    SSIGNAL --> S0 : 释放时 unparkSuccessor 清回 0
+    S0 --> SCANCELLED : 超时或中断取消
+    S0 --> SCONDITION : await 进入条件队列
+    SCONDITION --> S0 : signal 转回同步队列
+    S0 --> SPROPAGATE : 共享释放 doReleaseShared 置位
+    SPROPAGATE --> S0 : 后继共享节点获得后继续传播
+    SCANCELLED --> [*]
+```
 
 【官方】`Node.waitStatus` 只有五个取值：`0`（初始，无特殊含义）、`CANCELLED(1)`、`SIGNAL(-1)`、`CONDITION(-2)`、`PROPAGATE(-3)`。注意状态描述的是“后继节点需要什么”，不是本节点自己的状态：一个节点置 `SIGNAL`，意思是“我释放或取消时必须 unpark 我的后继”。
 
