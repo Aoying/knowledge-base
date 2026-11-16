@@ -2,7 +2,7 @@
 知识点: SQLAlchemy
 层级: 进阶
 适用版本: SQLAlchemy 2.x
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - pydantic
@@ -58,6 +58,19 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 - **engine 全局只建一个**：它内部管连接池；每处业务 `create_engine` 等于每处一套池，纯属浪费。
 - **Session 是工作单元（Unit of Work）**：一个业务动作一个 Session（如"写一章的分析结果"），用完即关。标准写法 `with SessionLocal() as session, session.begin():`——begin 块内自动提交、异常自动回滚，出 with 连接归还池。
+
+下图是一个业务动作的 Session 生命周期：begin 块内自动提交、异常自动回滚，出 with 归还连接。
+
+```mermaid
+flowchart TD
+    A[engine 全局只建一个 内部管连接池] --> B[一个业务动作一个 Session 用完即关]
+    B --> C[begin 块内执行业务动作]
+    C --> D{异常}
+    D -->|无异常| E[自动提交]
+    D -->|有异常| F[自动回滚]
+    E --> G[出 with 连接归还池]
+    F --> G
+```
 - `expire_on_commit=False` 值得显式设置：默认提交后对象属性过期，下次访问触发懒加载刷新，Session 已关闭时会抛 `DetachedInstanceError`。长流程批处理关掉过期更省心，代价是对象可能是旧快照。
 
 ## 3. 查询：2.0 风格
@@ -83,6 +96,16 @@ with SessionLocal() as session:
 
 `relationship` 默认懒加载：访问 `entity.states` 时才单独发一条查询。遍历 50 个人物各取状态就是 1 + 50 条 SQL——经典 N+1。批量场景按需改预加载，如 `.options(selectinload(Entity.states))` 用一条额外 IN 查询把集合批量带出：
 
+下图是 N+1 与预加载的条数对比：懒加载 51 条，selectinload 只要 2 条。
+
+```mermaid
+flowchart TD
+    A[relationship 默认懒加载 访问时才单独发一条查询] --> B[遍历 50 个人物 1 加 50 条 SQL]
+    B --> C[改预加载 selectinload]
+    C --> D[1 条主查询加 1 条 IN 查询 等于 2 条 省 49 条]
+    C --> E[joinedload JOIN 一次带出 1 条 SQL 但一对多行膨胀 别滥用]
+```
+
 | 策略 | 机制 | 适用 |
 |---|---|---|
 | `select`（默认懒加载） | 访问时单查 | 单对象、访问面不确定 |
@@ -93,6 +116,16 @@ with SessionLocal() as session:
 ## 5. 事务与并发口径
 
 - **flush 与 commit 分清**：`flush` 把变更发到数据库（拿到自增主键、触发约束检查）但未提交；`commit` 才落定。先拿 id 再建关联时手动 `flush()`，别为了拿 id 提前 commit 把业务动作拆成两个事务。
+
+下图是 flush 与 commit 的分工：flush 只发 SQL 不提交，commit 才落定，整章一个事务收口。
+
+```mermaid
+flowchart TD
+    A[改托管对象属性] --> B[flush 把变更发到数据库 拿到自增主键 触发约束检查 但未提交]
+    B --> C[先拿 id 再建关联 手动 flush 别提前 commit 拆成两个事务]
+    B --> D[commit 才落定]
+    D --> E[整章一个事务 entities relations events 要么全落 要么全回滚重抽]
+```
 - **SQLite 的写并发**：SQLite 单写模型，同一时刻只有一个写事务。引擎是单机批处理，串行写够用；出现 `database is locked` 先查有没有 Session 漏关（尤其异常路径）。用 `event` 监听 connect 事件执行 `PRAGMA journal_mode=WAL` 开 WAL，读写互不阻塞，低成本缓解。
 
 - 分析回写**整章一个事务**：一章的 entities/relations/events 要么全落，要么全回滚重抽；落一半的世界状态比不落更糟（矛盾检测会把半成品当事实）。

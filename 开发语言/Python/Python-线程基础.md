@@ -2,7 +2,7 @@
 知识点: Python 线程基础
 层级: 基础
 适用版本: Python 3.10+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - Python-多进程与GIL
@@ -93,6 +93,18 @@ def consumer() -> None:
 ```
 
 - **生产者消费者标准结构**：生产者 `put`、消费者 `get`、干完调 `task_done()`、主线程 `q.join()` 等全部任务完成。`task_done()` 漏调一次，`join()` 就永远等下去。
+
+下图是生产者消费者的标准结构：生产者 put，消费者 get，干完调 task_done，主线程 join 等全部完成。
+
+```mermaid
+flowchart TD
+    A[生产者 put] --> B[Queue 满了阻塞 不丢数据 背压]
+    A --> C[放哨兵 None 告诉消费者没活了 几个消费者放几个哨兵]
+    B --> D[消费者 get]
+    D --> E[干完调 task_done]
+    E --> F[主线程 q join 等全部任务完成]
+    E --> G[task_done 漏调一次 join 永远等下去]
+```
 - **哨兵值**：队列没有“关闭”概念，结束信号靠约定一个特殊值（如 `None`）；几个消费者就要放几个哨兵。
 - **`maxsize` 是背压**：队列满了生产者阻塞，天然限流；无界队列在生产快、消费慢时会把内存吃爆。
 
@@ -112,12 +124,34 @@ with ThreadPoolExecutor(max_workers=8) as pool:
 ```
 
 - **异常去哪了**：任务里抛的异常不会在 `submit` 时出现，而是存在 `Future` 里，调 `result()` 时才重新抛出。不调 `result()`，异常就静默丢了——批量任务收尾必须逐个 `result()` 或 `as_completed` 过一遍。
+
+下图是线程池任务异常的去向：异常存在 Future 里，只有调 result 时才重新抛出。
+
+```mermaid
+flowchart TD
+    A[pool submit 提交任务] --> B[任务在工作线程上跑 抛异常]
+    B --> C[异常存在 Future 里 submit 时不抛]
+    C --> D{调 result}
+    D -->|调了| E[重新抛出]
+    D -->|不调| F[异常静默丢了]
+    D --> G[批量任务收尾逐个 result 或 as_completed 过一遍]
+```
 - **map vs submit**：`pool.map` 按提交顺序出结果，适合“结果顺序要对上输入”；`submit` + `as_completed` 按完成顺序出结果，适合“谁先完先处理谁”。
 - **`max_workers` 默认值**：`min(32, os.cpu_count() + 4)`。IO 密集可适当调大，但上限受对端服务承受力制约，不是越大越好；`with` 块退出时自动 `shutdown(wait=True)`，等全部任务跑完才往下走。
 
 ## 5. 常见坑
 
 - **竞态**：`counter += 1` 是读、改、写三步，两个线程交错就会互相覆盖更新。共享可变状态要么加锁，要么只通过 `Queue` 传递、不要共享。
+
+下图是竞态的成因：读改写三步交错，两个线程读到同一个旧值，写回只加一次。
+
+```mermaid
+flowchart TD
+    A[线程 1 读 counter] --> B[线程 2 读到同一个旧值]
+    B --> C[各自加一 先后写回]
+    C --> D[结果只加一次 丢一次更新]
+    E[修法一 用 Lock 包住读改写 推荐 with lock] --> F[修法二 不共享计数器 改走 Queue 传递结果由一方汇总]
+```
 - **守护线程写一半被杀**：主线程一退出，守护线程当场掐断，落盘、写库、发请求都可能只做一半。不能丢的收尾放主线程或非守护线程，并 `join()` 确认。
 - **忘记 join / 不 shutdown**：主线程跑完、非守护线程还在跑，进程迟迟不退出；线程池不用 `with` 包起来，`submit` 完主线程直接退出也一样拖住。生命周期永远显式收口。
 - **线程里混 asyncio**：事件循环不是线程安全的，别在线程里直接调另一个线程的 loop 方法；跨线程递任务用 `asyncio.run_coroutine_threadsafe`，或干脆让 asyncio 侧用 `run_in_executor` 把阻塞活扔给线程池。

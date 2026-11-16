@@ -2,7 +2,7 @@
 知识点: FastAPI
 层级: 基础
 适用版本: FastAPI（基于 Starlette + pydantic v2）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - pydantic
@@ -68,6 +68,22 @@ def list_entities(session: Session = Depends(get_session)):
 - 依赖可嵌套（依赖里再依赖）、可复用、可用 `dependency_overrides` 在测试里整体替换成假实现——这点对 pytest 非常友好，不用打补丁。
 - 类比 Spring 的 `@Autowired` + 请求作用域 Bean：`yield` 前是"构造 + 注入"，yield 后是 `@PreDestroy`。从 Java 过来按这个模型理解最快。
 
+下图是 yield 型依赖的请求生命周期：yield 前构造注入，请求结束自动收尾。
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant FastAPI
+    participant Dep
+    participant Route
+    Client->>FastAPI: 发请求
+    FastAPI->>Dep: 执行依赖 yield 前 构造加注入
+    Dep-->>Route: 注入 Session
+    Route->>Route: 处理请求
+    Route-->>FastAPI: 返回响应
+    FastAPI->>Dep: 请求结束 执行 yield 后收尾
+```
+
 ## 4. pydantic 衔接
 
 FastAPI 的入参/出参模型就是 pydantic `BaseModel`，与 [pydantic 篇](开发语言/Python/pydantic.md) 是同一套：
@@ -81,9 +97,35 @@ FastAPI 的入参/出参模型就是 pydantic `BaseModel`，与 [pydantic 篇](�
 路由函数两种写法，选错就丢并发：
 
 - `async def` 端点跑在事件循环上，**里面绝不能有阻塞调用**：同步 SQLAlchemy Session、同步 `requests`、本地 Ollama 的同步 HTTP 客户端、长时间 CPU 计算（如大文本分块）——任何一个都会把整个事件循环冻住，所有请求一起卡。
+
+下图是两种端点写法的分流：async 端点里的阻塞调用冻住全部请求，同步端点只占一个线程池槽位。
+
+```mermaid
+flowchart TD
+    A[请求到达] --> B{端点写法}
+    B -->|async def| C[跑在事件循环上]
+    C --> D{有阻塞调用}
+    D -->|有| E[整个事件循环冻住 所有请求一起卡]
+    D -->|没有| F[正常推进]
+    B -->|def 同步| G[框架丢到线程池跑]
+    G --> H[阻塞只占一个线程 不冻全局]
+```
 - `def`（同步）端点框架会自动丢到线程池跑，阻塞只占一个线程，不冻全局。**引擎这类以同步 SQLAlchemy + 同步 Ollama 调用为主的服务，端点默认写同步 `def` 是更稳的选择**，别为了"用了 FastAPI 就该全异步"硬上 async。
 - 真要 async：数据库换异步驱动（aiosqlite + AsyncSession）、HTTP 换 `httpx.AsyncClient`，整条链路全异步才有意义；混一半是最坏状态——async 端点里藏着同步调用，压测才暴露。
 - CPU 密集且耗时的活（整章分析、embedding 批处理）本质不该挂在请求线程里等：接口收下任务返回 202 + 任务 id，后台执行，调用方轮询或回调。这与 [asyncio 篇](开发语言/Python/asyncio.md) 的任务编排是同一件事，HTTP 层只是入口。
+
+下图是长任务的 202 加任务 id 模式：接口只收任务，后台执行，调用方轮询状态。
+
+```mermaid
+flowchart TD
+    A[接口收到整章分析任务] --> B[返回 202 加任务 id]
+    B --> C[后台执行 不挂请求线程等]
+    C --> D[调用方轮询状态查询端点]
+    D --> E{状态}
+    E -->|排队或运行| D
+    E -->|完成| F[取结果]
+    E -->|失败| G[结构化返回错误信息]
+```
 
 ## 6. 给 Agent / 本地工具做服务的落点
 

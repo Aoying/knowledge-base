@@ -2,7 +2,7 @@
 知识点: pydantic 数据校验
 层级: 基础
 适用版本: pydantic v2
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - Agent
@@ -19,6 +19,15 @@
 pydantic 是基于类型注解的**运行时**数据校验库：定义一个继承 `BaseModel` 的类，传入数据时它按注解做类型转换与校验，不合格直接抛 `ValidationError` 并给出结构化的错误清单（哪个字段、什么错、输入是什么）。这补上了 typing 的短板——注解只给 IDE 看，pydantic 真的在运行时拦。
 
 定位：**系统边界的守门员**。一切不可信输入——LLM 输出的 JSON、HTTP 入参、配置文件、外部 API 返回——进系统前先过一遍 pydantic；进了系统内部之后，换 dataclass 传递（见关联知识）。
+
+下图是 pydantic 的守门员定位：一切不可信输入先进系统前先过校验，合格后换 dataclass 传递。
+
+```mermaid
+flowchart TD
+    A[不可信输入 LLM 输出 JSON HTTP 入参 配置文件 外部 API 返回] --> B[pydantic 按注解类型转换与校验]
+    B --> C[合格进系统内部 换 dataclass 传递]
+    B --> D[不合格抛 ValidationError 结构化错误清单 哪个字段 什么错 输入是什么]
+```
 
 ## 2. 基础知识
 
@@ -39,6 +48,18 @@ except ValidationError as e:
 ```
 
 - 小说引擎 ChapterAnalysisService 的 JSON 落库前必须过 pydantic，LLM 偶尔吐 `chapter: "第十二章"` 这种，直接进 SQLite 就是脏数据。校验失败的正确姿势是把 `e.errors()` 拼回提示词让模型重抽（retry with error feedback），而不是吞掉或硬存。
+
+下图是校验失败回喂重抽的闭环：落库前过 pydantic，失败把 errors 拼回提示词重抽。
+
+```mermaid
+flowchart TD
+    A[LLM 吐 JSON] --> B[ChapterAnalysisService 落库前过 pydantic]
+    B --> C{校验通过}
+    C -->|通过| D[进 SQLite]
+    C -->|失败| E[errors 拼回提示词让模型重抽]
+    E --> A
+    B --> F[不要吞掉或硬存 直接进 SQLite 就是脏数据]
+```
 - v2 用 `model_validate` / `model_validate_json`，别再用 v1 的 `parse_obj` / `parse_raw`（v1 已停止维护）。
 - `Field` 约束：数值 `ge/gt/le/lt`、字符串 `min_length/max_length/pattern`、集合 `min_length` 等；`Field(default=...)`、`Field(default_factory=...)` 设默认值，规则与 dataclass 一致（可变默认用工厂）。
 
@@ -47,6 +68,15 @@ except ValidationError as e:
 pydantic 默认是"宽容模式"（lax）：能转就转——字符串 `"12"` 转成 int 12、"true" 转成 bool。这在对接 LLM 时其实是优点（模型常把数字带引号），但要心里有数：
 
 - `chapter: "第十二章"` 转不动 → 报错，正是我们要拦的；
+
+下图是宽容模式与严格模式的区别：带引号的数字会被静默转换，转不动的才报错，严格模式连静默转换也拦。
+
+```mermaid
+flowchart TD
+    A[宽容模式 能转就转] --> B[带引号的 12 静默转成 12 不报错]
+    A --> C[第十二章 转不动 报错 正是要拦的]
+    D[严格模式 字段级或模型级 strict] --> E[拦住带引号数字的静默转换]
+```
 - `chapter: "12"` 会被静默转成 12 → 不报错，想拦这种就开严格模式：字段级 `Field(strict=True)` 或模型级 `model_config = ConfigDict(strict=True)`。
 - 枚举字段优先用 `Enum`/`Literal` 而非正则 `pattern`：`type: Literal["人物", "地点", "物品", "组织"]`，报错信息直接列出合法取值，拼回重抽提示时模型更容易改对。
 

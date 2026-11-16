@@ -2,7 +2,7 @@
 知识点: Python-NumPy与Pandas基础
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - SQLAlchemy
@@ -96,6 +96,16 @@ print(result)
 
 `groupby("city")` 先按 city 分组，再对选中的列聚合（sum/mean/count/max/min）。习惯：聚合前先选中列（`["amount"]`），避免对无关列也聚合一遍；groupby 默认按分组键排序，所以结果里上海排在北京前面。
 
+下图是 groupby 的流程：先分组，再选中列聚合，最后按分组键排序。
+
+```mermaid
+flowchart TD
+    A[DataFrame city amount] --> B[groupby city 按 city 分组]
+    B --> C[选中列 amount 避免对无关列聚合]
+    C --> D[聚合 sum mean count max min]
+    D --> E[默认按分组键排序 上海排在北京前面]
+```
+
 ### 缺失值：先数，再处理
 
 缺失在 Pandas 里是 `NaN`（浮点列里出现缺失，整列会变 float，这是正常的）。处理三件套：
@@ -113,6 +123,17 @@ print(result)
 ### 视图 vs 副本：最值得单拎出来的机制
 
 - **视图**：只换看法，不复制数据。`reshape`、切片 `a[0:2]` 属于视图，改视图会动原数据；布尔掩码索引与花式索引返回的是副本。
+
+下图是视图与副本的分流：reshape 与切片是视图，布尔掩码与花式索引是副本。
+
+```mermaid
+flowchart TD
+    A{操作} -->|reshape 切片| B[视图 只换看法 不复制数据]
+    A -->|布尔掩码索引 花式索引| C[副本 真复制]
+    A -->|分不清| D[用 shares_memory 验证 记不住直接 copy]
+    B --> E[改视图会动原数据]
+    C --> F[改副本不影响原数据]
+```
 - **副本**：`copy()`、花式索引（整数数组索引）等是真复制，改副本不影响原数据。
 - 规则记不住时直接 `arr.copy()` 求稳；分不清时用 `np.shares_memory(a, b)` 验证。
 
@@ -178,6 +199,16 @@ print(result)
 ```
 
 流程固定四步：读入（`read_csv`）→ 看缺失（`isna().sum()`）→ 处理缺失（这里填 0 是示例，真实业务先确认含义）→ 分组聚合排序。`read_csv` 常用参数：`usecols`（只读需要的列）、`dtype`（定死列类型，防推断跑偏）、`parse_dates`（日期列直接解析）。
+
+下图是读 CSV 清洗分组的固定四步：读入、看缺失、处理缺失、分组聚合排序。
+
+```mermaid
+flowchart TD
+    A[读入 read_csv] --> B[usecols 只读需要的列 dtype 定死列类型 parse_dates 解析日期]
+    B --> C[看缺失 isna sum 先数]
+    C --> D[处理缺失 fillna 或 dropna 先确认含义]
+    D --> E[分组聚合排序 groupby sum sort_values]
+```
 
 ## 6. 性能优化
 

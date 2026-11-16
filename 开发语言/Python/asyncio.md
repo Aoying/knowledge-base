@@ -2,7 +2,7 @@
 知识点: asyncio 并发模型
 层级: 进阶
 适用版本: Python 3.11+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - Python知识点地图
@@ -19,6 +19,16 @@
 ## 1. 核心概念
 
 asyncio 是单线程协作式并发：一个事件循环（event loop）在一个线程里轮流推进成百上千个协程，协程只在 `await` 处主动让出——让出时通常是在等 IO（网络、磁盘、定时器）。没有抢占、没有锁竞争，代价是**任何一段不让出的同步代码都会卡住所有协程**。
+
+下图是事件循环的协作式调度：协程只在 await 处让出，不让出的同步代码卡住所有协程。
+
+```mermaid
+flowchart TD
+    A[事件循环 一个线程轮流推进成百上千个协程] --> B[协程在 await 处主动让出 等 IO 网络 磁盘 定时器]
+    B --> C[推进下一个协程]
+    C --> A
+    A --> D[一段不让出的同步代码卡住所有协程]
+```
 
 判断标准只有一条：**瓶颈在等 IO 就用 asyncio，在算 CPU 就用多进程/多线程**。
 
@@ -63,11 +73,34 @@ asyncio.run(main(range(1, 51)))
 - **超时**：`async with asyncio.timeout(120):`（3.11+）或旧的 `asyncio.wait_for`。超时本质是取消任务，被取消方会收到 `CancelledError`——所以 `except Exception` 兜底时**不要吞掉 CancelledError**（3.8+ 它已不继承 Exception，但自己写 `except BaseException` 或裸 `except:` 仍会误吞）。重试逻辑要把"超时取消"和"业务异常"分开计数。
 - **取消传播**：`task.cancel()` 只是请求取消，对方在下一个 await 点才真正停下；正在跑的同步代码段拦不住。批量任务关停时给每个任务发 cancel 后再统一 await 收尾，别直接杀进程丢在途写入。
 
+下图是取消的传播：cancel 只是请求取消，对方在下一个 await 点才真正停下。
+
+```mermaid
+flowchart TD
+    A[asyncio timeout 超时本质是取消] --> B[task cancel 请求取消]
+    B --> C{下一个 await 点}
+    C -->|到了| D[真正停下 收到 CancelledError]
+    C -->|正在跑同步代码段| E[拦不住]
+    D --> F[批量任务关停 发 cancel 后统一 await 收尾 别直接杀进程丢在途写入]
+    D --> G[兜底 except 不要吞掉 CancelledError 超时取消和业务异常分开计数]
+```
+
 ## 4. 异步管道里的限流与背压
 
 Semaphore 只是第一层。真实管道（批量抽取 600 章）还要考虑：
 
 - **生产者-消费者用 `asyncio.Queue`**：生产者按章节入队，N 个 worker 协程消费，队列 `maxsize` 形成天然背压——不限制队列长度时，600 章的提示词会先把内存吃满。
+
+下图是批量抽取的生产者消费者管道：生产者入队，N 个 worker 消费，Semaphore 限流，gather 收结果。
+
+```mermaid
+flowchart TD
+    A[生产者按章节入队] --> B[asyncio Queue maxsize 天然背压]
+    B --> C[N 个 worker 协程消费]
+    C --> D[Semaphore 限流 Ollama 并发 4 左右]
+    D --> E[gather 并发跑 按传入顺序返回]
+    B --> F[不限制队列长度 600 章提示词先把内存吃满]
+```
 - **重试退避**：Ollama 超时/返回坏 JSON 时别立即重试打爆服务，指数退避 + 抖动（如 1s、2s、4s 上限封顶）；重试次数单独计数，超过阈值的章节进失败清单，跑完统一汇报，不要让一章坏数据拖死整批。
 - **连接复用**：`httpx.AsyncClient` 全程复用一个实例（连接池），不要每章 new 一个；同步版 `requests` 在协程里是阻塞调用，绝对不能混用——同步 SDK 要么换异步版，要么 `asyncio.to_thread` 丢线程池。
 

@@ -2,7 +2,7 @@
 知识点: Python-日志与HTTP客户端
 层级: 进阶
 适用版本: Python 3.10+（requests 2.x / httpx 0.x）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - Logback与日志规范
@@ -31,6 +31,17 @@
 - **Filter**：做级别之外的细粒度过滤（如按请求 ID），用得少，知道有这层即可。
 
 日志沿层级向父级**传播**（propagate 默认开）：子 logger 的日志会冒泡到父 handler。重复输出的经典根因就是自己挂了 handler 又让它冒泡到 root，打两遍。
+
+下图是 logging 五件套与冒泡路径：日志从 Logger 出发，经 Handler 与 Formatter 输出，默认还会冒泡到父级。
+
+```mermaid
+flowchart TD
+    A[Logger novel chapter 子 logger 级别沿层级继承] --> B[Handler 决定去哪 控制台 文件 滚动文件 队列]
+    B --> C[Formatter 决定长什么样 至少带时间 级别 logger 名]
+    A --> D[传播默认开 子 logger 日志冒泡到父 handler]
+    D --> E[自己挂 handler 又冒泡到 root 打两遍]
+    E --> F[业务 logger 显式关掉冒泡 只走自己挂的 handler]
+```
 
 ## 3. 为什么不用 print，配置怎么写
 
@@ -82,6 +93,17 @@ dictConfig({
 **永远显式设超时**：requests 默认超时是无穷大，服务端 hang 住，客户端就永久挂起，批处理整夜卡死在一章上。
 
 - requests 用元组拆两段：`timeout=(连接超时, 读取超时)`，如 `timeout=(3, 60)`。
+
+下图是超时的分段：连接、读取、写、等连接池空位各防各的卡点。
+
+```mermaid
+flowchart TD
+    A[发请求] --> B{超时分段}
+    B -->|连接| C[连接超时 3 秒 防对端不通]
+    B -->|读取| D[读取超时 60 秒 大章生成会误杀 按连接 3 秒 读取数分钟设]
+    B -->|写| E[写超时 10 秒]
+    B -->|等池位| F[等连接池空位 5 秒]
+```
 - httpx 拆得更细：`Timeout(connect=3, read=60, write=10, pool=5)`——连接、读、写、等连接池空位四段。概念上就是连接/读/池三分（外加写）。
 - 连接池：requests 用 `Session` + `HTTPAdapter(pool_connections, pool_maxsize)` 复用连接，别每次请求新建 Session；httpx 的 Client 本身即连接池，长期复用同一实例。
 
@@ -103,6 +125,19 @@ session.mount("http://", HTTPAdapter(max_retries=retry, pool_maxsize=10))
 - **业务层重试**（tenacity）：`@retry(stop=stop_after_attempt(3), wait=wait_exponential(...), retry=retry_if_exception_type(...))`，按异常类型与返回结果决定重试，适合包在「调一次 LLM 抽取」这类业务函数上。
 
 **重试边界**（比工具更重要）：只重试连接失败、超时与 5xx/429；4xx 是请求本身错了，重试纯属浪费。POST 等非幂等请求慎重试——服务端可能已处理成功只是响应丢了；要重试先确认有幂等键或操作可重入。
+
+下图是重试的边界判断：只重试连接失败、超时与 5xx 或 429，4xx 不重试，非幂等请求先确认可重入。
+
+```mermaid
+flowchart TD
+    A[请求失败] --> B{失败类型}
+    B -->|连接失败 超时 5xx 429| C[重试 连接层或业务层 指数退避]
+    B -->|4xx| D[不重试 请求本身错了 重试浪费]
+    C --> E{POST 等非幂等请求}
+    E -->|是| F[先确认有幂等键或操作可重入]
+    E -->|否| G[重试]
+    F --> G
+```
 
 ## 7. 落点：调本地 Ollama 的实战姿势
 

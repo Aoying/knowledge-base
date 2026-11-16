@@ -2,7 +2,7 @@
 知识点: Python
 层级: 基础
 适用版本: Python 3.x
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python知识点地图
   - asyncio
@@ -73,6 +73,19 @@ conn.close()
 
 要点：`?` 占位符防注入；`row_factory` 让结果按列名访问；记得 `commit`。
 
+下图是 sqlite3 最小示例的流程：连接、建表、插入、提交、查询、关闭。
+
+```mermaid
+flowchart TD
+    A[connect novel.db] --> B[row_factory 按列名取数]
+    B --> C[cursor]
+    C --> D[CREATE TABLE IF NOT EXISTS entity]
+    D --> E[INSERT 占位符问号防注入]
+    E --> F[commit 提交写入]
+    F --> G[SELECT 按 kind 查]
+    G --> H[close 关闭连接]
+```
+
 ## 调 Ollama 本地接口（RAG 原型同款）
 
 ```python
@@ -91,6 +104,18 @@ print(r.json()["message"]["content"])
 ```
 
 注意：`/api/embed` 的参数是 `input`（字符串或数组），不是 `prompt`。
+
+下图是调 Ollama 本地接口的两步：先调 embed 取向量，再调 chat 取回答。
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Ollama
+    Client->>Ollama: POST api embed input 文本
+    Ollama-->>Client: 返回 embeddings
+    Client->>Ollama: POST api chat model 与 messages
+    Ollama-->>Client: 返回 message content
+```
 
 ## Windows 中文乱码
 

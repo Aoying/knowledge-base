@@ -2,7 +2,7 @@
 知识点: JavaScript
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-11
+更新日期: 2026-11-16
 关联:
   - 总览
   - 前端开发
@@ -42,6 +42,19 @@ async function main() {
 }
 // 并发
 const [a, b] = await Promise.all([p1, p2]);       // 任一失败全失败
+
+下图是三种并发写法的结果差异：all 任一失败全失败，allSettled 都要结果，race 取先完成的。
+
+```mermaid
+flowchart TD
+    A[并发] --> B[Promise all]
+    A --> C[Promise allSettled]
+    A --> D[Promise race]
+    B --> E[任一失败全失败]
+    B --> F[全部成功拿到结果]
+    C --> G[都要结果 全部返回再过滤]
+    D --> H[谁先完成拿谁 超时控制]
+```
 const r = await Promise.allSettled([p1, p2]);     // 都要结果
 const first = await Promise.race([p1, timeout]);  // 超时控制
 ```
@@ -116,6 +129,16 @@ node --watch app.js     # 文件变化自动重启（开发用）
 
 ```js
 // 防抖：最后一次触发后等 ms 才执行（搜索框输入）
+
+下图是防抖与节流的区别：防抖等停手，节流限频率。
+
+```mermaid
+flowchart TD
+    A[防抖 搜索框输入] --> B[每次触发清掉上一次定时器]
+    B --> C[停手 ms 后才执行一次]
+    D[节流 滚动加载] --> E[ms 内只执行一次]
+    E --> F[距上次执行超过 ms 才执行]
+```
 const debounce = (fn, ms) => {
   let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 };
@@ -186,6 +209,16 @@ async function processBig(arr) {
 - **函数是一等公民**：函数可以赋值给变量、作参数、作返回值，回调与高阶函数都建立在这一点上。
 - **原型链**：对象查找属性时，自己没有就沿 `__proto__` 往上找，直到 null；类与继承只是这套机制的语法糖。
 - **事件循环**：JS 单线程执行，耗时任务靠回调排队；先跑完同步代码，再清空微任务（Promise），最后取宏任务（定时器、事件）。
+
+下图是事件循环的执行顺序：同步代码先跑完，再清空微任务，最后取宏任务。
+
+```mermaid
+flowchart TD
+    A[同步代码先跑完] --> B[清空微任务队列 Promise 回调] 
+    B --> C[取下一个宏任务 定时器 事件]
+    C --> D[渲染]
+    D --> B
+```
 
 ### 基础语法与用法
 

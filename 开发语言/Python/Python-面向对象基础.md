@@ -2,7 +2,7 @@
 知识点: Python 面向对象基础
 层级: 基础
 适用版本: Python 3.10+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - dataclass与typing
@@ -33,6 +33,18 @@ class Account:
 三条分界线要先立住：
 
 - **实例属性 vs 类属性**：`self.x` 是实例的，`ClassName.x` 是全类共享的。实例读属性时先查实例、再查类；实例赋值永远只写实例，不会改到类属性。
+
+下图是属性的读写分流：读先查实例再查类，写永远只写实例。
+
+```mermaid
+flowchart TD
+    A[实例读属性] --> B{实例字典有吗}
+    B -->|有| C[用实例属性]
+    B -->|没有| D[去类字典找 类属性全类共享]
+    E[实例赋值] --> F[永远只写实例 不会改到类属性]
+    G[类属性是列表或字典] --> H[所有实例改同一份]
+    H --> I[默认状态放 init 里建 别放类属性上]
+```
 - **可变类属性是经典坑**：类属性是 `[]` 或 `{}` 时，所有实例改的是同一份。默认状态一律放 `__init__` 里建，别放类属性上。
 - **三种方法**：实例方法（第一个参数 `self`）、类方法（`@classmethod`，第一个参数 `cls`，常用于替代构造器）、静态方法（`@staticmethod`，不拿 `self` 也不拿 `cls`，只是挂在类名下的普通函数）。
 
@@ -52,6 +64,31 @@ class SavingsAccount(Account):
 ```
 
 - **MRO 怎么查**：`SavingsAccount.__mro__` 直接打印顺序。菱形继承（D 同时继承 B、C，B、C 都继承 A）时，MRO 保证 A 的方法只走一次，且顺序可预测；`super()` 链上的每一环都要调 `super()`，断一环后面就全断。
+
+下图是继承与菱形继承的结构：SavingsAccount 继承 Account，菱形继承里 A 的方法只走一次。
+
+```mermaid
+classDiagram
+    class Account {
+        +bank
+        +owner
+        +balance
+        +deposit(amount)
+    }
+    class SavingsAccount {
+        +rate
+        +deposit(amount)
+    }
+    class A
+    class B
+    class C
+    class D
+    SavingsAccount --|> Account
+    B --|> A
+    C --|> A
+    D --|> B
+    D --|> C
+```
 - **多态靠协议不靠继承**：Python 里“能调什么方法”比“是什么类型”重要。函数接受任何带 `deposit` 方法的对象就能跑，这叫鸭子类型——走起来像鸭子，就按鸭子用。
 
 ## 3. 魔术方法
@@ -92,6 +129,17 @@ class Account:
 ```
 
 调用方写 `acc.balance = -5` 仍会触发校验，因为 `balance` 是数据描述符。注意 `__init__` 里也应走 `self.balance = ...` 而不是直接写 `self._balance`，否则校验会被绕过。
+
+下图是 property 校验的走法：赋值走描述符的 setter，init 里也要走属性而不是直接写内部变量。
+
+```mermaid
+flowchart TD
+    A[赋值 balance 为负 5] --> B[balance 是数据描述符 先走描述符逻辑]
+    B --> C[setter 校验 余额不能为负 抛错]
+    C --> D[校验通过才写内部余额]
+    E[init 里走属性赋值] --> C
+    F[init 里直接写内部变量] --> G[绕过校验]
+```
 
 ### 4.2 描述符入门
 

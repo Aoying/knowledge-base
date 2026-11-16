@@ -2,7 +2,7 @@
 知识点: Lua
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - 总览
   - Godot
@@ -55,6 +55,20 @@ local t1 = setmetatable({1,2}, {
 
 常用元方法：`__index`（读不到 key 时兜底）、`__newindex`（写拦截）、`__call`（table 当函数调用）。
 
+下图是元表的查找与拦截链：先查自身，找不到才走 __index，写新增键走 __newindex。
+
+```mermaid
+flowchart TD
+    A[读 table 的 key] --> B{表自身有 key}
+    B -->|有| C[直接返回值]
+    B -->|没有| D[走元表 __index 兜底]
+    D --> E{__index 是表还是函数}
+    E -->|表| F[去那张表找]
+    E -->|函数| G[动态计算默认值]
+    H[写新增键] --> I[走元表 __newindex 拦截]
+    I --> J[校验或只读拦截]
+```
+
 ## 协程（Coroutine）
 
 ```lua
@@ -66,6 +80,17 @@ coroutine.resume(co)  -- co 2
 ```
 
 协作式多任务，游戏里做"等待 N 秒再继续"、分帧加载就靠它。
+
+下图是协程的状态流转：新建后挂起，resume 跑到 yield 再挂起，return 后结束。
+
+```mermaid
+stateDiagram-v2
+    [*] --> Suspended : create 新建
+    Suspended --> Running : resume
+    Running --> Suspended : yield 暂停
+    Running --> Dead : return 结束
+    Dead --> [*]
+```
 
 ## 与宿主交互
 
@@ -101,6 +126,18 @@ Redis 里 Lua 跑在服务端，原子执行，适合"读+写"必须一起成功
 ```lua
 -- KEYS[1]=限流key, ARGV[1]=窗口内最大次数, ARGV[2]=窗口秒数
 local c = redis.call('INCR', KEYS[1])
+
+下图是固定窗口限流脚本的流程：计数为 1 时设过期时间，再按窗口内最大次数判断放行。
+
+```mermaid
+flowchart TD
+    A[INCR 限流 key 计数 c] --> B{c 等于 1}
+    B -->|是| C[EXPIRE 设窗口秒数]
+    B -->|否| D[c 小于等于窗口内最大次数]
+    C --> D
+    D -->|是| E[返回 1 放行]
+    D -->|否| F[返回 0 拒绝]
+```
 if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
 return c <= tonumber(ARGV[1]) and 1 or 0
 ```

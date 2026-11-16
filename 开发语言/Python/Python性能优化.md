@@ -2,7 +2,7 @@
 知识点: Python性能优化
 层级: 进阶
 适用版本: 通用
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - asyncio
@@ -17,11 +17,30 @@
 
 Python 性能优化只有一条纪律：先定位，再动手。没有 profile 数据的优化，大概率优化错地方。本篇按“定位 → 常见慢点 → 优化手段 → 对照数值 → 误区”的顺序讲。
 
+下图是本篇的优化顺序：先定位，再看慢点与手段，最后对照数值、避开误区。
+
+```mermaid
+flowchart TD
+    A[先定位 cProfile 与 timeit] --> B[常见慢点 循环重复计算 字符串拼接 全局查找 IO 阻塞]
+    B --> C[优化手段 内置函数 缓存 数据结构选型 并发边界]
+    C --> D[对照数值 set 缓存 sum]
+    D --> E[误区 过早优化]
+```
+
 ## 1. 先定位：cProfile 与 timeit
 
 - cProfile：标准库性能分析器，看函数级耗时分布。`python -m cProfile -s cumtime script.py` 按累计耗时排序输出，优先看 cumtime 高且调用次数多的函数；tottime 高说明函数自身耗时，cumtime 高说明它调用的子函数耗时。
 - timeit：标准库微基准工具，适合对比“两种写法谁更快”。`python -m timeit "sum(range(100000))"` 或代码里用 `timeit.timeit(stmt, number=N)`；默认关闭 GC 做微基准，结果只用于同条件对比，不代表真实负载耗时。
 - line_profiler：逐行耗时工具，能定位到具体哪一行慢。思路是“先 cProfile 定函数、再逐行定语句”；它是第三方库，本文只讲这个思路，不展开安装用法，标准库可跑的部分是 cProfile 和 timeit。
+
+下图是定位的递进：先 cProfile 定函数，再逐行定语句，timeit 只做两种写法的微基准对比。
+
+```mermaid
+flowchart TD
+    A[cProfile 定函数 看 cumtime 高且调用次数多的函数] --> B[line_profiler 定语句]
+    B --> C[先看热点函数再看行 没有热点的感觉慢不值得优化]
+    A --> D[timeit 对比两种写法谁更快]
+```
 - 定位原则：先看火焰（热点函数）再看行；没有热点的“感觉慢”不值得优化。
 
 ## 2. 常见慢点
@@ -37,6 +56,16 @@ Python 性能优化只有一条纪律：先定位，再动手。没有 profile �
 - 缓存重复计算：`functools.lru_cache` 适合纯函数、参数可哈希、重复调用多的场景；注意 `maxsize` 与内存占用，无界缓存可能把内存吃满。
 - 数据结构选型：成员检查用 `set` 不用 `list`（平均 O(1) 对 O(n)）；两端操作用 `collections.deque`；频繁按键查找用 `dict`；选型错误带来的差距往往比微调循环大几个数量级。
 - 并发与异步的适用边界：CPU 密集型任务用多进程（绕开 GIL），IO 密集型任务用多线程或 `asyncio`；`asyncio` 不加速 CPU 计算，把计算密集代码包进协程只会让它继续占住事件循环。选错并发模型，优化方向就全错。
+
+下图是并发选型的边界：CPU 密集用多进程，IO 密集用多线程或 asyncio，asyncio 不加速 CPU 计算。
+
+```mermaid
+flowchart TD
+    A[任务] --> B{瓶颈}
+    B -->|CPU 密集| C[多进程 绕开 GIL]
+    B -->|IO 密集| D[多线程或 asyncio]
+    D --> E[asyncio 不加速 CPU 计算 包进协程只会继续占住事件循环]
+```
 
 ## 4. 实跑对照数值（本机实测，仅作量级参考）
 

@@ -2,7 +2,7 @@
 知识点: dataclass 与 typing
 层级: 基础
 适用版本: Python 3.10+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Python
   - pydantic
@@ -43,6 +43,24 @@ def get_chapter(cid: int) -> Optional[Chapter]: ...
 - **字段顺序**：无默认值字段必须排在有默认值字段之前，和函数参数规则一致。
 - **`@dataclass` 常用参数**：
   - `frozen=True`：实例不可改属性（赋值抛 `FrozenInstanceError`），且自动可哈希，可当 dict 的 key 或放进 set——适合表示"值对象"，如一条不可变的剧情事实 StoryFact。
+
+下图是本篇两个示例 dataclass 的字段：Chapter 是章节结构，StoryFact 是不可变的剧情事实。
+
+```mermaid
+classDiagram
+    class Chapter {
+        +id
+        +title
+        +summary
+        +entities
+    }
+    class StoryFact {
+        +subject
+        +predicate
+        +obj
+        +since_chapter
+    }
+```
   - `eq=True`（默认）：按字段逐个比较生成 `__eq__`。
   - `slots=True`（3.10+）：用 `__slots__` 存字段，省内存、属性访问更快、且拼错属性名直接报错；大量小对象（如全量 EntityState 快照）时值得开。
   - `kw_only=True`（3.10+）：强制构造时用关键字传参，字段多时防传错位。
@@ -87,9 +105,30 @@ class Tool(Protocol):
 
 经验分工：**边界用 pydantic 校验，内部用 dataclass 传递**。LLM 吐的 JSON 经 pydantic 验证后转成 dataclass 对象进入业务层，业务层里就不必再到处防空指针式地 `.get()`。
 
+下图是边界与内部的分工：LLM 的 JSON 先过 pydantic 校验，再转 dataclass 进业务层。
+
+```mermaid
+flowchart TD
+    A[LLM 输出的 JSON] --> B[pydantic 验证 有校验 第三方 外部输入边界]
+    B --> C[转成 dataclass 对象进入业务层]
+    C --> D[业务层内部传递 不必到处防空指针式 get]
+    C --> E[dataclass 无运行时校验 标准库 进程内部传递主力]
+```
+
 ## 5. 实战应用
 
 从 dict 安全地构造 dataclass：字段对不上时直接 `Chapter(**d)` 会因多余键报错。小说引擎里 JSON 来源杂，常用一个宽容的构造助手：
+
+下图是宽容构造助手的流程：按 fields 取字段名，过滤多余键后再构造。
+
+```mermaid
+flowchart TD
+    A[JSON 来源杂 data 字典] --> B[按 dataclasses fields 取字段名集合]
+    B --> C[过滤掉多余键]
+    C --> D[Chapter 解包构造]
+    A --> E[直接 Chapter 解包会因多余键报错]
+    D --> F[asdict 递归转回 dict replace 改字段产生新版本]
+```
 
 ```python
 import dataclasses
