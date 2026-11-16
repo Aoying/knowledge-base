@@ -2,7 +2,7 @@
 知识点: Java IO 与 NIO
 层级: 进阶
 适用版本: JDK 8+（NIO.2 为 JDK 7 引入）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - 计算机网络
@@ -16,6 +16,15 @@
 # Java IO 与 NIO
 
 ## 1. 核心概念
+
+下图是 BIO、NIO、AIO 在阻塞与同步两个维度上的区分。
+
+```mermaid
+flowchart TD
+    BIO[BIO 阻塞加同步] --> B1[一连接一线程]
+    NIO[NIO 非阻塞加同步] --> N1[Selector 管理大量连接]
+    AIO[AIO 异步加通知] --> A1[内核读完通知应用]
+```
 
 三组概念先分清，后面所有模型都是它们的组合：
 
@@ -55,6 +64,20 @@
 - `map()` 单次映射有硬上限：size 不得超过 `Integer.MAX_VALUE`（约 2GB），超限抛 `IllegalArgumentException: Size exceeds Integer.MAX_VALUE`（JDK 源码限制，至 JDK 20 仍如此）；超大文件要分段映射，每段 < 2GB。根源是 `MappedByteBuffer` 用 int 下标索引，不是操作系统限制。
 
 ### 3.3 Selector：多路复用的入口
+
+下图是回声服务器的 Selector 事件循环：select 等就绪事件，可接受时注册读就绪，可读时读出并回写，处理完移除 key。
+
+```mermaid
+flowchart TD
+    A[select 等事件就绪] --> B{事件类型}
+    B --> C[OP_ACCEPT 接受连接]
+    C --> D[注册 OP_READ]
+    B --> E[OP_READ 可读]
+    E --> F[read 读数据]
+    F --> G[flip 后 write 回声]
+    D --> H[移除已处理 key 回到 select]
+    G --> H
+```
 
 - 一个 Selector 注册多个 Channel，关心四种事件：`OP_ACCEPT`、`OP_CONNECT`、`OP_READ`、`OP_WRITE`；`select()` 阻塞到至少一个事件就绪，返回就绪集合逐个处理——单线程（或少数几个线程）扛起大量连接靠的就是它，本质对应操作系统的 epoll/kqueue。
 - 可运行的回声服务器骨架：
@@ -101,6 +124,15 @@ while (true) {
 - `AsynchronousSocketChannel` + `CompletionHandler`：读写完成由回调通知。知道模型即可，生产网络编程直接上 Netty，不要自己造 AIO 轮子。
 
 ## 5. 零拷贝
+
+下图对比传统拷贝与零拷贝：传统路径要经过用户缓冲，transferTo 让数据在内核内部从文件缓冲直达 socket 缓冲。
+
+```mermaid
+flowchart LR
+    A[磁盘] --> B[内核缓冲] --> C[用户缓冲] --> D[内核 socket 缓冲] --> E[网卡]
+    F[文件缓冲] --> G[transferTo 内核直达 socket 缓冲]
+    G --> E
+```
 
 - 传统「读文件 → 经网络发出」要经历磁盘 → 内核缓冲 → 用户缓冲 → 内核 socket 缓冲 → 网卡，多次拷贝与态切换；其中「内核 → 用户缓冲」一趟对只转发不加工的场景纯属浪费。
 - `FileChannel.transferTo(position, count, socketChannel)` 解决它：数据在内核内部从文件缓冲直达 socket 缓冲（底层 sendfile），不经过用户态。文件下载、静态资源、消息中间件落盘转发都吃这个红利。

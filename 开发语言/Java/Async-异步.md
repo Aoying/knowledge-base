@@ -2,7 +2,7 @@
 知识点: "@Async 异步"
 层级: 进阶
 适用版本: Spring Boot 2.7
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - Java-并发编程
@@ -16,6 +16,15 @@
 # @Async 异步
 
 ## 1. 核心概念
+
+下图把 @Async 的调用链画出来：调用方经 AOP 代理把方法提交到 Executor 后立即返回，执行在异步线程里完成。
+
+```mermaid
+flowchart LR
+    Caller[调用方] --> Proxy[AOP 代理] --> Executor[Executor] --> AsyncThread[异步线程执行]
+    Proxy --> Return[调用方立即返回]
+    AsyncThread --> Task[发短信 发邮件 记操作日志 推送通知]
+```
 
 `@Async` 是 Spring 的声明式异步：标注的方法经 AOP 代理后被提交到一个 `Executor` 里执行，调用方立即返回。它的价值是把「主流程不必等的活」（发短信、发邮件、记操作日志、推送通知）从请求线程上剥离，缩短接口响应时间。代价是执行脱离了调用方的线程上下文：事务、ThreadLocal、异常感知统统断开，用之前先想清楚这笔账。
 
@@ -70,6 +79,15 @@ public class NotifyService {
 - **`@Async` 标在 private 方法、或类没被 Spring 管理**：代理不生效，静默同步执行，排查时先确认方法确实走了代理。
 
 ## 4. CompletableFuture 编排
+
+下图是原文的并行汇合编排：两个 supplyAsync 并行取数，thenCombine 汇合，orTimeout 设超时后 join。
+
+```mermaid
+flowchart LR
+    F1[supplyAsync 取 User] --> Combine[thenCombine 汇合]
+    F2[supplyAsync 取 Order 列表] --> Combine
+    Combine --> Timeout[orTimeout 3 秒] --> Join[join 取结果]
+```
 
 多个异步任务要并行并汇合时，用 CompletableFuture 而不是裸 @Async：
 

@@ -2,7 +2,7 @@
 知识点: JDBC基础
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Druid
   - 多数据源
@@ -31,6 +31,26 @@ JDBC 的核心对象分工：
 ## 2. 基础知识
 
 ### 完整流程：查一条记录
+
+下图是查一条记录的 JDBC 调用链：从 DataSource 拿连接，建 PreparedStatement，执行后读 ResultSet，用完按后开先关归还。
+
+```mermaid
+sequenceDiagram
+    participant Biz as 业务代码
+    participant DS as DataSource
+    participant PS as PreparedStatement
+    participant RS as ResultSet
+    Biz->>DS: getConnection
+    Biz->>PS: prepareStatement
+    Biz->>PS: setLong
+    Biz->>PS: executeQuery
+    PS-->>Biz: 返回 ResultSet
+    Biz->>RS: next 取值
+    RS-->>Biz: 返回 User 或 null
+    Biz->>RS: 关闭 ResultSet
+    Biz->>PS: 关闭 Statement
+    Biz->>DS: 关闭 Connection 归还到池
+```
 
 ```java
 public User findById(DataSource ds, long id) throws SQLException {
@@ -71,6 +91,19 @@ ps.setString(1, input);
 ## 3. 进阶知识
 
 ### 事务控制：边界在 Connection 上
+
+下图是事务边界的控制流程：关自动提交后两条写操作走同一连接，成功提交，失败回滚，归还前恢复自动提交。
+
+```mermaid
+flowchart TD
+    A[setAutoCommit false] --> B[updateA]
+    B --> C[updateB]
+    C --> D{是否成功}
+    D --> E[commit]
+    D --> F[rollback]
+    E --> G[setAutoCommit true 归还连接]
+    F --> G
+```
 
 ```java
 try (Connection conn = ds.getConnection()) {

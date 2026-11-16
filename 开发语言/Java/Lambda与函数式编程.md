@@ -2,7 +2,7 @@
 知识点: Lambda与函数式编程
 层级: 基础
 适用版本: 通用（Java 8+）
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Stream与Optional
   - Java-泛型与类型擦除
@@ -59,6 +59,17 @@ Runnable r = () -> System.out.println("hi");
 
 ### 方法引用：Lambda 的简写
 
+下图是方法引用的四种形式：前三种按调用对象区分，第四种是构造器引用。
+
+```mermaid
+flowchart TD
+    A[Lambda 体只是调已有方法] --> B[类名双冒号静态方法]
+    A --> C[对象双冒号实例方法]
+    A --> D[类名双冒号实例方法]
+    A --> E[类名双冒号 new 构造器引用]
+    D --> F[String length 首参数是接收者]
+```
+
 当 Lambda 体只是调用一个已有方法时，用 `::` 更简洁：
 
 | 形式 | 例子 | 等价 Lambda |
@@ -108,6 +119,17 @@ Stream 与 Optional 的完整用法见 [Stream与Optional](开发语言/Java/Str
 
 ### 变量捕获：为什么要求事实最终变量
 
+下图是变量捕获的规则：Lambda 捕获局部变量的副本，所以局部变量必须事实最终；实例字段走 this 引用，不受此限。
+
+```mermaid
+flowchart TD
+    A[Lambda 生命周期可能长于方法栈帧] --> B[捕获局部变量的副本]
+    B --> C[局部变量必须事实最终]
+    A --> D[实例字段 静态字段走 this 或类引用]
+    D --> E[可改 捕获的是对象引用]
+    C --> F[累计值用数组或 AtomicInteger]
+```
+
 ```java
 int factor = 2;
 Function<Integer, Integer> f = x -> x * factor;
@@ -149,6 +171,18 @@ public static <T, R> Function<T, R> unchecked(CheckedFunction<T, R> fn) {
 `@FunctionalInterface` 注解不是必需的，但加上后编译器会校验「恰好一个抽象方法」，多写一个就编译失败——自定义接口时建议加上。
 
 ## 4. 实战应用：策略表替代 if-else
+
+下图是计费策略表：按类型查表取计费逻辑，查不到用默认逻辑兜底后执行。
+
+```mermaid
+flowchart LR
+    A[查策略表 calc] --> B[NORMAL 取原金额]
+    A --> C[VIP 取金额乘 0.9（9 折）]
+    A --> D[查不到用 getOrDefault 默认逻辑]
+    B --> E[apply 执行计费]
+    C --> E
+    D --> E
+```
 
 ```java
 // 计费策略：类型 -> 计费逻辑，一张表代替一串 if-else

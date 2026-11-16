@@ -2,7 +2,7 @@
 知识点: Bean Validation 参数校验
 层级: 基础
 适用版本: Spring Boot 2.7
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - Spring-Boot
@@ -44,6 +44,15 @@ Bean Validation（JSR 380，校验注解规范）+ Hibernate Validator（默认�
 
 ## 3. 触发与级联
 
+下图是校验的触发与级联链路：入参 @Valid 触发，嵌套对象和集合元素都要单独标 @Valid 才会级联。
+
+```mermaid
+flowchart LR
+    Controller[Controller 入参] --> Valid[Valid 触发校验] --> DTO[LoanApplyDTO 字段校验]
+    DTO --> Nested[嵌套对象 Valid 级联]
+    DTO --> ListElem[集合元素 Valid 加泛型注解双写]
+```
+
 ```java
 @Data
 public class LoanApplyDTO {
@@ -67,6 +76,18 @@ public R<String> apply(@Valid @RequestBody LoanApplyDTO dto) { ... }
 - Service 层方法校验同样靠类上 `@Validated` + 参数注解，适合内部接口的二次防线。
 
 ## 4. 统一异常返回
+
+下图是两条异常通道的分流：RequestBody 校验失败与散参数校验失败抛不同的异常，全局处理要各接一个。
+
+```mermaid
+flowchart TD
+    Fail[校验失败] --> A[RequestBody 失败]
+    Fail --> B[散参数 方法校验失败]
+    A --> E1[MethodArgumentNotValidException]
+    B --> E2[ConstraintViolationException]
+    E1 --> Handler[ValidateHandler 统一返回]
+    E2 --> Handler
+```
 
 ```java
 // 统一异常返回

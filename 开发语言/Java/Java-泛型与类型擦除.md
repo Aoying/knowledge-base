@@ -2,7 +2,7 @@
 知识点: Java-泛型与类型擦除
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - MyBatis-Plus
@@ -49,6 +49,16 @@ class GenericsUtil {
 ```
 
 ### 边界通配符与 PECS 原则
+
+下图是 PECS 原则：只读用 extends，只写用 super，Collections.copy 同时用了两者。
+
+```mermaid
+flowchart TD
+    P[Producer 只读] --> E[问号 extends Number 可安全读 不能 add]
+    C[Consumer 只写] --> S[问号 super T 写进去安全 读出只知是 Object]
+    E --> Ex[Collections copy dest 用 super src 用 extends]
+    S --> Ex
+```
 ```java
 import java.util.List;
 
@@ -101,6 +111,16 @@ List<?>[] a2 = new List<?>[10];           // 合法：通配符数组可以
 
 ## 原理剖析
 ### 擦除规则
+
+下图是类型擦除规则：无界擦为 Object，有界擦为第一个边界，调用处由编译器插入强转。
+
+```mermaid
+flowchart LR
+    A[无界 T] --> B[擦除为 Object]
+    C[有界 T extends Number] --> D[擦除为 Number]
+    B --> E[调用处插入强转 checkcast]
+    D --> E
+```
 | 声明 | 擦除后 |
 |---|---|
 | 无界 `<T>` | `Object` |
@@ -151,6 +171,15 @@ public class Box2<T> {
 
 ## 实战应用
 ### 1. MyBatis-Plus 的 BaseMapper<T> 如何反推实体类
+
+下图是 BaseMapper 反推实体类的流程：从泛型接口签名里抠出类型参数，不能用只拿擦除后 Class 的 getInterfaces。
+
+```mermaid
+flowchart LR
+    A[UserMapper extends BaseMapper] --> B[getGenericInterfaces 取泛型接口签名]
+    B --> C[ParameterizedType 取实际类型参数]
+    C --> D[得到实体类 User]
+```
 ```java
 import java.lang.reflect.*;
 

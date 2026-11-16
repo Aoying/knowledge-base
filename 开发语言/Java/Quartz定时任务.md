@@ -2,7 +2,7 @@
 知识点: Quartz 定时任务
 层级: 进阶
 适用版本: Quartz 2.3 / Spring Boot 2.7.3
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Spring-Boot
   - 线程池
@@ -20,6 +20,16 @@
 Quartz 是 Java 生态最老牌的任务调度框架，解决 `@Scheduled` 解决不了的三件事：**任务持久化**（重启不丢）、**集群防重复**（多节点只跑一份）、**运行时动态增删改任务**。神农 e 贷法人版的对账、报表、催办提醒这类业务定时任务就属于这一档。
 
 三个核心角色，关系必须分清：
+
+下图是 Quartz 四个角色的关系：Scheduler 统一驱动，JobDetail 可被多个 Trigger 引用，一个 Trigger 只绑一个 JobDetail。
+
+```mermaid
+flowchart LR
+    S[Scheduler 调度器] --> J[JobDetail 任务定义]
+    S --> T[Trigger 触发规则]
+    J --> Job[Job 任务逻辑 execute]
+    T --> J
+```
 
 | 角色 | 是什么 | 关键点 |
 | --- | --- | --- |
@@ -91,12 +101,33 @@ public class SpringJobFactory extends AdaptableJobFactory {
 
 ## 4. 集群与持久化
 
+下图是 Quartz 集群防重复的流程：多节点连同一个库，触发前抢 QRTZ_LOCKS 行锁，抢到的才执行。
+
+```mermaid
+flowchart LR
+    A[多节点连同一个库] --> B[isClustered true]
+    B --> C[触发前抢 QRTZ_LOCKS 行锁]
+    C --> D[抢到才执行 同一时刻只一个节点执行]
+```
+
 - JDBC JobStore 把触发器状态存进 `QRTZ_*` 系列表（11 张），多节点连同一个库、`org.quartz.jobStore.isClustered=true` 即成集群。
 - 防重复原理：节点触发前要抢 `QRTZ_LOCKS` 里的行锁，抢到的才执行——所以集群是**抢占式单跑**，不是负载均衡分片：同一 Trigger 同一时刻只有一个节点执行，想并行分片得自己按数据范围拆多个 JobDetail。
 - 集群节点时钟必须同步，时钟漂移会造成重复触发或错过触发，NTP 是前置条件（与链路追踪对时钟的要求同理）。
 - 持久化用 OceanBase（MySQL 模式）存 `QRTZ_*` 表没有障碍，按普通 InnoDB 兼容表对待即可，表前缀可通过 `spring.quartz.properties.org.quartz.jobStore.tablePrefix` 修改。
 
 ## 5. Misfire：错过触发怎么办
+
+下图是 CronTrigger 三种 misfire 策略的取舍：补一次、不补、错过几次补几次。
+
+```mermaid
+flowchart TD
+    M[错过触发 超过 60 秒才算 misfire] --> F[FIRE_ONCE_NOW 立刻补跑一次]
+    M --> D[DO_NOTHING 不补 等下个周期]
+    M --> I[IGNORE_MISFIRE_POLICY 错过几次补几次]
+    F --> F1[报表 对账 漏了要补但只补一次]
+    D --> D1[催办提醒 状态同步 补跑反而重复打扰]
+    I --> I1[慎用 停机一周能补跑上百次]
+```
 
 任务该跑时没跑上（应用停机、线程池被长任务占满、暂停太久）即 misfire，超过 `org.quartz.jobStore.misfireThreshold`（默认 60 秒）才算数。CronTrigger 的策略：
 

@@ -2,7 +2,7 @@
 知识点: Druid 监控与慢 SQL 定位
 层级: 进阶
 适用版本: Druid 1.2.x
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - MyBatis-Plus
@@ -17,6 +17,17 @@
 # Druid 监控与慢 SQL 定位
 
 ## 1. 核心概念
+
+下图是 Druid 的两件套：StatFilter 做 SQL 监控统计，WallFilter 做防火墙拦截。
+
+```mermaid
+flowchart LR
+    SQL[SQL 执行] --> DS[Druid 连接池] --> Stat[StatFilter 监控统计]
+    Stat --> Wall[WallFilter 防火墙]
+    Wall --> DB[数据库]
+    Stat --> S1[执行次数 总耗时 慢 SQL 最大并发]
+    Wall --> S2[防注入 防误删全表]
+```
 
 Druid 是阿里开源的 JDBC 连接池，自带两样别的池（HikariCP 等）没有的东西：**SQL 监控统计**（StatFilter：每条 SQL 的执行次数、总耗时、慢 SQL、最大并发）和 **Wall 防火墙**（WallFilter：按 SQL 语义防注入、防误删全表）。连接池本身的取舍是「功能全、监控强」对「极致轻量」；在需要线上定位慢 SQL 的企业项目里，监控能力的价值通常压过那点性能差（经验）。
 
@@ -45,6 +56,13 @@ spring:
 
 - 浏览器开 `/druid/index.html` 看 SQL 监控页：执行次数、慢 SQL、max 并发，一目了然（生产记得加账号密码）。
 - 慢 SQL 定位链路：druid 慢日志 → `EXPLAIN` 看执行计划 → 索引/分页优化 → 回 druid 验证耗时下降。
+
+下图是原文的慢 SQL 定位链路：从 druid 慢日志出发，优化后回 druid 验证耗时下降。
+
+```mermaid
+flowchart LR
+    A[druid 慢日志] --> B[EXPLAIN 看执行计划] --> C[索引 分页优化] --> D[回 druid 验证耗时下降]
+```
 - 神农这种金融项目：`slow-sql-millis` 设 500ms，定时扫监控页，比等用户投诉强。阈值不是越小越好：太小日志会被正常波动淹没，看自己业务的耗时分布定（经验）。
 - 监控页重点看三列：**执行次数**（揪出 N+1 式的高频小查询）、**最大耗时**（揪出偶发大慢查）、**读取行数/更新行数**（扫描行数远大于返回行数 = 没走好索引）。
 
@@ -64,6 +82,19 @@ Boot 2.7 集成用 `druid-spring-boot-starter`，监控页账号密码走 `sprin
 - Wall 拦截抛 `WallFilterCheckException`，全局异常处理里要给它一个明确的错误码，别混进「系统异常」里看不见。
 
 ## 5. 连接泄漏排查
+
+下图是连接池打满的排查顺序：先区分真慢还是连接没还，再看长事务，最后才用 remove-abandoned 临时止血。
+
+```mermaid
+flowchart TD
+    A[监控页活跃连接长期不降] --> B[看连接池与 SQL 统计]
+    B --> C{真慢还是连接没还}
+    C --> D[真慢 某条 SQL 占连接久]
+    C --> E[连接没还 手写 JDBC 或流式查询没关流]
+    C --> F[长事务占连接 事务里调外部接口]
+    F --> G[把外部调用移出事务]
+    E --> H[remove-abandoned 临时止血定位]
+```
 
 连接池打满是最常见的 Druid 线上事故：表现是 `max-wait` 超时、监控页活跃连接长期不降。排查顺序：
 

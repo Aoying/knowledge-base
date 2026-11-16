@@ -2,7 +2,7 @@
 知识点: Stream 与 Optional
 层级: 基础
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
 标签:
@@ -13,6 +13,15 @@
 # Stream 与 Optional
 
 ## 1. Stream：集合管道
+
+下图是原文的 Stream 管道：数据源经惰性的中间操作，到终端操作才真正跑起来。
+
+```mermaid
+flowchart LR
+    A[数据源 集合 数组 IO] --> B[中间操作 filter map sorted limit 惰性]
+    B --> C[终端操作 collect forEach reduce count]
+    C --> D[整条管道真正跑起来]
+```
 
 Stream 是对集合的声明式处理管道：你描述「要什么」，不写「怎么遍历」。一条管道由三部分组成：数据源（集合/数组/IO）、中间操作（`filter`、`map`、`sorted`、`limit` 等，惰性求值，只登记不执行）、终端操作（`collect`、`forEach`、`reduce`、`count` 等，触发整条管道真正跑起来）。理解惰性求值是理解 Stream 行为的关键：没有终端操作，中间操作一行都不执行。
 
@@ -48,9 +57,29 @@ Map<Long, User> byId = users.stream().collect(
 
 ## 2. 并行流的取舍
 
+下图是并行流的取舍：只在数据量大、单元素处理重、无共享状态时才考虑，阻塞 IO 不能放公共池。
+
+```mermaid
+flowchart TD
+    A[parallelStream] --> B{数据量大 单元素处理重 无共享状态}
+    B --> C[可考虑并行 实测对比]
+    B --> D[默认不用串行]
+    A --> E[共用 ForkJoinPool 公共池]
+    E --> F[阻塞 IO 会拖累同 JVM 其他并行流]
+```
+
 `parallelStream()` 把任务拆给 ForkJoinPool 公共池跑。听起来免费提速，实际只在「数据量大、单元素处理重、且无共享状态」时才划算；普通业务集合（几百几千条、元素处理就是简单取值判断）并行化的拆分调度开销反而更慢（经验）。更危险的是它共用全局公共池，在里面做阻塞 IO 会拖累同 JVM 里其他并行流。结论：默认不用，确认是 CPU 密集大批量再考虑，并实测对比。
 
 ## 3. Optional：把「可能没有」写进类型
+
+下图是原文的 Optional 取值链：ofNullable 包装后 map 逐层取值，空时用 orElse 给默认值。
+
+```mermaid
+flowchart LR
+    A[ofNullable user] --> B[map 取 Address]
+    B --> C[map 取 City]
+    C --> D[orElse 未知]
+```
 
 `Optional` 的设计意图是做**方法返回值**：调用方从签名上就知道结果可能为空，必须显式处理，而不是靠文档和自觉判空。
 

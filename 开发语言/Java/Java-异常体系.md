@@ -2,7 +2,7 @@
 知识点: Java 异常体系
 层级: 基础
 适用版本: JDK 8+ / Spring Boot 2.7
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - Spring-事务
@@ -16,6 +16,19 @@
 # Java 异常体系
 
 ## 1. 核心概念
+
+下图是异常体系的树：Throwable 分 Error 与 Exception，Exception 再分 RuntimeException 与其他受检异常。
+
+```mermaid
+flowchart TD
+    T[Throwable] --> E[Error JVM 系统级 通常不捕获]
+    T --> X[Exception]
+    X --> R[RuntimeException 非受检]
+    X --> C[其他 Exception 受检]
+    E --> E1[OutOfMemoryError StackOverflowError]
+    R --> R1[NullPointerException IllegalArgumentException]
+    C --> C1[IOException SQLException]
+```
 
 Java 的异常体系只有一棵树：`Throwable` 是根，下面分 `Error` 和 `Exception` 两大支。关键不是背 API，而是分清三件事：哪些是程序不该管的（Error）、哪些必须显式表态的（受检异常）、哪些是编码错误或业务失败信号的（非受检异常）。
 
@@ -45,6 +58,16 @@ Throwable
 原则：JDK 已定义好的语义不要再造同义异常；空指针、参数非法这类直接抛标准异常，自定义异常只用于表达**业务语义**（见第 4 节）。
 
 ## 3. try-with-resources
+
+下图是 try-with-resources 的关闭顺序：按声明逆序自动关闭，关闭时抛的异常挂到主异常的 Suppressed 里。
+
+```mermaid
+flowchart LR
+    A[声明 Connection] --> B[声明 PreparedStatement]
+    B --> C[业务代码]
+    C --> D[逆序关闭 Statement 再关闭 Connection]
+    D --> E[关闭异常挂到 getSuppressed]
+```
 
 实现了 `AutoCloseable` 的资源（连接、流、Statement 等）一律用 try-with-resources，不要手写 `finally` 关流——手写版本一旦 `close()` 本身抛异常，就会把 try 块里的原始异常盖掉，排查时看到的是假现场。try-with-resources 按声明逆序自动关闭：
 
@@ -82,6 +105,18 @@ public class BizException extends RuntimeException {
 - 给用户看的消息和给日志看的信息分开：message 写可展示文案，别把 SQL、内部类名塞进 message 透传到前端。
 
 ## 5. 全局异常处理：@RestControllerAdvice
+
+下图是全局异常处理的分发顺序：先接业务异常，再接参数校验异常，最后用 Exception 兜底。
+
+```mermaid
+flowchart TD
+    A[接口抛异常] --> B{BizException}
+    B --> C[422 消息可透传]
+    A --> D{MethodArgumentNotValidException}
+    D --> E[400 返回字段级错误]
+    A --> F[Exception 兜底]
+    F --> G[500 只给兜底文案 堆栈进日志]
+```
 
 接口层的异常出口只留一个：`@RestControllerAdvice` 统一收口成信封 `{code, msg, data, traceId}`（结构与分工见 [REST 接口设计](工程实践/接口设计与文档.md)）。Controller 不写 try-catch 拼错误响应，Service 只管抛。
 

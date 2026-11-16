@@ -2,7 +2,7 @@
 知识点: Java 新特性
 层级: 基础
 适用版本: JDK 17 / 21
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - 虚拟线程
@@ -17,6 +17,17 @@
 # Java 新特性
 
 ## 1. 核心概念
+
+下图是 JDK 17 与 21 两个 LTS 站点的特性主线：数据建模、模式匹配与并发模型。
+
+```mermaid
+flowchart LR
+    A[JDK 10 var] --> B[JDK 14 switch 表达式]
+    B --> C[JDK 15 文本块]
+    C --> D[JDK 16 instanceof 模式匹配 record]
+    D --> E[JDK 17 sealed 类]
+    E --> F[JDK 21 switch 模式匹配 record 模式 虚拟线程]
+```
 
 从 JDK 8 基线看 17/21，三条主线：**数据建模**（record、sealed）、**模式匹配**（instanceof、switch、record 模式）、**并发模型**（虚拟线程）；其余是可读性改进。判断标准：能不能让银行后端代码少写样板、少出状态错误。
 
@@ -95,12 +106,43 @@ public record LoanApplyDTO(Long id, BigDecimal amt, String status) {
 
 ```java
 public sealed interface ApproveState permits Pending, Approved, Rejected {}
+
+下图是 sealed 审批状态的封闭继承关系：ApproveState 只允许 Pending、Approved、Rejected 三个子类。
+
+```mermaid
+classDiagram
+    class ApproveState {
+        <<sealed>>
+    }
+    class Pending {
+        String auditor
+    }
+    class Approved {
+        Instant at
+    }
+    class Rejected {
+        String reason
+    }
+    ApproveState <|-- Pending
+    ApproveState <|-- Approved
+    ApproveState <|-- Rejected
+```
 public record Pending(String auditor) implements ApproveState {}
 public record Approved(Instant at) implements ApproveState {}
 public record Rejected(String reason) implements ApproveState {}
 ```
 
 **switch 模式匹配 + record 模式（21）**：对 sealed 类型做穷尽匹配，漏一个状态编译报错；record 模式直接解构组件，可带 `when` 守卫。
+
+下图是 sealed 状态的 switch 模式匹配分支：带 when 守卫的驳回分支要放在普通驳回分支之前。
+
+```mermaid
+flowchart TD
+    S[switch state] --> P[Pending 待审]
+    S --> A[Approved 已通过]
+    S --> R1[Rejected 且 reason 为空 驳回无原因]
+    S --> R2[Rejected 驳回加原因]
+```
 
 ```java
 String msg = switch (state) {

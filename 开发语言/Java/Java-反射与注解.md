@@ -2,7 +2,7 @@
 知识点: Java-反射与注解
 层级: 进阶
 适用版本: JDK 8+
-更新日期: 2026-11-14
+更新日期: 2026-11-16
 关联:
   - Java
   - Spring-IOC与AOP
@@ -95,6 +95,16 @@ public @interface LogTime {
 - 注解成员类型受限：基本类型、String、Class、枚举、注解，及这些类型的一维数组。
 
 ### 注解处理器的两条路线
+
+下图是注解的两条读取路线：编译期 APT 生成代码或报错，运行期反射在启动或运行时读取。
+
+```mermaid
+flowchart TD
+    Ann[注解] --> APT[编译期 APT]
+    Ann --> RT[运行期反射]
+    APT --> A1[Lombok MapStruct 零运行期开销]
+    RT --> R1[Spring MyBatis-Plus Hibernate Validator 灵活但有成本]
+```
 - **编译期 APT**（`javax.annotation.processing`）：`javac` 阶段扫描注解、生成代码或报错。Lombok、MapStruct 走这条路——零运行期开销。
 - **运行期反射**：启动/运行时用 `getAnnotation()` 读取。Spring、MyBatis-Plus、Hibernate Validator 走这条路——灵活但有成本。
 
@@ -126,6 +136,16 @@ public class LogTimeProcessor extends AbstractProcessor {
 
 ## 实战应用
 ### 1. Spring IOC：反射实例化 + 注入（见 [Spring-IOC与AOP](开发语言/Java/Spring/Spring-IOC与AOP.md)）
+
+下图是 Spring IOC 用反射实例化并注入的流程：按类名加载，构造器建实例，遍历字段读 Autowired 注解后注入依赖。
+
+```mermaid
+flowchart LR
+    A[Class forName 加载类] --> B[getDeclaredConstructor newInstance 建实例]
+    B --> C[getDeclaredFields 遍历字段]
+    C --> D{字段有 Autowired 注解}
+    D --> E[setAccessible 后 set 注入依赖]
+```
 ```java
 // 伪代码：容器根据 BeanDefinition 创建 Bean
 Class<?> clazz = Class.forName("com.example.UserService");
@@ -177,6 +197,15 @@ public static boolean isDbField(java.lang.reflect.Field field) {
 ```
 
 ### 4. Bean-Validation：注解校验链路（见 [Bean-Validation](开发语言/Java/Bean-Validation.md)）
+
+下图是 Bean Validation 的校验链路：约束注解经元注解指定校验器类，运行期反射实例化校验器并执行。
+
+```mermaid
+flowchart LR
+    A[NotBlank 注解] --> B[元注解 Constraint 指定校验器类]
+    B --> C[运行期反射实例化校验器]
+    C --> D[执行校验 返回 ConstraintViolation]
+```
 链路：`@NotBlank` → 元注解 `@Constraint(validatedBy=...)` 指定校验器类 → 运行期反射实例化校验器并执行。自定义约束注解也是这个套路：
 
 ```java
