@@ -94,6 +94,7 @@
 - [JVM 故障排查](开发语言/Java/JVM/JVM-故障排查.md)
 - [Java 性能联合排查](开发语言/Java/JVM/Java性能联合排查.md)
 - [JVM 字节码与 JIT](开发语言/Java/JVM/JVM-字节码与JIT.md)
+- [JVM 生产诊断工具链](开发语言/Java/JVM/JVM-生产诊断工具链.md)
 - [Java IO 与 NIO](开发语言/Java/Java-IO与NIO.md)
 - [Java 并发编程](开发语言/Java/并发/Java-并发编程.md)（汇总）
 - [线程池](开发语言/Java/并发/线程池.md)
@@ -172,6 +173,12 @@
 - [Flowable](工程实践/Flowable.md)（汇总；子篇在 工程实践/Flowable/：基础入门、多实例与网关、事件与监听器、历史与部署）
 - [CI/CD](工程实践/运维/CICD.md)
 - [监控告警](工程实践/运维/监控告警.md)
+- [Linux 性能分析](工程实践/运维/Linux性能分析.md)
+- [Prometheus 与 Grafana](工程实践/运维/Prometheus与Grafana.md)
+- [OpenTelemetry](工程实践/运维/OpenTelemetry.md)
+- [Kubernetes 基础](工程实践/运维/Kubernetes基础.md)
+- [Terraform 与 Ansible](工程实践/运维/Terraform与Ansible.md)
+- [灾备备份与恢复演练](工程实践/运维/灾备备份与恢复演练.md)
 - [Shell 脚本编程](工程实践/Shell/Shell脚本编程.md)
 - [生产级 Shell 脚本](工程实践/Shell/生产级Shell脚本.md)
 - [运维实战脚本](工程实践/Shell/运维实战脚本.md)
@@ -230,6 +237,13 @@
 - [A/B测试实战](计算机基础/统计/AB测试实战.md)
 - [相关分析深篇](计算机基础/统计/相关分析深篇.md)
 - [假设检验深篇](计算机基础/统计/假设检验深篇.md)
+- [集合论基础](计算机基础/数学/集合论基础.md)
+- [数理逻辑基础](计算机基础/数学/数理逻辑基础.md)
+- [关系与函数](计算机基础/数学/关系与函数.md)
+- [图论基础](计算机基础/数学/图论基础.md)
+- [精度误差](计算机基础/数学/精度误差.md)
+- [浮点数](计算机基础/数学/浮点数.md)
+- [数值稳定性](计算机基础/数学/数值稳定性.md)
 
 ## 游戏 / 探索
 
