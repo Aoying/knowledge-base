@@ -1,7 +1,7 @@
 ---
 知识点: Elasticsearch
 层级: 进阶
-适用版本: Elasticsearch 7 / 8
+适用版本: Elasticsearch 7 / 8 / 9
 更新日期: 2026-11-16
 关联:
   - ES-倒排索引与查询
@@ -111,7 +111,7 @@ flowchart LR
 
 ## ES|QL 入门（8.11+，9.x 主推）
 
-Elastic 官方新查询语言，管道式写法，比 DSL 好读一个量级（2026-10-18 按 Elastic 官方 release notes 核验，9.3 为当前版本）。
+Elastic 官方新查询语言，管道式写法，比 DSL 好读一个量级（2026-11-16 核验：9.5.6 为当前最新版，2026-11-03 安全更新 ESA-2026-201；9.4 线最新补丁为 9.4.9，同批发布）。
 
 ```esql
 FROM logs-*
@@ -323,6 +323,73 @@ Elastic 官方建议单分片大小落在 10–50GB 之间（日志与时序类�
 - 边界 3：`from + size` 的代价按分片数放大，分片越多、翻得越深，协调节点的归并量越大；`max_result_window` 默认 10,000 是保护线，调大它只会把内存压力往后推。
 - 边界 4：refresh 调大与 bulk 调大都只在批量导入场景划算；在线实时写入与实时搜索场景下，refresh 保持 1s、bulk 保持 5–15MB，改大任何一个都会先伤可见性或内存，再谈收益。
 
+## 向量检索与 RAG 定量：HNSW 图、量化与召回算一算
+
+> 本节数字分两类：官方文档默认值（注明来源与核验日期）与演示算例（明确标注“假设”/第三方实测）。版本口径为 Elasticsearch 9.x；9.1 之前版本的默认值不同，照抄本节数字前先确认版本。
+
+### 默认索引类型：9.x 下不写 index_options 落成的是 bbq_hnsw
+
+`dense_vector` 字段不写 `index_options` 时，9.x 默认落成的不是 float32 的 `hnsw`，而是量化图 `bbq_hnsw`（Better Binary Quantization + HNSW）。两处独立实测一致：ES 9.5.5 上建表后回读 mapping 得到 `{"type": "bbq_hnsw", "m": 16, "ef_construction": 100, "rescore_vector": {"oversample": 3.0}}`；ES 9.5.6 上同样默认落成 `bbq_hnsw`（m 16、ef_construction 100、oversample 3.0）。官方文档给出的 HNSW 默认值与之吻合：`m` 默认 16、`ef_construction` 默认 100。
+
+- 版本差异注意：9.4+ 的调优文档把 `bbq_disk`（磁盘版 BBQ）列为 9.4+ 的默认取向，但自建 9.5.5/9.5.6 实测仍落成 `bbq_hnsw`——默认值随版本与部署形态变，建索引后先 `GET` 看实际落成的 `index_options`，不要凭记忆断言。
+- 未显式 mapping 的浮点数组（128–4096 维）会被动态映射为 `dense_vector`，默认相似度 `cosine`（官方 8.17 文档口径，9.x 沿用）。
+
+### HNSW 图内存：向量数 × 4 × m
+
+图内存只算 HNSW 图本身，不含向量原始数据。公式（阿里云 ES 最佳实践文档给出）：
+
+```text
+HNSW 图内存 ≈ 向量数 × 4 字节 × m
+```
+
+`m` 默认 16，即每向量 64 字节。算例（m=16，单副本）：
+
+| 向量数 | 图内存（单副本） | 1 副本时总量 |
+| --- | --- | --- |
+| 10 万 | 6.4 MB（约 6.1 MiB） | 约 12.2 MiB |
+| 100 万 | 64 MB（约 61.0 MiB） | 约 122.1 MiB |
+| 1000 万 | 640 MB（约 610.4 MiB） | 约 1220.7 MiB |
+
+- `m` 翻倍，图内存与建图耗时跟着翻倍，召回率上升但边际递减；`ef_construction` 只影响建图时的搜索宽度，不影响图内存，只拉长建索引时间。两者都是建索引时定的，改要重建索引。
+- 图内存与向量维度无关：维度只影响向量本身的存储（下一小节），不影响这张图的 64 字节/向量。
+
+### 量化存储：float32、int8、BBQ 三档差多少
+
+只算向量本身的字节数（不含 HNSW 图、不含倒排与元数据）：
+
+| 量化方式 | 每向量字节数（768 维） | 100 万向量的向量存储 |
+| --- | --- | --- |
+| float32（`hnsw`） | 768 × 4 = 3072 B | 约 2.86 GiB |
+| int8（`int8_hnsw`） | 768 × 1 = 768 B | 约 0.72 GiB |
+| BBQ 二值（`bbq_hnsw`） | 768 bit = 96 B | 约 0.089 GiB |
+
+- 倍数关系：int8 是 float32 的 1/4，BBQ 是 float32 的 1/32、int8 的 1/8。1536 维时三档分别为每向量 6144 / 1536 / 192 字节，100 万向量约 5.72 / 1.43 / 0.18 GiB。
+- BBQ 便宜的代价是精度：查询时先在二值图上粗筛，再按 `rescore_vector.oversample` 把前 `k × oversample` 个候选拿原始向量重排（默认 oversample 3.0，k=10 时重排 30 个）。重排用的原始向量要另外存一份，这是 BBQ 存储账里容易漏的一笔。
+
+### num_candidates：k=10 时默认到底是多少
+
+`num_candidates` 是每分片先取多少个候选、再取前 k 个返回。默认值分类型：
+
+| 字段类型 | k=10 时的默认 num_candidates | 重排行为 |
+| --- | --- | --- |
+| `hnsw`（float32） | 15（即 1.5 × k） | 无重排；`rescore_vector` 写了也会被接受但忽略 |
+| `int8_hnsw` | 15（即 1.5 × k） | 查询不设 oversample 时不重排 |
+| `bbq_hnsw` | 30（即 max(1.5 × k, oversample × k)，oversample 默认 3.0） | 前 30 个用原始向量重排 |
+
+- 约束：`k ≤ num_candidates ≤ 10,000`。k=50 时 float 默认 75、BBQ 默认 150。
+- 调参方向：float/int8 图上想提召回就加 `num_candidates`；BBQ 图上只加 `num_candidates` 作用有限，真正起作用的是 `rescore_vector.oversample`——因为只有 `k × oversample` 个候选会被重排。
+
+**召回实测（第三方，非官方数字）：** ES 9.5.5、FiQA 数据集 57,638 条向量，默认 `bbq_hnsw` 查询 top-10 召回率 77%；把 oversample 调到 8、同时 `num_candidates` 设为 1000 后，召回率升到 96%。这是单数据集、单机节点的实测，不可当作通用承诺；它说明的方向是：BBQ 默认参数偏省资源、偏召回上限，RAG 场景想提召回先调 oversample、再看 num_candidates。
+
+### 边界条件
+
+- 边界 1：HNSW 是近似最近邻（ANN），不保证找回全部真实最近邻；召回率与延迟、内存的取舍由 m、ef_construction、num_candidates、oversample 四个旋钮共同决定，没有一组“全场景最优”默认值。
+- 边界 2：`m` 与 `ef_construction` 只在建索引时定，改要重建索引；`num_candidates` 与 `oversample` 是查询时参数，可以逐条查询调，不用重建。
+- 边界 3：向量维度与相似度（cosine/dot_product）同样在 mapping 里定死；维度定错、相似度选错，重建索引是唯一解法，与 text/keyword 定错一个性质。
+- 边界 4：本节“快 5 倍”一类的倍数只采信官方原文的表述；ES|QL 小节里“BBQ 让向量检索快 5 倍”是 Elastic 官方说法，未经本库独立实测，引用时注明是厂商说法。
+
+> 来源（核验日期 2026-11-16）：最新版 9.5.6 与 9.4.9 见 Elastic 安全公告 ESA-2026-201（https://discuss.elastic.co/t/elasticsearch-8-19-24-9-4-9-9-5-6-security-update-esa-2026-201/391356）与 Elastic 博客“Elastic Stack 9.4.9 released”（https://www.elastic.co/blog/elastic-stack-9-4-9-released）；m 默认 16、ef_construction 默认 100 见 Elastic 官方 dense_vector 文档（https://www.elastic.co/guide/en/elasticsearch/reference/8.17/dense-vector.html）；HNSW 图内存公式 `num_vectors × 4 × m` 见阿里云 ES 向量引擎最佳实践（https://www.alibabacloud.com/help/en/es/user-guide/vector-engine-best-practices）；默认落成 bbq_hnsw（m 16、ef 100、oversample 3.0）、num_candidates 默认值与 FiQA 召回实测见第三方实测（https://www.queryquotient.com/blog/elasticsearch-knn-num-candidates-oversampling，ES 9.5.5；另有 9.5.6 实测 https://webcrawlerapi.com/blog/elasticsearch-opensearch-website-knowledge-base）。
+
 ## 原理剖析
 
 本节只把原文已有章节给出的结论拆开讲清机制：不引入新概念，不补新数字，数字一律复用定量节已核验的算例；凡原文没展开的点，文中明确标注，不作定论。
@@ -375,6 +442,10 @@ ILM 是同一类思路在时间维度的应用：原文 `## 索引生命周期 I
 
 【小技巧】脚本里调 ES 别加 `?pretty`，用 `filter_path` 只要需要的字段：`GET _cluster/health?filter_path=status,number_of_nodes` 返回只有两行，监控脚本解析 JSON 不用扛整页输出。`pretty` 是给人眼看的，`filter_path` 是给程序看的，两个参数别混着用。
 
+【小技巧】建向量索引后先 `GET` 看实际落成的 `index_options` 再调参：9.x 默认是 `bbq_hnsw`（m 16、ef_construction 100、oversample 3.0），不是 float32 的 `hnsw`。想提召回时 BBQ 图上先调 `rescore_vector.oversample`（默认 3.0，k=10 时只重排 30 个），只加 `num_candidates` 作用有限；float/int8 图上反过来，直接加 `num_candidates`（默认 1.5 × k）。
+
+【冷知识】BBQ 是 Better Binary Quantization 的缩写：把 float32 向量压成每维 1 bit，768 维向量从 3072 字节压到 96 字节，是 float32 的 1/32。便宜的代价是精度，查询时靠 `rescore_vector.oversample` 把前 k × oversample 个候选拿原始向量重排补回来——所以 BBQ 索引里原始向量还要另外存一份，存储账不能只算二值图那 96 字节。
+
 【小技巧】建索引先写索引模板（index template），别每个索引手敲 settings：模板里定好 `index_patterns`、`number_of_shards`、mapping 骨架和 ILM 策略，之后按天建的日志索引自动继承，不会再出现“这个索引副本是 1、那个是 0”的手滑。8.x 用可组合模板（component template + index template），改公共部分只改一个组件。
 
 【冷知识】每个分片都是一个完整的 Lucene 索引实例：分片不是“数据的一块切片”那么简单，底层每个主分片和副本分片都各跑一个 Lucene 实例、各自维护倒排索引和段文件。这就是原文“分片不是越多越好”的根本原因——分片数翻倍，Lucene 实例数和文件句柄数也翻倍，集群的固定开销跟着涨。
@@ -393,6 +464,8 @@ ILM 是同一类思路在时间维度的应用：原文 `## 索引生命周期 I
 
 4. 900GB 日志按单分片目标 30GB 要切多少主分片？`from = 9,990、size = 10` 在 10 个分片上实际取回多少条文档，为什么 `search_after` 更便宜？refresh 从 1s 调到 30s 一天少做多少次 refresh？
 
+5. 9.x 下不写 `index_options` 的 `dense_vector` 默认落成什么索引类型，m 与 ef_construction 的默认值各是多少？k=10 时 float32 图与 BBQ 图的默认 num_candidates 各是多少？100 万条 768 维向量，float32、int8、BBQ 三种量化各占多少向量存储（不含 HNSW 图）？
+
 ### 参考答案
 
 1. 类型定错只能重建索引（reindex），上线前就要想清楚。主分片数建索引时定死，改也要重建；副本数随时可改。
@@ -400,3 +473,5 @@ ILM 是同一类思路在时间维度的应用：原文 `## 索引生命周期 I
 3. 不是丢了：文档写入先进内存缓冲，refresh 后（默认 1s）才生成可搜索的段，所以是“近”实时。急查刚写的数据可用 `?refresh=wait_for`，但别在高频写入里这么用。
 
 4. 900÷30=30个主分片，20–50GB区间为18–45个。10分片共取回100,000条，只返回10条；search_after每片只取size条，不随页码膨胀。refresh从1s调到30s，一天由86,400次降至2,880次，少83,520次。
+
+5. 默认落成 `bbq_hnsw`，m 默认 16、ef_construction 默认 100、rescore_vector oversample 默认 3.0。k=10 时 float32 图默认 num_candidates 为 15（1.5 × k），BBQ 图为 30（max(1.5 × k, oversample × k)）。100 万条 768 维向量：float32 约 2.86 GiB、int8 约 0.72 GiB、BBQ 约 0.089 GiB（仅向量本身，不含 HNSW 图，图本身另按 向量数 × 4 × m 算，m=16 时 100 万向量约 61.0 MiB）。
