@@ -356,7 +356,7 @@ long misses = stats.missCount();
 2. 因为高并发下两个写请求交错时，@CachePut 写缓存的顺序可能与数据库提交顺序相反，缓存里反而留下旧值。用 @CacheEvict 先更新数据库、再删缓存，下次读时按 Cache Aside 回源重建，顺序错乱的影响只剩短暂不一致，配合 TTL 兜底更稳妥。@CachePut 只适合单写、低并发的配置型数据。
 3. 因为 Spring Cache 靠 AOP 代理生效，同类内 this.getItem() 自调用不走代理，@Cacheable 会静默不生效、且不报错。这与 @Transactional 自调用是同一个病根，解法同样是注入自身代理或把方法拆到另一个类；排查时还要先确认已加 @EnableCaching、方法非私有、类已被 Spring 管理。
 4. 只到同一 JVM 内：sync = true 保证同一 JVM 内同 key 只有一个线程回源，其他线程等待。跨实例无效，多实例下热点 key 过期瞬间仍会并发打库，集群防击穿要靠分布式锁或逻辑过期，见 Redis 篇。
-5. 三处：序列化、TTL、空值策略。默认 JDK 序列化在 Redis 里是二进制不可读、类全名变更后反序列化直接失败，应换成 GenericJackson2JsonRedisSerializer 存 JSON 并带类型信息；无 TTL 等于缓存永不过期、改了永远读旧值，且各缓存要分级错峰、避免一起过期形成雪崩；空值策略要按缓存分别定，disableCachingNullValues 与 unless = "#result == null" 会放弃防穿透，而缓存空值则要配短 TTL（如 1 分钟）来防穿透。
+5. 三处：序列化、TTL、空值策略。默认 JDK 序列化在 Redis 里是二进制不可读、类全名变更后反序列化直接失败，应换成 GenericJackson2JsonRedisSerializer 存 JSON 并带类型信息；无 TTL 等于缓存永不过期、改了永远读旧值，且各缓存要分级错峰、避免一起过期形成雪崩；空值策略要按缓存分别定，disableCachingNullValues 与 `unless = "#result == null"` 会放弃防穿透，而缓存空值则要配短 TTL（如 1 分钟）来防穿透。
 
 6. `refreshAfterWrite` 只对 `LoadingCache` 生效：到期后条目变「可刷新」而非过期，首次访问到旧条目时异步调 `CacheLoader.reload(K, V)` 刷新并立即返回旧值，刷新异常被记录后吞掉，旧值继续留着；`expireAfterWrite` 则是到期即过期，下次访问重新回源。Spring 默认的 `CaffeineCacheManager`（只配 spec、没配 loader）建的是普通 `Cache`，不是 `LoadingCache`——只写 spec 不配 `CacheLoader`，刷新永远不会发生；要生效需显式调 `CaffeineCacheManager.setCacheLoader(...)`。首次加载仍是同步的：缓存里没有该 key 时，`@Cacheable` 方法照常同步执行并回写，`refreshAfterWrite` 只管「已有旧条目的后续刷新」，管不着第一次。
 

@@ -322,6 +322,7 @@ mysqlbinlog --read-from-remote-server -h 127.0.0.1 -P 3307 -uroot -pdemo123 \
 ```bash
 # 清理
 docker rm -f mysql-binlog-demo
+```
 
 ## binlog 体量与恢复时间定量
 

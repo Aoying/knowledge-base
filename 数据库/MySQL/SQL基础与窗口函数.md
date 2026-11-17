@@ -396,7 +396,7 @@ FROM / JOIN → ON → WHERE → GROUP BY → HAVING → SELECT → DISTINCT →
 
 ## 8. 常见误区
 
-1. **`= NULL` 永远查不到**：NULL 不是值，是“未知”，判空用 `IS NULL` / `IS NOT NULL`；`NULL = NULL` 也是 UNKNOWN。
+1. **`x = NULL` 永远查不到**：NULL 不是值，是“未知”，判空用 `IS NULL` / `IS NOT NULL`；`NULL = NULL` 也是 UNKNOWN。
 2. **WHERE 里写聚合或窗口函数**：见第 7 节铁律 2，聚合条件用 HAVING，窗口结果包一层再过滤。
 3. **左连接条件放错位置**：右表条件放 WHERE 会退化成内连接（第 3 节），放 ON 才保住左表全量。
 4. **GROUP BY 后 SELECT 非分组列**：ONLY_FULL_GROUP_BY 下报错；要么进 GROUP BY，要么包聚合函数，要么改用窗口函数。

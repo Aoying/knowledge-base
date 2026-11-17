@@ -434,7 +434,7 @@ FROM information_schema.innodb_trx ORDER BY trx_started;
 
 1. RC 和 RR 在快照生成时机上有何区别？为什么长事务在 RR 下会拖垮数据库？
 2. 同一事务里先快照读、后当前读，为什么会读到不同版本的数据？
-3. `innodb_flush_log_at_trx_commit=0` 和 `=2` 在 MySQL 崩溃与机器断电时的丢数后果有何不同？
+3. `innodb_flush_log_at_trx_commit=0` 和 `innodb_flush_log_at_trx_commit=2` 在 MySQL 崩溃与机器断电时的丢数后果有何不同？
 
 4. 某 RR 事务的 ReadView 为 m_ids=[100,101,102]、min_trx_id=100、max_trx_id=103，另有一行版本链为 102 → 101 → 100 → 95：这次快照读会读到哪个版本、遍历了几个版本？若同一行以每秒 50 次被更新、该长事务持有快照 10 分钟，版本链会长到多少？
 

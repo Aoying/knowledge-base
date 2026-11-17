@@ -73,7 +73,7 @@
 
 **核心用法**：
 - 代码块语言选 `dataview`，写查询：
-  ```dataview
+  ```text
   TABLE file.mtime as 修改时间
   FROM "开发语言/Java"
   SORT file.mtime DESC
@@ -166,7 +166,7 @@
 **核心用法**：
 - 表格里按 `Tab` 跳到下一单元格、`Enter` 换行，自动对齐竖线
 - 命令面板：插入/删除行列、移动行列、按列排序、行列转置
-- 支持表格公式（如 `=sum(@row)`），命令 `Evaluate formulas` 计算
+- 支持表格公式（如 = `sum(@row)`），命令 `Evaluate formulas` 计算
 
 **技巧**：整理快捷键对照表、对比表时用它，排版一次成型。
 
@@ -347,14 +347,14 @@ flowchart LR
 
 ## dataview 高级查询（配合本库看板食用）
 
-```dataview
+```text
 -- 本周新建的笔记
 TABLE file.ctime AS 创建时间
 FROM ""
 WHERE file.ctime >= date(today) - dur(7 days)
 SORT file.ctime DESC
 ```
-```dataview
+```text
 -- 哪个文件任务最多（欠债榜）
 TABLE length(file.tasks) AS 任务数,
       length(filter(file.tasks, (t) => !t.completed)) AS 未完成

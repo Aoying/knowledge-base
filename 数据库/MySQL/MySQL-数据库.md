@@ -270,7 +270,7 @@ flowchart TD
 
 - UPDATE / DELETE 忘写 WHERE：全表被改/删。养成习惯：先用相同 WHERE 跑一遍 SELECT 确认行数，再执行；生产删改优先逻辑删除（加 del_flag）。
 - DROP TABLE / TRUNCATE vs DELETE：DROP 连表结构一起删，TRUNCATE 清空全表且不可回滚、自增归零——危险命令，执行前必须确认连的是哪个库、表里数据要不要留档；DELETE 是逐行删、可回滚、可带 WHERE。
-- 用 `= NULL` 判断空：永远查不到，判空用 `IS NULL` / `IS NOT NULL`。
+- 用 `x = NULL` 判断空：永远查不到，判空用 `IS NULL` / `IS NOT NULL`。
 - 把聚合条件写进 WHERE：WHERE 在分组前执行，不能写 COUNT() 这类聚合，过滤分组结果用 HAVING。
 - SELECT *：取回无用列、覆盖索引失效、表结构变更时代码易炸，按需列出字段。
 - 钱用 FLOAT 存、时间用字符串存、枚举用中文字符串存：三类经典建模错误，分别改 DECIMAL、DATETIME、TINYINT + 字典表。
