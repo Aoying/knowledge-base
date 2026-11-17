@@ -15,6 +15,33 @@
 
 # Agent
 
+<!-- TOC -->
+- [核心概念](#核心概念)
+- [四个关键部件](#四个关键部件)
+  - [1. 推理（LLM）](#1-推理llm)
+  - [2. 工具（Tools / Tool Calling）](#2-工具tools--tool-calling)
+  - [3. 记忆（Memory）](#3-记忆memory)
+  - [4. 循环控制](#4-循环控制)
+- [LangGraph（状态机式 Agent 框架）](#langgraph状态机式-agent-框架)
+- [MCP（Model Context Protocol）](#mcpmodel-context-protocol)
+- [Hermes Agent](#hermes-agent)
+- [落到你的项目](#落到你的项目)
+- [Agent 设计模式（四种常用）](#agent-设计模式四种常用)
+- [Human-in-the-Loop（人机回路）](#human-in-the-loop人机回路)
+- [MCP 实战：最小 stdio Server（Python）](#mcp-实战最小-stdio-serverpython)
+- [来源](#来源)
+- [记忆系统设计（三层）](#记忆系统设计三层)
+- [基础知识补强](#基础知识补强)
+  - [核心概念与术语](#核心概念与术语)
+  - [基础知识与用法](#基础知识与用法)
+  - [关键机制速览](#关键机制速览)
+  - [新手易错点](#新手易错点)
+- [已拆分专题（独立知识点）](#已拆分专题独立知识点)
+- [小技巧与冷知识](#小技巧与冷知识)
+- [面试与自测](#面试与自测)
+  - [参考答案](#参考答案)
+<!-- /TOC -->
+
 > 每晚 20:30 自动补充完善。
 
 ## 核心概念
