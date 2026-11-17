@@ -42,6 +42,7 @@ async function main() {
 }
 // 并发
 const [a, b] = await Promise.all([p1, p2]);       // 任一失败全失败
+```
 
 下图是三种并发写法的结果差异：all 任一失败全失败，allSettled 都要结果，race 取先完成的。
 
@@ -55,6 +56,7 @@ flowchart TD
     C --> G[都要结果 全部返回再过滤]
     D --> H[谁先完成拿谁 超时控制]
 ```
+```js
 const r = await Promise.allSettled([p1, p2]);     // 都要结果
 const first = await Promise.race([p1, timeout]);  // 超时控制
 ```
@@ -94,7 +96,7 @@ node --watch app.js     # 文件变化自动重启（开发用）
 
 1. **`this` 丢失**：回调里 `this` 变了，用箭头函数或 `.bind(this)`；class 方法传给事件监听最常见。
 2. **浮点精度**：`0.1 + 0.2 !== 0.3`，金额计算用整数分或 decimal 库。
-3. **`==` 隐式转换**：永远用 `===`，`==` 的转换规则是 bug 之源。
+3. **`a == b` 隐式转换**：永远用 `a === b`，`a == b` 的转换规则是 bug 之源。
 4. **async 函数没 await**：Promise 静默悬挂，错误 catch 不到。
 5. **循环里用 var**：`for (var i...)` + 异步回调全是最后一个值，改 `let`。
 
@@ -129,6 +131,7 @@ node --watch app.js     # 文件变化自动重启（开发用）
 
 ```js
 // 防抖：最后一次触发后等 ms 才执行（搜索框输入）
+```
 
 下图是防抖与节流的区别：防抖等停手，节流限频率。
 
@@ -139,6 +142,7 @@ flowchart TD
     D[节流 滚动加载] --> E[ms 内只执行一次]
     E --> F[距上次执行超过 ms 才执行]
 ```
+```js
 const debounce = (fn, ms) => {
   let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 };
@@ -320,7 +324,7 @@ const obj = JSON.parse(text);            // 字符串 -> 对象，非法 JSON �
 - **浅拷贝只拷一层**：展开运算符和 `Object.assign` 都是浅拷贝，嵌套对象仍然共享（深拷贝另有办法，原文已述）。
 - **this 由调用方式决定**：谁调用就指向谁；对象方法被单独取出来传走，this 就丢了（原文已述解决法）。
 - **严格模式**：`'use strict'` 或模块默认开启，未声明变量赋值直接报错，很多静默错误变成显式异常。
-- **相等判断**：`===` 不转类型先比类型再比值；`Object.is` 多处理了 NaN 与正负零两个边角。
+- **相等判断**：`a === b` 不转类型先比类型再比值；`Object.is` 多处理了 NaN 与正负零两个边角。
 
 ### 新手易错点
 
@@ -330,7 +334,7 @@ const obj = JSON.parse(text);            // 字符串 -> 对象，非法 JSON �
 - **const 对象的误会**：const 只保证变量不重新赋值，对象属性照样能改；想真冻结用 `Object.freeze`（也只是浅冻结）。
 - **字符串方法不改原串**：字符串不可变，`replace/slice` 都返回新串，不接返回值等于白调。
 - **parseInt 不带进制**：`parseInt('08')` 在老环境有坑，养成 `parseInt(s, 10)` 的习惯。
-- **switch 用严格相等**：`switch (x)` 内部是 `===` 比较，x 是字符串 '1' 时匹配不上 `case 1`。
+- **switch 用严格相等**：`switch (x)` 内部是 `a === b` 比较，x 是字符串 '1' 时匹配不上 `case 1`。
 - **return 后自动分号**：`return` 单独一行、值写在下一行，会被自动补分号变成返回 undefined；值跟 return 写同行。
 - **在条件里写单个等号**：`if (a = 1)` 是赋值不是比较，还恒为真；比较永远写两个或三个等号并配合 lint。
 - **定时器里的 this 与参数**：`setTimeout(obj.method, 100)` 会丢 this，包一层箭头函数 `() => obj.method()` 再传。

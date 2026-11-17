@@ -129,7 +129,7 @@ addopts = "-q"
 - 【小技巧】`pytest --durations=10` 跑完后列出最慢的 10 个用例。慢用例往往是偷偷调了真实服务、写了 sleep、或在 fixture 里重复建表的地方；suite 越来越慢时先看这张榜，再决定把谁 mock 掉或把 fixture 作用域放大，比凭感觉优化有效。
 - 【小技巧】失败一多就用 `--tb=short`，CI 日志里只想扫失败清单时用 `--tb=line`：默认的长回溯（long）在几十个失败时刷屏，`--tb=line` 每个失败只留一行摘要，先定位"挂了哪些用例"，再对单个用例切回默认回溯细查。回溯风格是展示层面的选择，不影响用例本身的通过与否。
 - 【冷知识】`--stepwise`（`-sw`）可以在失败处断点续跑：它在第一个失败时停下，修好代码后再次运行 `pytest --stepwise`，会跳过已经通过的用例、直接从上次失败的用例继续；而 `-x` 每次都要从头跑。调试一串相互关联的失败用例时，stepwise 省掉大量重复等待。
-- 【小技巧】断言浮点数别写 `==`，用 `pytest.approx`：`assert 0.1 + 0.2 == pytest.approx(0.3)`，默认相对容差是 1e-6；它还能直接比较列表和字典，逐项按容差判定。RAG 里断言相似度分数、embedding 余弦值这类浮点结果时，approx 能避免"差 1e-16 就红"的假失败。
+- 【小技巧】断言浮点数别写 `a == b`，用 `pytest.approx`：`assert 0.1 + 0.2 == pytest.approx(0.3)`，默认相对容差是 1e-6；它还能直接比较列表和字典，逐项按容差判定。RAG 里断言相似度分数、embedding 余弦值这类浮点结果时，approx 能避免"差 1e-16 就红"的假失败。
 - 【小技巧】可选依赖的测试文件顶部写 `pytest.importorskip("xxx")`：该库没装时整文件跳过（skip）而不是报错，CI 矩阵里"有的环境装了、有的没装"的用例就不用到处写 try/except。它只在 import 失败时跳过，库存在但版本不对时不会帮你兜底。
 - 【冷知识】pytest 的断言重写只发生在测试模块：它改写 `test_*.py` 里 `assert` 的字节码，失败时才能展开变量值；被测源码里的 `assert` 失败时只有一句普通的 AssertionError，没有变量展开。所以想看清"哪边的值不对"，断言要写在测试函数里，别指望源码里的 assert 也给出漂亮的 diff。
 - 【小技巧】`capsys` 只能抓 print，想断言日志走 `caplog`：`caplog` fixture 捕获 logging 输出，`caplog.set_level(logging.DEBUG)` 可以临时把级别调低，`caplog.text` 里按字符串断言"某分支有没有打出关键日志"。测"矛盾检测命中规则时是否记了审计日志"这类需求，用 caplog 比在 capsys 里找 print 靠谱。

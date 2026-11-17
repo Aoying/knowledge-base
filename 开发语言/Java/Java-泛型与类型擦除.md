@@ -170,7 +170,7 @@ public class Box2<T> {
 - 静态成员不行：静态成员属于类只有一份，而 T 每个实例化都不同。
 
 ## 实战应用
-### 1. MyBatis-Plus 的 BaseMapper<T> 如何反推实体类
+### 1. MyBatis-Plus 的 `BaseMapper<T>` 如何反推实体类
 
 下图是 BaseMapper 反推实体类的流程：从泛型接口签名里抠出类型参数，不能用只拿擦除后 Class 的 getInterfaces。
 

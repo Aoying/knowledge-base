@@ -90,7 +90,7 @@ with SessionLocal() as session:
     )
 ```
 
-条件走 `==`、`in_()`、`.like()` 等表达式 API 组合，**不要用 f-string 拼 SQL**（防注入见第 6 节）。
+条件走 `a == b`、`in_()`、`.like()` 等表达式 API 组合，**不要用 f-string 拼 SQL**（防注入见第 6 节）。
 
 ## 4. 关系加载策略与 N+1
 
