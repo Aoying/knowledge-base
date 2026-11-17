@@ -56,6 +56,7 @@ class Worker {
 int data = 0;
 volatile boolean ready = false;
 // 线程 A: data = 42; ready = true;      （volatile 写禁止前面的写被排到它后面）
+```
 
 下图是 volatile 发布模式：先写数据、再写标志位，读到标志的线程一并看到数据。
 
@@ -65,6 +66,7 @@ flowchart LR
     B --> C[线程 B 读 ready 为 true]
     C --> D[线程 B 读 data 得 42]
 ```
+```java
 // 线程 B: if (ready) use(data);         // 能读到 42，靠 hb 传递性 + 顺带刷新
 ```
 

@@ -141,6 +141,7 @@ flowchart LR
 
 ```json
 PUT _ilm/policy/logs-30d {
+```
 
 下图是索引生命周期的三个阶段。
 
@@ -150,6 +151,7 @@ flowchart TD
     B --> C[warm 缩分片到1]
     C --> D[delete 30天删]
 ```
+```json
   "policy": { "phases": {
     "hot":   { "actions": { "rollover": { "max_age": "7d", "max_size": "50gb" } } },
     "warm":  { "min_age": "7d",  "actions": { "shrink": { "number_of_shards": 1 } } },

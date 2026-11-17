@@ -27,6 +27,7 @@
 TreeMap<Integer, String> map = new TreeMap<>();
 map.put(30, "c"); map.put(10, "a"); map.put(20, "b");
 map.keySet();            // 10, 20, 30，与插入顺序无关
+```
 
 下图是按 30、10、20 的顺序 put 进去后的有序树：遍历即 10、20、30，与插入顺序无关。
 
@@ -43,6 +44,7 @@ map.firstKey();          // 10
 map.lastKey();           // 30
 map.floorKey(25);        // ≤25 的最大 key：20
 map.ceilingKey(25);      // ≥25 的最小 key：30
+```java
 map.higherKey(20);       // 严格大于 20：30
 map.pollFirstEntry();    // 弹出最小键值对
 ```

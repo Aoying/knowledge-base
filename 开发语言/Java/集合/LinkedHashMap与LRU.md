@@ -35,6 +35,7 @@ ins.keySet().forEach(System.out::println);
 Map<String, Integer> acc = new LinkedHashMap<>(16, 0.75f, true);
 acc.put("a", 1); acc.put("b", 2); acc.put("c", 3);
 acc.get("a");
+```
 
 下图是访问顺序的移位：get 到 a 后，a 挪到链尾，链头就变成最久未访问的 b。
 
@@ -44,6 +45,7 @@ flowchart LR
     B --> C[a 挪到链尾 顺序变 b c a]
     C --> D[链头 b 最久未访问 链尾 a 最新]
 ```
+```java
 acc.keySet().forEach(System.out::println);
 ```
 

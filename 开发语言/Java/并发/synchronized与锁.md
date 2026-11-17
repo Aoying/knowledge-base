@@ -324,7 +324,7 @@ if (gotA && gotB) {
 
 1. synchronized 是 JVM 内置锁：关键字、自动释放，底层是对象头 Mark Word 的锁状态升级（偏向→轻量→重量；JDK 15 起偏向默认禁用、JDK 18 已废弃）。ReentrantLock 是 JUC 的 Lock，以 AQS 为底座：state + FIFO 队列管排队、阻塞、唤醒。能力上后者多出 tryLock/带超时、可中断加锁、公平选项、多个 Condition；选型口诀是默认 synchronized，需要这些能力时才上 ReentrantLock。
 2. 公平锁吞吐低：每次唤醒都严格按排队顺序，线程切换更频繁，非公平允许后来者直接抢、减少切换。读锁不能升级写锁：拿写锁要求当前没有读锁持有者，而升级线程自己就持有一把读锁，永远等不到自己释放，会死锁；反过来持写锁再拿读锁（锁降级）是允许的。
-3. 排查步骤：先留现场再重启。jstack <pid>，看“Found one Java-level deadlock”直接给出的死锁环，或用 jconsole / Arthas thread -b 看 BLOCKED 线程在等哪把锁、被谁持有；顺着“waiting to lock … owned by”画出等待环，定位到代码行。预防：全局固定加锁顺序、tryLock 带超时、锁粒度尽量小、持锁期间不调外部方法。
+3. 排查步骤：先留现场再重启。jstack `<pid>`，看“Found one Java-level deadlock”直接给出的死锁环，或用 jconsole / Arthas thread -b 看 BLOCKED 线程在等哪把锁、被谁持有；顺着“waiting to lock … owned by”画出等待环，定位到代码行。预防：全局固定加锁顺序、tryLock 带超时、锁粒度尽量小、持锁期间不调外部方法。
 
 4. 临界区 T=1ms、8 个线程排队时，队尾要等前面 7 个线程依次执行完，即 (8-1)×1ms=7ms，吞吐上限 1/T=1000 次/秒；T 缩到 100μs 则队尾等待 700μs。公平锁下这是最坏等待的上界，非公平锁后来者可插队，队尾等待没有上界。缩短等待只能缩短 T 或减少排队数。
 

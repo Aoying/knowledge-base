@@ -227,7 +227,7 @@ map.computeIfAbsent("a", k -> {
 - 映射函数执行时持有桶锁，递归回写可能等同一把锁直接卡死，某些路径抛 `IllegalStateException: Recursive update`。
 - 解法：映射函数只做纯计算，依赖数据提前在锁外算好再传入。
 
-### 6.2 用 size() == 0 判断后初始化：check-then-act 竞态
+### 6.2 用 `size() == 0` 判断后初始化：check-then-act 竞态
 
 ```java
 if (map.size() == 0) initDefaults(map); // A、B 两线程同时判 0，都执行初始化，互相覆盖

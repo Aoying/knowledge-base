@@ -101,6 +101,7 @@ RDB 定时快照（恢复快、丢快照后的数据）；AOF 记录写命令，
 
 ```bash
 XADD orders * user 1001 amount 99          # 生产
+```
 
 下图是 Stream 消费者组的实战流程。
 
@@ -111,6 +112,7 @@ flowchart TD
     C --> D[XACK 确认]
     C --> E[XPENDING 查未确认]
 ```
+```bash
 XGROUP CREATE orders g1 0 MKSTREAM        # 建消费组（0=从头消费）
 XREADGROUP GROUP g1 c1 COUNT 10 BLOCK 5000 STREAMS orders >   # 消费
 XACK orders g1 <message-id>                # 确认

@@ -95,6 +95,7 @@ flowchart TD
 
 ```java
 // 无锁状态流转：任务状态只允许 INIT -> RUNNING -> DONE，CAS 保证只有一个线程能推进
+```
 
 下图是无锁任务状态机：只有抢到 CAS 的线程能把状态推进一步。
 
@@ -108,6 +109,7 @@ stateDiagram-v2
     RUNNING --> DONE : compareAndSet 推进完成
     DONE --> [*]
 ```
+```java
 class Job {
     enum S { INIT, RUNNING, DONE }
     private final AtomicReference<S> state = new AtomicReference<>(S.INIT);

@@ -37,6 +37,7 @@ flowchart TD
 
 ```text
 请求（低温度 + JSON mode / schema）
+```
 
 一条可靠的解析管线是这样走的：
 
@@ -48,6 +49,7 @@ flowchart TD
     D --> E[业务校验]
     E -->|任一环节失败| F[带着错误信息重试]
     E -->|通过| G[输出]
+```
 ```
   → 提取（剥掉代码块围栏、前后闲话，只取 JSON 主体）
   → json.loads 解析
