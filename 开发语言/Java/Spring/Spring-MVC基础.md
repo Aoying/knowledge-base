@@ -16,6 +16,30 @@
 
 # Spring MVC基础
 
+<!-- TOC -->
+- [1. 核心概念](#1-核心概念)
+- [2. 基础知识](#2-基础知识)
+  - [Controller 与返回值](#controller-与返回值)
+  - [参数绑定速记](#参数绑定速记)
+  - [与 Bean-Validation 配合](#与-bean-validation-配合)
+- [3. 进阶知识](#3-进阶知识)
+  - [拦截器：HandlerInterceptor](#拦截器handlerinterceptor)
+  - [内容协商与 REST](#内容协商与-rest)
+  - [文件上传](#文件上传)
+- [4. 实战应用：全局异常处理](#4-实战应用全局异常处理)
+- [5. 疑难杂症](#5-疑难杂症)
+- [6. 常见误区](#6-常见误区)
+- [7. 版本差异](#7-版本差异)
+- [原理剖析](#原理剖析)
+- [实战案例](#实战案例)
+  - [案例一：404 但 Controller 明明写了，启动日志里没有映射](#案例一404-但-controller-明明写了启动日志里没有映射)
+  - [案例二：拦截器里读了 body，后续 Controller 读不到](#案例二拦截器里读了-body后续-controller-读不到)
+- [小技巧与冷知识](#小技巧与冷知识)
+- [8. 面试与自测](#8-面试与自测)
+  - [参考答案](#参考答案)
+- [关联知识](#关联知识)
+<!-- /TOC -->
+
 ## 1. 核心概念
 
 Spring MVC 是 Spring 的 Web 层框架，职责是「把 HTTP 请求翻译成 Java 方法调用，再把返回值翻译回 HTTP 响应」。Spring Boot 项目里只要引入 `spring-boot-starter-web`，内嵌 Tomcat 与 MVC 基础设施就由自动配置装配好，不用手写 web.xml 或 DispatcherServlet 注册。
