@@ -367,7 +367,7 @@ Jandex 这类构建期索引把扫描挪到编译期，运行期启动成本接�
 
 【小技巧】在 JDK 9 及以上，判断能不能破封装时优先用 `trySetAccessible()` 而不是直接调 `setAccessible(true)`。前者是 `AccessibleObject` 上 JDK 9 引入的方法，成功返回 `true`、失败返回 `false` 而不抛异常，适合在工具代码里先探测再降级；后者在模块未 `opens` 的包上会直接抛 `InaccessibleObjectException`，原文的疑难杂症一节也提到了这个异常和 `--add-opens` 的解法。
 
-【冷知识】`getAnnotation()` 拿到的注解对象并不是一个普通实例，而是实现该注解接口的动态代理。原文原理剖析一节讲过这一点，它带来的实际影响是：注解实例的 `equals`、`hashCode`、`toString` 都是按注解规范实现的，两个从不同类上读到的、成员值相同的同种注解可以 `equals` 为真，比较注解时不要用 `==`，也不要指望它有你自己写的实现类。
+【冷知识】`getAnnotation()` 拿到的注解对象并不是一个普通实例，而是实现该注解接口的动态代理。原文原理剖析一节讲过这一点，它带来的实际影响是：注解实例的 `equals`、`hashCode`、`toString` 都是按注解规范实现的，两个从不同类上读到的、成员值相同的同种注解可以 `equals` 为真，比较注解时不要用 `a == b`，也不要指望它有你自己写的实现类。
 
 【小技巧】读方法上的注解时，涉及泛型方法或接口实现时不要只用裸 `getAnnotation()`，要留意桥接方法。原文在 AOP 一节提到 Spring 用 `AnnotationUtils.findAnnotation` 而不是裸 `getAnnotation`，原因就是 JDK 动态代理拿到的是接口方法、注解可能标在实现类方法上，而且泛型擦除会生成桥接方法，直接读很可能读到桥接方法而漏掉注解；自己不用 Spring 时，至少要先判断 `method.isBridge()` 并顺着桥接关系找到原始方法再读。
 
@@ -430,7 +430,7 @@ Jandex 这类构建期索引把扫描挪到编译期，运行期启动成本接�
 **复盘**
 
 - 排障顺序：先确认读的是接口方法、实现类方法还是桥接方法 → 再查保留级别是不是 RUNTIME → 再查 `@Inherited` 的继承口径；三步缺一不可。
-- 注解比较不要用 `==`：`getAnnotation()` 拿到的注解对象是实现该注解接口的动态代理，`equals`、`hashCode`、`toString` 都是按注解规范实现的，两个从不同类上读到的、成员值相同的同种注解可以 `equals` 为真。
+- 注解比较不要用 `a == b`：`getAnnotation()` 拿到的注解对象是实现该注解接口的动态代理，`equals`、`hashCode`、`toString` 都是按注解规范实现的，两个从不同类上读到的、成员值相同的同种注解可以 `equals` 为真。
 - 框架的注解解析只在启动时做一次并缓存成元数据（Spring 的 `BeanDefinition`、MyBatis-Plus 的 `TableInfo`），运行期只读缓存；自己写工具类也按这个口径，不要在每次调用时重复解析注解。
 
 ## 面试与自测

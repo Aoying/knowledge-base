@@ -192,7 +192,7 @@ ttlPool.execute(() -> System.out.println(TRACE.get()));   // 池线程里也能�
 
 ### 8.4 泄漏规模：N × M × S 算一算
 
-- 公式：泄漏总量 `= N × M × S`，N 是线程池线程数，M 是每个线程的 map 里未清理的 value 个数（不同 key 计，同一 key 反复 set 只算 1 个），S 是每个 value 的平均大小。`1 KB = 1024 B`，`1 MB = 1024 KB`，下表按二进制换算。
+- 公式：泄漏总量 = `N × M × S`，N 是线程池线程数，M 是每个线程的 map 里未清理的 value 个数（不同 key 计，同一 key 反复 set 只算 1 个），S 是每个 value 的平均大小。`1 KB = 1024 B`，`1 MB = 1024 KB`，下表按二进制换算。
 
 | 线程数 N | 每线程未清理 value 数 M | 平均大小 S | 泄漏总量 |
 | --- | --- | --- | --- |

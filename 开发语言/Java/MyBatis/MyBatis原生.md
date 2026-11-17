@@ -81,7 +81,7 @@ flowchart LR
 </insert>
 ```
 
-要点：`<where>` 自动去开头多余的 AND/OR，`<set>` 自动去结尾逗号，`<trim>` 是两者的通用版，自定义拼接用它。`test` 里是 OGNL 表达式，字符串比较用 `==`，别写成单个 `=`。多参数方法用 `@Param` 命名后按名引用，不要靠 `param1/arg0`。
+要点：`<where>` 自动去开头多余的 AND/OR，`<set>` 自动去结尾逗号，`<trim>` 是两者的通用版，自定义拼接用它。`test` 里是 OGNL 表达式，字符串比较用 `a == b`，别写成单个 =。多参数方法用 `@Param` 命名后按名引用，不要靠 `param1/arg0`。
 
 **resultMap 与嵌套映射**：列名与属性名不一致、或一对一/一对多关联时用 resultMap，不要指望自动映射硬凑：
 
@@ -191,7 +191,7 @@ try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.BATCH, fals
 - 排查：原文第 4 节的原理——PageHelper 本质是一个 MyBatis 插件，拦截 Executor 的 query，在执行前根据 `PageHelper.startPage()` 放进 ThreadLocal 的分页参数改写 SQL（拼 limit）并先跑一条 count 查询。由此可推：`startPage` 后紧跟的第一条查询才被分页，中间隔了别的查询就分错；原文参考答案第 2 条也是这个结论。
 - 结论：`startPage` 必须紧贴在要分页的那条查询之前，中间不隔任何别的查询。异常路径下 ThreadLocal 没清掉会污染同线程下一次查询，分页参数的清理要走 finally。PageHelper 与 Plus 分页拦截器二选一，混用会拼两套 limit；神农项目栈里 PageHelper 1.4.3 与 MP 并存，存量 XML 查询走 PageHelper，新代码走 MP 分页插件，同一条查询链路上只能出现一种。
 
-### 案例二：排序字段直接 ${} 拼接，前端传什么就拼什么
+### 案例二：排序字段直接 `${}` 拼接，前端传什么就拼什么
 
 - 现象：列表接口的排序参数 `orderBy` 由前端传，代码里直接写 `${orderBy}` 拼进 SQL；安全扫描报 SQL 注入，传 `id; DROP TABLE loan_apply` 这类值时直接进了 SQL 文本。
 - 排查：原文第 6 节的疑难杂症——前端传的 `orderBy` 直接 `${orderBy}` 拼接被注入。原文第 2 节的规则：`${}` 是字符串直接拼接，只允许用于表名、列名、排序字段这类不能用占位符的位置，且值必须经枚举、白名单校验；`${}` 拼用户输入就是教科书级 SQL 注入。`#{}` 是预编译占位符、走 PreparedStatement 设值，天然防注入，默认永远用它。

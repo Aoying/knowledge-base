@@ -106,6 +106,7 @@ public record LoanApplyDTO(Long id, BigDecimal amt, String status) {
 
 ```java
 public sealed interface ApproveState permits Pending, Approved, Rejected {}
+```
 
 下图是 sealed 审批状态的封闭继承关系：ApproveState 只允许 Pending、Approved、Rejected 三个子类。
 
@@ -127,6 +128,7 @@ classDiagram
     ApproveState <|-- Approved
     ApproveState <|-- Rejected
 ```
+```java
 public record Pending(String auditor) implements ApproveState {}
 public record Approved(Instant at) implements ApproveState {}
 public record Rejected(String reason) implements ApproveState {}
