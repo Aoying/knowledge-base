@@ -20,9 +20,9 @@
 - [知识点拆分索引](#知识点拆分索引)
 - [排查三板斧](#排查三板斧)
 - [疑难杂症](#疑难杂症)
-  - [1. OceanBase 下大事务超时回滚，MySQL 上好好的](#1-oceanbase-下大事务超时回滚mysql-上好好的)
-  - [2. 内层 try-catch 吃掉异常，外层事务不回滚](#2-内层-try-catch-吃掉异常外层事务不回滚)
-  - [3. Druid 连接"假死"：能连上但 SQL 一直 hang](#3-druid-连接假死能连上但-sql-一直-hang)
+  - [1-oceanbase-下大事务超时回滚-mysql-上好好的](#1-oceanbase-下大事务超时回滚-mysql-上好好的)
+  - [2-内层-try-catch-吃掉异常-外层事务不回滚](#2-内层-try-catch-吃掉异常-外层事务不回滚)
+  - [3-druid-连接-假死-能连上但-sql-一直-hang](#3-druid-连接-假死-能连上但-sql-一直-hang)
 - [基础知识补强](#基础知识补强)
   - [核心概念与术语](#核心概念与术语)
   - [基础语法与用法](#基础语法与用法)
@@ -30,8 +30,8 @@
   - [新手易错点](#新手易错点)
 - [原理剖析](#原理剖析)
 - [实战案例](#实战案例)
-  - [案例一：内层 try-catch 吃掉异常，外层事务不回滚](#案例一内层-try-catch-吃掉异常外层事务不回滚)
-  - [案例二：OceanBase 下大事务超时回滚，MySQL 上好好的](#案例二oceanbase-下大事务超时回滚mysql-上好好的)
+  - [案例一-内层-try-catch-吃掉异常-外层事务不回滚](#案例一-内层-try-catch-吃掉异常-外层事务不回滚)
+  - [案例二-oceanbase-下大事务超时回滚-mysql-上好好的](#案例二-oceanbase-下大事务超时回滚-mysql-上好好的)
 - [小技巧与冷知识](#小技巧与冷知识)
 - [面试与自测](#面试与自测)
   - [参考答案](#参考答案)
@@ -77,17 +77,17 @@
 
 ## 疑难杂症
 
-### 1. OceanBase 下大事务超时回滚，MySQL 上好好的
+### 1-oceanbase-下大事务超时回滚-mysql-上好好的
 - **现象**：批量更新几万行，MySQL 正常，OceanBase 报事务超时回滚。
 - **原因**：OceanBase 对大事务限制更严（undo 保留、超时阈值），默认超时参数和 MySQL 不同。
 - **解决**：大批量拆小批次提交；调大 `ob_trx_timeout`；能异步就别放事务里。
 
-### 2. 内层 try-catch 吃掉异常，外层事务不回滚
+### 2-内层-try-catch-吃掉异常-外层事务不回滚
 - **现象**：`@Transactional` 方法里 try-catch 了内层异常，业务失败了但数据已提交。
 - **原因**：Spring 靠异常触发回滚；异常被 catch 后事务拦截器认为"正常返回"直接提交。
 - **解决**：catch 后 `throw new RuntimeException(e)` 重新抛出，或手动 `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()`。
 
-### 3. Druid 连接"假死"：能连上但 SQL 一直 hang
+### 3-druid-连接-假死-能连上但-sql-一直-hang
 - **现象**：服务跑着跑着部分请求卡死，重启就好。
 - **原因**：数据库端杀掉了空闲连接（如 wait_timeout），但连接池不知道，拿到的是死连接。
 - **解决**：Druid 开 `testWhileIdle=true` + `validationQuery=SELECT 1`，`timeBetweenEvictionRunsMillis` 小于数据库的 wait_timeout。
@@ -241,13 +241,13 @@ sender.send("hi");
 
 ## 实战案例
 
-### 案例一：内层 try-catch 吃掉异常，外层事务不回滚
+### 案例一-内层-try-catch-吃掉异常-外层事务不回滚
 
 - 现象：`@Transactional` 方法里内层 try-catch 了异常，业务失败了但数据已提交；日志里明明记了异常，库里却留下了本该回滚的数据。
 - 排查：原文疑难杂症第 2 条——Spring 靠异常触发回滚，异常被 catch 后事务拦截器认为“正常返回”直接提交。原文参考答案第 1 条也是这个结论。
 - 结论：catch 后 `throw new RuntimeException(e)` 重新抛出，或手动 `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()`。异常处理骨架按原文基础语法示例：能恢复就 catch，不能就往上抛，finally 常用于释放资源。
 
-### 案例二：OceanBase 下大事务超时回滚，MySQL 上好好的
+### 案例二-oceanbase-下大事务超时回滚-mysql-上好好的
 
 - 现象：批量更新几万行，MySQL 正常，OceanBase 报事务超时回滚；同一段代码、同一批数据，换库就翻车。
 - 排查：原文疑难杂症第 1 条——OceanBase 对大事务限制更严（undo 保留、超时阈值），默认超时参数和 MySQL 不同。原文参考答案第 2 条也是这个结论。
