@@ -2,7 +2,7 @@
 知识点: Kubernetes基础
 层级: 进阶
 适用版本: Kubernetes 1.37.x（截至 2026-11-16 的当前稳定大版本，最新补丁 1.37.2 于 2026-10-27 发布；1.38 预计 2026-12-16 发布）
-更新日期: 2026-11-16
+更新日期: 2026-11-18
 关联:
   - Linux性能分析
   - 监控告警
@@ -145,6 +145,146 @@ flowchart TD
 所以实战口径是：request 按“平时真实用量”填，保证能调度；limits 按“峰值再留余量”填，防止一个 Pod 把整台节点拖垮。request 填得太小会导致调度上去却跑不动，填得太大会浪费节点、白白让 Pod Pending。
 
 ## 进阶知识
+
+### 资源请求、限制与调度定量：节点能装多少 Pod、HPA 何时触发
+
+前文「资源调度算一笔账」只算了一半：调度器按 request 算账没错，但它算的不是节点 Capacity，而是 **Allocatable（可分配量）**；而 Pod 跑起来之后能不能不被节流、不被杀掉、不被驱逐，看的是 limits 和 QoS；流量上来之后副本数变不变，看的是 HPA 的算式。这一节把三笔账一次算全。
+
+生活类比：节点是一间仓库，Capacity 是仓库的建筑面积，Allocatable 是扣掉消防通道、物业办公室和安全余量之后真正能摆货架的面积；request 是你向仓库管理员预订的货架格子，limits 是消防规定的单格最大堆高；HPA 是看到货架快满了就自动加格子的值班员；QoS 是着火时先搬谁的货的优先级。
+
+#### 1. 概念：先分清三组数
+
+**第一组：Capacity 与 Allocatable。** Capacity 是节点物理资源的账面总量；Allocatable 是调度器真正能分给 Pod 的量，公式是：
+
+```text
+Allocatable = Capacity - kubeReserved - systemReserved - evictionHard
+```
+
+- `kubeReserved`：留给 kubelet、容器运行时等 Kubernetes 自身守护进程的量。
+- `systemReserved`：留给 sshd、udev、journald 等操作系统守护进程的量。
+- `evictionHard`：硬驱逐阈值，只对内存和临时存储有效，CPU 没有驱逐阈值、所以 CPU 的 Allocatable 里没有这一项。
+
+默认值（Kubernetes 1.37，2026-11-18 核验）：`kubeReserved` 与 `systemReserved` 默认都是空，即默认不预留，全部 Capacity 都算进 Allocatable；`evictionHard` 默认是 `memory.available` 低于 100Mi、`nodefs.available` 低于 10%、`nodefs.inodesFree` 低于 5%、`imagefs.available` 低于 15% 时触发驱逐。也就是说，一个什么都没配的节点，内存 Allocatable 也比 Capacity 少 100Mi——这 100Mi 是硬驱逐阈值占掉的。`enforceNodeAllocatable` 默认只含 `pods` 一项，即 kubelet 只把所有 Pod 一起限制在 Allocatable 以内；想让预留真正约束到系统守护进程，要另外把 `system-reserved`、`kube-reserved` 加进该项。
+
+**第二组：requests 与 limits。** 两组数是给两台不同机器读的：
+
+| 资源 | request 给谁读 | limit 给谁读 | 超过 limit 的后果 |
+| --- | --- | --- | --- |
+| CPU | 调度器：按它算能不能放下这个 Pod | 内核 cgroup：按它做 CFS quota 节流 | 被节流：变慢，不重启、不报错事件 |
+| 内存 | 调度器：按它算能不能放下这个 Pod；kubelet：按它给驱逐排序 | 内核 cgroup：硬上限 | 被 OOM Kill：容器直接被杀，重启后状态里出现 OOMKilled，退出码 137 |
+
+关键区别就一句：**CPU 是可压缩资源**，超了只是慢；**内存是不可压缩资源**，超了就是死。所以内存 limit 必须按实测峰值加余量来定，CPU limit 定错了最多是变慢，内存 limit 定错了是半夜被杀。
+
+两条 API 默认规则也要记住：只写了 limit 没写 request 时，request 会默认等于 limit；内存 limit 写得比 request 还小，API Server 会直接拒绝这个 Pod。
+
+**第三组：HPA 的三个数。** HPA 的目标利用率、`minReplicas`、`maxReplicas`。利用率的分母是 request，不是 limit、也不是节点容量——所以 request 填多少，直接决定了 HPA 的触发基线。
+
+#### 2. 原理：Allocatable 手算例——节点到底能装几个 Pod
+
+沿用前文的节点：4 核 CPU、8 Gi 内存（8 Gi 等于 8192 Mi）。假设 kubelet 配了示例预留（注意：以下 `kubeReserved` 与 `systemReserved` 的取值是示例，不是默认值；默认值是空）：
+
+- `kubeReserved`：CPU 100m、内存 100Mi
+- `systemReserved`：CPU 100m、内存 100Mi
+- `evictionHard`：`memory.available` 低于 100Mi（默认值）
+
+先算 Allocatable：
+
+- CPU：4 - 0.1 - 0.1 = 3.8 核（CPU 没有 eviction 项）
+- 内存：8192 - 100 - 100 - 100 = 7892 Mi，约 7.71 Gi
+
+再算能装几个 Pod。沿用前文 Deployment 里的 Pod 规格：每个 Pod request 是 0.5 核 CPU、512Mi 内存。
+
+- 按 CPU 算：3.8 ÷ 0.5 = 7.6，向下取整是 7 个
+- 按内存算：7892 ÷ 512 = 15.4，向下取整是 15 个
+- 取最小值：**7 个 Pod，瓶颈是 CPU**
+
+验算第 8 个 Pod 为什么进不来：7 个 Pod 已占 CPU 7 × 0.5 = 3.5 核，剩余 3.8 - 3.5 = 0.3 核，小于一个 Pod 要的 0.5 核，于是第 8 个 Pod 卡在 Pending，事件里写 `Insufficient cpu`。此时内存还剩 7892 - 7 × 512 = 4308 Mi，大把空着也没用——调度器按最短板算。
+
+还有两道天花板要一起看，节点能装的 Pod 数是四者取最小：
+
+- Allocatable 除以单 Pod request（本例是 7 个）
+- kubelet 的 `maxPods`，默认 110 个（本例不构成约束）
+- CNI 能分配的 IP 数量（取决于具体 CNI 与云厂商实现，无统一数字，待验证）
+- DaemonSet 等系统 Pod 已占掉的 request（它们也是普通 Pod，同样吃 Allocatable）
+
+一句话口径：**调度器只认 request 和 Allocatable，不认实际用量。** 节点实际 CPU 只跑了 5%，但 request 已占满时，调度器照样认为它满了。
+
+#### 3. 超卖换算：limits 总和超过节点会怎样
+
+继续上面的例子：7 个 Pod，每个 limits 是 1 核 CPU、1 Gi 内存。
+
+- limits 总计：7 × 1 = 7 核 CPU、7 × 1 = 7 Gi 内存
+- CPU 超卖倍数（相对 Capacity）：7 ÷ 4 = 1.75 倍
+- CPU 超卖倍数（相对 Allocatable）：7 ÷ 3.8 = 1.84 倍
+- 内存 limits 总计 7 Gi，小于内存 Allocatable 7.71 Gi，不超卖
+
+超卖本身不报错，因为 limits 只是「最多能用多少」，不是「预先占住多少」。但 7 个 Pod 如果同时满负荷跑，节点只有 4 核，CPU 会被节流变慢；内存如果同时冲过各自的 limit，超的那个容器会被 OOM Kill。超卖倍数越大，满载时互相挤占得越狠。
+
+所以 request 与 limits 的分工要这样定：request 按「平时真实用量」填，保证能调度、HPA 基线准；limits 按「峰值再留余量」填，防止一个 Pod 把整台节点拖垮。request 填得太小会导致调度上去却跑不动，还会让 HPA 的利用率分母变小、提前触发扩容；填得太大会浪费节点、白白让 Pod Pending。
+
+#### 4. HPA 何时触发：目标利用率的触发算式
+
+HPA 是控制平面里的一个控制循环，默认每 15 秒算一次（由 kube-controller-manager 的同步周期参数控制，默认 15 秒）。核心算式只有一行：
+
+```text
+desiredReplicas = ceil(当前副本数 × 当前指标值 ÷ 目标指标值)
+```
+
+其中 `ceil` 是向上取整。资源类指标（CPU、内存）的「当前指标值」是各 Pod 利用率的平均值，而利用率 = 实际用量 ÷ 该容器的 request。指标数据来自资源指标 API，一般由 Metrics Server 提供。
+
+手算两例（沿用前文 Deployment：3 副本，每个 Pod request 500m CPU，HPA 目标平均利用率 50%，即目标平均用量是 500 × 50% = 250m）：
+
+- 实测平均用量 400m：算式是 `ceil(3 × 400 ÷ 250)`，等于 `ceil(4.8)`，结果是 **5 副本**，扩容 2 个。
+- 实测平均用量 125m：算式是 `ceil(3 × 125 ÷ 250)`，等于 `ceil(1.5)`，结果是 **2 副本**，但不会立刻缩容，原因见下文的稳定窗口。
+
+还有两道刹车，算式算出的数不是直接执行的：
+
+- **容忍度**：当前值与目标值的比值在 1.0 上下 10% 以内（默认 0.1）时，HPA 什么都不做。比如比值是 1.05，算式明明算出要多 0.15 个副本，HPA 也会按兵不动，避免抖动。
+- **稳定窗口**：扩容稳定窗口默认 0 秒，即算出来要扩就马上扩；缩容稳定窗口默认 300 秒（5 分钟），即 HPA 取过去 5 分钟里算出的最高副本建议，只有连续 5 分钟都建议缩，才真正缩下去。上面第二例算出的 2 副本，要等 5 分钟持续低负载才会执行。默认的速率策略是：每 15 秒最多扩容 100% 或 4 个 Pod（取较大者），每 15 秒最多缩容 100%。
+- `autoscaling/v2` 是当前稳定版 API（自 Kubernetes 1.23 起稳定），`autoscaling/v1` 只支持 CPU 单指标，已不推荐。
+
+一个常见坑：**用内存利用率做 HPA 目标要格外小心。** CPU 用量随负载升降，副本数多了单 Pod 的 CPU 利用率会下来；但内存用量通常不会因为副本多了就降下去——加副本分摊的是请求，不是已占的内存。内存 HPA 一旦触发扩容，利用率可能纹丝不动，HPA 会一路扩到 `maxReplicas`。内存更适合做告警和容量规划，扩容目标优先选 CPU 或自定义指标（如队列深度、每秒请求数）。
+
+#### 5. QoS 三档与驱逐顺序的定量影响
+
+Kubernetes 不用你手动指定 QoS，它完全由 request 和 limits 的填法推导出来：
+
+| QoS 档 | 判定条件 | 节点内存压力下的驱逐顺序 |
+| --- | --- | --- |
+| Guaranteed | 每个容器的 CPU 与内存 request 都等于 limits | 最后驱逐 |
+| Burstable | 至少一个容器设了 request 或 limits，但不符合 Guaranteed | 中间驱逐 |
+| BestEffort | 所有容器都没设 request 和 limits | 最先驱逐 |
+
+kubelet 驱逐时的排序规则是：先按 QoS 档（BestEffort、Burstable、Guaranteed），同档内再按 Pod 优先级（低优先级先走），Burstable 同档内按「实际用量超出 request 的比例」从大到小排，公式是（实际内存用量 - 内存 request）÷ 内存 request。
+
+手算一例：节点内存告急，要在两个 Burstable Pod 里挑一个驱逐。
+
+- Pod A：内存 request 512Mi，实际用了 1536Mi，超出比例是（1536 - 512）÷ 512 = 2.0，即超出 200%
+- Pod B：内存 request 1024Mi，实际用了 1228.8Mi（1.2 Gi），超出比例是（1228.8 - 1024）÷ 1024 = 0.2，即超出 20%
+- 结果：**先驱逐 Pod A**，因为它超出自己预订量的幅度最大。
+
+三点定量推论，填 request 和 limits 时就要想清楚：
+
+- request 填得越小，（用量 - request）÷ request 的比值越大，节点压力一来你越先被驱逐。request 填小省调度、填大保命，这是同一笔账的两面。
+- Guaranteed 档的保护是有代价的：request 等于 limits 意味着你按峰值预订了全部资源，调度时最占地方；换来的好处是最后才被驱逐，且内核 OOM  killer 给它的 `oom_score_adj` 最低（Guaranteed 是 -997，BestEffort 是 1000，分越低越不容易被内核选中杀掉）。
+- 节点内存真正耗尽、kubelet 来不及驱逐时，动手的是内核 OOM killer，它按 `oom_score_adj` 加实际用量打分，不完全按 QoS 排——极端情况下一个用量巨大的 Guaranteed 容器也可能先于用量小的 Burstable 容器被杀。QoS 保的是 kubelet 驱逐顺序，不是内核杀人的顺序。
+- 附带一点：Guaranteed 档且 CPU 为整数核的 Pod，在静态 CPU 管理策略下可获得独占物理核、不走 CFS quota 节流，这是延迟敏感服务选 Guaranteed 的另一个理由。
+
+#### 6. 常见问题
+
+- **问：request 总和没超 Allocatable，Pod 还是 Pending？** 先看是不是撞了 `maxPods` 110 的上限或 CNI 的 IP 上限，再看节点是不是打了污点、Pod 的亲和性规则是不是太苛刻，最后看 DaemonSet 有没有先占掉一大块 request。
+- **问：HPA 配了目标 50%，利用率明明 80% 却不扩容？** 先确认 Metrics Server 装了没有（没有它就没有资源指标 API），再确认 Pod 的 request 填了没有（利用率的分母是 request，没填 request 就没有利用率可算），最后看是不是卡在容忍度或 `maxReplicas` 上。
+- **问：缩容后负载一回来又扩容，来回抖怎么办？** 先把缩容稳定窗口从默认 300 秒调大，再检查目标利用率是不是定得太低（目标 50% 意味着扩容后利用率要回到 50% 附近才稳住，目标定得越低、扩容后离触发线越近、越容易反复横跳）。
+- **问：节点内存压力告警响了，先动谁？** 先看驱逐顺序：BestEffort 的 Pod 是第一批牺牲品，确认它们是不是能丢；再看 Burstable 里超出 request 最多的那个；Guaranteed 的 Pod 最后动，动之前先扩节点或迁移，而不是调低它的 limits。
+
+#### 7. 生产实践
+
+- 给每个容器都填内存 request 和 limits，CPU 至少填 request；延迟敏感服务可以不填 CPU limit，让它用节点空闲 CPU，但内存 limit 一定要有。
+- request 按一周实测用量的 P95 附近定，不要按峰值定（峰值留给 limits），也不要按平均值定（平均值定 request 会让 HPA 基线失真、驱逐排序吃亏）。
+- HPA 的 `minReplicas` 至少留 2 个做高可用，`maxReplicas` 按节点容量反推：最大副本数 × 单 Pod request 不能超过集群 Allocatable 总和，否则扩容到一半会 Pending。
+- 定期跑 `kubectl describe node` 对一遍 Capacity 与 Allocatable 的差，差值突然变大说明有人改了 kubelet 预留或驱逐阈值，先查配置再查应用。
+
+> 来源：Kubernetes 官方文档「Reserve Compute Resources for System Daemons」「Horizontal Pod Autoscaling」「Pod Quality of Service Classes」「Node-pressure Eviction」；核验日期 2026-11-18；版本口径 Kubernetes 1.37（最新补丁 1.37.2，2026-10-27 发布；1.38 预计 2026-12-16 发布）。托管集群（EKS、GKE、AKS）的预留与 Pod 上限各有自己的默认值，数字以各云厂商文档为准。
 
 ### Deployment：完整可跑的 YAML，逐字段讲
 
@@ -345,6 +485,7 @@ kubectl rollout status deployment/web
 2. 节点 4 核 8 Gi，5 个 Pod 各 request 1 核 1 Gi，第 5 个 Pod 会发生什么？为什么？
 3. livenessProbe 和 readinessProbe 失败后分别会发生什么？把启动很慢的应用配上很短的 initialDelaySeconds 会有什么后果？
 4. Deployment 改了镜像后，为什么用户可能不会立刻看到新版本？滚动更新期间 Pod 数量是怎么变化的（replicas=3、maxSurge=1、maxUnavailable=1）？
+5. 节点 4 核 8 Gi，kubelet 预留 CPU 各 100m、内存各 100Mi，硬驱逐阈值是内存可用低于 100Mi；Pod 每个 request 0.5 核、512Mi 内存，limits 各 1 核、1 Gi。这个节点能装几个这样的 Pod？CPU 超卖几倍？如果节点内存告急，一个 request 512Mi 实际用了 1536Mi 的 Pod 和一个 request 1024Mi 实际用了 1228.8Mi 的 Pod，谁先被驱逐？
 
 ### 参考答案
 
@@ -352,6 +493,7 @@ kubectl rollout status deployment/web
 2. 第 5 个 Pod 会卡在 Pending，事件里出现 `Insufficient cpu`。前 4 个 Pod 已占 4 × 1 = 4 核，节点只剩 4 − 4 = 0 核，调度器只按 request 算账，CPU 不够就无法调度；内存还剩 8 − 4 = 4 Gi，但按最短板算也没用。
 3. liveness 失败会重启容器，readiness 失败只把 Pod 从 Service 的流量名单摘掉、不重启。启动慢的应用配上很短的 initialDelaySeconds 时，liveness 探针会在应用尚未启动完成时判定死亡，容器被反复重启、永远起不来。
 4. 因为 Deployment 默认做滚动更新，不是全量替换：先起新 Pod、确认就绪后再停旧 Pod，逐步替换。replicas=3、maxSurge=1、maxUnavailable=1 时，更新期 Pod 总数最多 3 + 1 = 4 个，最少可用 3 − 1 = 2 个，所以用户在一段时间内仍可能访问到旧版本 Pod，这是正常的，不是发布失败。
+5. Allocatable 是 CPU 4 - 0.1 - 0.1 = 3.8 核，内存 8192 - 100 - 100 - 100 = 7892 Mi。按 CPU 算 3.8 ÷ 0.5 = 7.6 取整 7 个，按内存算 7892 ÷ 512 = 15.4 取整 15 个，取最小值是 7 个，瓶颈是 CPU；7 个 Pod 的 limits 总计 7 核，相对 Capacity 超卖 7 ÷ 4 = 1.75 倍。两个 Pod 都是 Burstable，同档内按（用量 - request）÷ request 排序：前者（1536 - 512）÷ 512 = 2.0，后者（1228.8 - 1024）÷ 1024 = 0.2，所以 request 512Mi 用了 1536Mi 的那个先被驱逐。
 
 ## 小技巧与冷知识
 
@@ -361,6 +503,7 @@ kubectl rollout status deployment/web
 - `kubectl apply` 是声明式提交，可以反复执行同一份 YAML；`kubectl create` 是命令式创建，执行第二次会因为“已存在”而报错。
 - Kubernetes 的名字 Kubernetes 源自希腊语“舵手”，图标是一个七边形的船舵；缩写 K8s 是因为 K 和 s 之间正好有 8 个字母。
 - Service 的 ClusterIP 是虚拟 IP，节点上并没有真的监听这个 IP 的网卡，流量转发靠 kube-proxy 写 iptables 或 IPVS 规则实现。
+- 先算 Allocatable 再报资源不足：`kubectl describe node` 里 Capacity 与 Allocatable 的差就是 kubelet 预留加驱逐阈值，Pod Pending 时先对这笔账，再怀疑应用；只看 Capacity 会以为节点还有余量，实际调度器早就按 Allocatable 判满了。
 
 ## 关联知识
 
