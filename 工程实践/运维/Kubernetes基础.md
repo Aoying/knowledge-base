@@ -16,34 +16,6 @@
 
 # Kubernetes基础
 
-<!-- TOC -->
-- [基础知识](#基础知识)
-  - [Kubernetes 是什么](#kubernetes-是什么)
-  - [集群、节点、Pod：先认三层](#集群节点pod先认三层)
-  - [六个核心对象：一句话定位 + 一个小例子](#六个核心对象一句话定位--一个小例子)
-  - [kubectl：你和集群说话的遥控器](#kubectl你和集群说话的遥控器)
-- [原理剖析](#原理剖析)
-  - [控制平面：小区的物业管理处](#控制平面小区的物业管理处)
-  - [Pod 是怎么出生的：从提交 YAML 到容器跑起来](#pod-是怎么出生的从提交-yaml-到容器跑起来)
-  - [资源调度算一笔账：request 和 limits](#资源调度算一笔账request-和-limits)
-- [进阶知识](#进阶知识)
-  - [Deployment：完整可跑的 YAML，逐字段讲](#deployment完整可跑的-yaml逐字段讲)
-  - [Service：完整可跑的 YAML，逐字段讲](#service完整可跑的-yaml逐字段讲)
-  - [ConfigMap 与 Secret：配置和密码分开放](#configmap-与-secret配置和密码分开放)
-  - [Ingress：集群的大门](#ingress集群的大门)
-- [疑难杂症](#疑难杂症)
-  - [Pod 一直 Pending：先看事件，再看资源](#pod-一直-pending先看事件再看资源)
-  - [CrashLoopBackOff：容器起来就死，起来就死](#crashloopbackoff容器起来就死起来就死)
-  - [探针配错的后果：liveness 和 readiness 不是一回事](#探针配错的后果liveness-和-readiness-不是一回事)
-  - [滚动升级卡住：先看 rollout，再看新 Pod](#滚动升级卡住先看-rollout再看新-pod)
-- [实战案例](#实战案例)
-  - [案例：从零发布一个 Web 服务并完成一次升级](#案例从零发布一个-web-服务并完成一次升级)
-- [面试与自测](#面试与自测)
-  - [参考答案](#参考答案)
-- [小技巧与冷知识](#小技巧与冷知识)
-- [关联知识](#关联知识)
-<!-- /TOC -->
-
 ## 基础知识
 
 ### Kubernetes 是什么

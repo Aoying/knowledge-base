@@ -14,14 +14,6 @@
 
 # 开发工作流 Skills
 
-<!-- TOC -->
-- [1. agent-skills（cyberfly）个人 Agent 技能集](#1-agent-skillscyberfly个人-agent-技能集)
-- [2. superpowers（obra/superpowers）TDD 驱动的 Agent 开发方法论](#2-superpowersobrasuperpowerstdd-驱动的-agent-开发方法论)
-- [3. agent-skills（vercel-labs/agent-skills）Vercel 官方前端工程 skills](#3-agent-skillsvercel-labsagent-skillsvercel-官方前端工程-skills)
-- [4. grill-me（mattpocock/skills）开工前拷问计划](#4-grill-memattpocockskills开工前拷问计划)
-- [5. ECC（Everything Claude Code）Agent 全家桶](#5-ecceverything-claude-codeagent-全家桶)
-<!-- /TOC -->
-
 > Git、会话管理、代码检查、开发方法论类实用 skill。只收集分析，不安装不执行。
 
 ## 1. agent-skills（cyberfly）个人 Agent 技能集

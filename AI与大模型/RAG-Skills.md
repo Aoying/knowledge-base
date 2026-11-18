@@ -16,16 +16,6 @@
 
 # RAG Skills
 
-<!-- TOC -->
-- [1. rag-skills（Goodnight77）模块化 RAG 技能集](#1-rag-skillsgoodnight77模块化-rag-技能集)
-- [2. agentic-rag（ch040602）Agentic RAG 脚手架](#2-agentic-ragch040602agentic-rag-脚手架)
-- [3. rag-eval-workflow（w93139）RAG 评测技能](#3-rag-eval-workfloww93139rag-评测技能)
-- [4. anthropics/skills（官方 Agent Skills 仓库）](#4-anthropicsskills官方-agent-skills-仓库)
-- [RAG 评测指标（工程方法，非 skill）](#rag-评测指标工程方法非-skill)
-- [混合检索（BM25 + 向量）工程要点](#混合检索bm25--向量工程要点)
-- [切片（chunking）策略详解](#切片chunking策略详解)
-<!-- /TOC -->
-
 > RAG 检索、评测与工程实践。只收集分析，不安装不执行；引入前自行检查脚本内容。
 
 ## 1. rag-skills（Goodnight77）模块化 RAG 技能集

@@ -16,16 +16,6 @@
 
 # Agent 开发 Skills
 
-<!-- TOC -->
-- [1. langgraph-agent-stack（Brescou）LangGraph 多智能体模式](#1-langgraph-agent-stackbrescoulanggraph-多智能体模式)
-- [2. awesome-agent-skills（johnsonbuilds）精选技能目录](#2-awesome-agent-skillsjohnsonbuilds精选技能目录)
-- [3. awesome-agent-factories（portpowered）Agent 框架索引](#3-awesome-agent-factoriesportpoweredagent-框架索引)
-- [4. agent-skills（addyosmani）生产级工程 Skills](#4-agent-skillsaddyosmani生产级工程-skills)
-- [5. claude-mem（跨会话持久记忆）](#5-claude-mem跨会话持久记忆)
-- [6. andrej-karpathy-skills（Karpathy 的 LLM 编程坑位总结）](#6-andrej-karpathy-skillskarpathy-的-llm-编程坑位总结)
-- [7. ponytail（高效编码习惯 skill）](#7-ponytail高效编码习惯-skill)
-<!-- /TOC -->
-
 > LangGraph、多智能体模式与技能目录。只收集分析，不安装不执行。
 
 ## 1. langgraph-agent-stack（Brescou）LangGraph 多智能体模式
