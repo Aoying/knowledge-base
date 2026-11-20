@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-18
+更新日期: 2026-11-20
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -24,7 +24,7 @@
 - [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）
 - [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）、davila7/claude-code-templates（Claude Code 组件目录，926 个 SKILL.md）、garrytan/gstack（Garry Tan 的 Claude Code 虚拟工程团队，77 个 SKILL.md）、SuperClaude-Org/SuperClaude_Framework（SuperClaude 配置框架，30 个斜杠命令 + 9 个 SKILL.md）、openai/skills（OpenAI 官方 Codex Skills 目录，44 个 SKILL.md）、gamedev-skills/awesome-gamedev-agent-skills（游戏开发 Agent Skills，78 个 SKILL.md，含 16 个 Godot 专项）、anthropics/claude-plugins-official（Anthropic 官方 Claude Code 插件目录，40 个 SKILL.md）、supabase/agent-skills（Supabase 官方 Agent Skills：Supabase 开发 + Postgres 最佳实践）、huggingface/skills（Hugging Face 官方 Agent Skills：HF 生态 26 个 SKILL.md，含本地 GGUF 模型与 TRL 微调）、plugin87/ux-ui-agent-skills（设计系统 + WCAG 无障碍审计 Skills：DTCG 设计令牌与 Figma 同步）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）
-- [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）
+- [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）、[janestreet/agent_skills](https://github.com/janestreet/agent_skills)（苏格拉底式家教 skill：诊断定级 + 间隔复习）
 
 ## 已收录
 
@@ -455,3 +455,12 @@
 - **安装方法**：整套安装用 `npx ux-ui-agent-skills@3.1.1 init`（或作 Claude Code 插件装）；只取单个 skill 用 `npx skills add plugin87/ux-ui-agent-skills --skill design-tokens` 等。注意：只拷单个 SKILL.md 时是 guidance-only 模式——门禁脚本（contrast.py / validate_tokens.py / gate.mjs）不跑、不出实测结论，SKILL.md 自己会先声明这一点。
 - **依赖**：跑门禁需本地 Python 3 与 Node；Figma 同步需 Figma MCP Server 已连接（未连时只做令牌 JSON 层面的映射说明，不碰 Figma）。
 - **安全注意**：只收集不安装。已通读 `design-tokens`、`a11y-audit`、`figma-integration` 三个主 skill 的 SKILL.md 全文（2026-11-18 核验）：内容为本地令牌 JSON 生成、WCAG 检查清单与 Figma 变量映射，无恶意代码、无敏感信息读取、无网络上传、无危险命令；“token”一词指设计令牌（DTCG），不是 API token。两点使用时注意：① `a11y-audit` 会跑本地脚本量对比度（`gate.mjs measure_render.mjs`、`contrast.py`），只读本地 HTML 文件、不上传截图与源码；② `figma-integration` 在 Figma MCP 已连接时才读 Figma 帧/变量/截图进代码，取用前确认 MCP 连接是你本人配的，不要把 Figma token 交给未确认的 MCP 端点。
+
+### 48. agent_skills（janestreet/agent_skills）苏格拉底式家教 Skill：诊断定级 + 技能地图 + 间隔复习
+
+- **功能**：目前仅 1 个 skill（`socratic-tutor`，SKILL.md 约 5KB）：用户明确要求被教学、测验或刷题到掌握时才启动；先诊断定级（每子技能 0–5 级：0 不知道、1 听说过、2 能跟上、3 需帮助能做、4 能独立做、5 能教人/处理边界），再一问一答苏格拉底式教学（一次只问一题，答错不直接给答案、改问更窄的问题；答对偶尔唱反调施压），定期无预警复习旧技能、答错降级，结课做覆盖全部子技能的终测；带 `save state` / `resume from` 续课机制。
+- **适用场景**：ao 转型学习期的刻意练习——把一个知识点（如 LangGraph、RAG、JVM）拆成 4–10 个子技能逐项刷到能独立做/能讲出来；与小说引擎无关，纯学习方法。
+- **来源**：https://github.com/janestreet/agent_skills
+- **热度/更新**：10,365 stars、715 forks（2026-11-20 GitHub API 核验），MIT，2026-11-03 创建，最近推送 2026-11-17，单 skill、tree 未变（截至 2026-11-17 仍只有 socratic-tutor 一个 skill）。
+- **许可证**：MIT。
+- **安全注意**：只收集不安装。已通读 `socratic-tutor/SKILL.md` 全文（2026-11-20 核验）：纯教学文本，无网络请求、无 shell 命令、无敏感信息读取、无凭证索取、无文件写入指令；全文唯一命中词是 `Evaluation rules` 标题中的 eval，非代码执行。使用时注意：该 skill 只在用户明确说“教我/考我/带我练到掌握”时启动，一次性问题（“解释 X”）不应进教学循环，SKILL.md 自己有这条防误启动的 guard。
