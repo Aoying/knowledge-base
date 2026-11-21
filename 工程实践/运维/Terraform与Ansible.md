@@ -2,7 +2,7 @@
 知识点: Terraform与Ansible
 层级: 进阶
 适用版本: Terraform 1.x（当前稳定 1.17.2，2026-11-11 发布） / Ansible Core 2.x（当前稳定 2.22.0）
-更新日期: 2026-11-16
+更新日期: 2026-11-21
 关联:
   - Kubernetes基础
   - Linux性能分析
@@ -349,6 +349,84 @@ web-01 : ok=3 changed=3 unreachable=0 failed=0
 
 典型流水线分四步走：第一，Terraform `apply` 建好云主机，输出公网 IP；第二，把输出的 IP 写进 `inventory.ini`，可以手写，也可以让 Terraform 的 `local_file` 资源自动生成；第三，Ansible 拿着新 inventory 跑 Playbook，装软件、写配置、启服务；第四，下次扩容时 Terraform 把主机数从 1 改成 3，inventory 跟着变 3 行，Ansible 再跑一遍，3 台就都配好了。生活类比：Terraform 是“盖楼的”，盖好把钥匙和门牌号交出来；Ansible 是“装修队”，拿着门牌号一家一家去装修。盖楼的不管装修，装修的不管盖楼，交接的东西就是一张门牌号清单。
 
+## 规模与耗时定量
+
+前面几节讲了“怎么用”，这一节算一算“大了以后要花多少时间”。Terraform 的耗时跟着资源数走，Ansible 的耗时跟着主机数和批数走；两边的默认值都很保守，调之前先算清瓶颈在哪一头。
+
+### 原理拆解
+
+#### Terraform：plan 先刷新全部资源，再算差值
+
+每次 `terraform plan` 都做两件事。第一，刷新：对 state 里的每个资源，至少调一次云厂商 API 去读它现在的真实状态，不管这次改没改它。第二，比对：把刷新后的状态和配置比对，算出差值。官方文档的说法是，每个资源的刷新、创建、更新或删除都是一次独立操作（来源见文末）。所以 plan 的耗时下限由资源数决定：资源翻一倍，刷新要调的 API 调用数至少翻一倍。
+
+state 本身是一个 JSON 文件，随资源数线性变大：每多一个资源，state 里就多一条记录（云厂商 ID、属性、依赖关系）。state 越大，每次运行要加载、解析、回写的数据就越多；远端后端还要多一次上传下载。state 体积本身很少成为第一瓶颈，真正贵的是刷新阶段的 API 调用次数。
+
+#### Terraform：并行度是“同时走几条路”的上限
+
+Terraform 先把配置建成一张依赖图（有向无环图），再沿着图走：依赖满足的节点才能执行。`-parallelism` 控制的就是同时能执行几个互不依赖的操作，默认值是 10（HashiCorp 官方文档，`terraform plan`、`terraform apply`、`terraform destroy` 三者相同）。调大它只能让“已经能并行的部分”跑得更快，不能凭空造出并行度；调小它常用来治云厂商 API 限流。企业版（HCP Terraform）里同名变量的取值范围是 1 到 256，默认值同样是 10。
+
+#### Ansible：耗时等于“批数 × 单批耗时”
+
+Ansible 默认用 linear 策略：一个任务要在全部主机上跑完，才开始下一个任务；同一任务内，主机按 forks 数分批跑。`forks` 的默认值是 5（Ansible 官方文档 `DEFAULT_FORKS`），即同时最多对 5 台主机执行。主机数除以 forks，向上取整，就是批数；总耗时约等于批数乘以单台任务耗时。每个 fork 是控制节点上的一个独立进程，要占一份内存，社区经验值约为每 fork 50 MB（经验值，未实测，见文末来源）。
+
+### 数字算一算
+
+#### 手算 1：100 个和 1000 个资源时，state 体积与 plan 耗时
+
+先取一个已公开的社区实测锚点（dev.to 社区文章，非官方基准）：1600 个资源的 state，plan 约 8 分钟以上；2900 个资源的 state，plan 约 20 到 25 分钟。由此折算单资源刷新成本：480 秒 ÷ 1600 约 0.3 秒；1200 到 1500 秒 ÷ 2900 约 0.41 到 0.52 秒。取 0.3 到 0.5 秒每个资源作为估算口径（不同云厂商、不同资源类型差异很大，只能用于量级估算）。
+
+- 100 个资源：刷新调用至少 100 次；按 0.3 到 0.5 秒每个资源估算，刷新阶段约 100 × 0.3 = 30 秒到 100 × 0.5 = 50 秒。
+- 1000 个资源：约 1000 × 0.3 = 300 秒（5 分钟）到 1000 × 0.5 = 500 秒（约 8.3 分钟）。
+
+state 体积按假设口径估算（待验证，未实测）：简单资源每条记录约 1 KB JSON，复杂资源（带策略、带嵌套属性）约 3 KB。100 个资源约 100 KB 到 300 KB；1000 个资源约 1 MB 到 3 MB。建议用 `ls -lh terraform.tfstate` 在自己的项目上实测一次，再回填真实数字。
+
+#### 手算 2：Ansible 对 50 台和 500 台主机跑同一任务，fork=5 与 fork=50 对比
+
+假设条件（手算假设，未实测）：单个任务在每台主机上耗时约 30 秒，其中 SSH 握手约 1 秒（握手耗时沿用原文口径），其余为任务本身执行时间；linear 策略；各台耗时相同。
+
+- 50 台主机，fork=5：50 ÷ 5 = 10 批，10 × 30 秒 = 300 秒，即 5 分钟。
+- 50 台主机，fork=50：50 ÷ 50 = 1 批，1 × 30 秒 = 30 秒，比 fork=5 省 4.5 分钟。
+- 500 台主机，fork=5：500 ÷ 5 = 100 批，100 × 30 秒 = 3000 秒，即 50 分钟。
+- 500 台主机，fork=50：500 ÷ 50 = 10 批，10 × 30 秒 = 300 秒，即 5 分钟，比 fork=5 省 45 分钟。
+
+代价也要算进去：按每 fork 约 50 MB 内存的社区经验值，fork=50 时控制节点约需 50 × 50 MB = 2500 MB（约 2.5 GB）；若把 fork 拉到 500 想一批跑完 500 台，则约需 500 × 50 MB = 25000 MB（约 25 GB），控制节点大概率先扛不住。fork 不是越大越好，瓶颈会从“排队等批”转移到“控制节点内存与网络”。
+
+#### 手算 3：Terraform 图遍历的并行度上限与依赖链瓶颈
+
+假设每个资源操作耗时为 t（同一量级，仅用于比较结构）。
+
+- 500 个相互独立的资源，并行度 10：需要 500 ÷ 10 = 50 轮，总耗时约 50t；并行度提到 50：500 ÷ 50 = 10 轮，总耗时约 10t。独立资源越多，并行度越值钱。
+- 反例：500 个资源排成一条依赖链（例如 VPC → 子网 → 路由表 → NAT 网关 → 弹性 IP 的加长版）：每一步都必须等上一步完成，总耗时是 500t，并行度设 10 还是 100 都一样，一步都省不掉。
+- 结论公式：总耗时下限 = 关键路径长度 × 单步耗时。并行度只决定“同时能走几条”，不决定“最长的那条链有多长”。一条 5 步的链，每步耗时 t，再怎么调并行度也至少要 5t。
+
+### 边界条件
+
+- 并行度只在“同一时刻有足够多互不依赖的操作”时才生效；依赖链越长，并行度的收益越小，链长是硬上限。
+- Ansible 里真正生效的并行数取 forks 与 `serial` 两者中较小的一个：`serial` 设了 5，就算 forks 设成 50，每批也只跑 5 台。
+- forks 超过主机数没有意义：50 台主机配 forks=500，实际只会起 50 个 fork，多余的 450 个不会被创建。
+- 云厂商 API 限流是另一道上限：并行度调得太高，刷新阶段的大量并发调用会触发限流，Terraform 重试后反而更慢；这时正确做法是调低并行度，而不是调高。
+- state 拆分是 plan 变慢后的结构解法：一个 state 管几百个资源时，每次 plan 都要刷新全部资源；按业务边界拆成多个小 state，每个 plan 只刷新自己那一份。
+
+### 反例与易错点
+
+- 误区 1：“plan 慢就把 `-parallelism` 拉到 100”。如果慢在一条很长的依赖链上，拉并行度毫无作用；如果慢在刷新阶段，先确认是不是某个 provider 的 API 本身就慢，再考虑并行度与限流的平衡。
+- 误区 2：“只改了一个资源，plan 应该很快”。默认情况下 plan 会刷新 state 里的全部资源，改 1 个和改 100 个，刷新阶段的调用数是一样的；想跳过刷新，要用 `-refresh=false`（见文末小技巧），且只在确认 state 是最新的时候用。
+- 误区 3：“Ansible 管 500 台，forks 直接设 500”。控制节点内存、SSH 连接数、跳板机与防火墙的并发上限都会先到瓶颈；正确做法是逐步上调，同时盯着控制节点的内存与连接数。
+- 误区 4：“state 才几 MB，没什么好担心的”。state 体积本身不是瓶颈，瓶颈是它背后的资源数：几 MB 的 state 可能对应上千个资源，每次 plan 都要为这上千个资源各调一次 API。
+
+### 来源（核验于 2026-11-21）
+
+- HashiCorp 官方文档 `terraform apply` 命令：`-parallelism=n` 默认值 10。https://developer.hashicorp.com/terraform/cli/commands/apply
+- HashiCorp 官方文档工作区最佳实践：默认最多 10 个操作并行；每次 apply 都会刷新 state 里的每个资源并与远端对象比对，每个资源的刷新、创建、更新或删除都是一次独立操作。https://developer.hashicorp.com/terraform/enterprise/workspaces/best-practices
+- HashiCorp 官方文档工作区变量：`TFE_PARALLELISM` 取值范围 1 到 256，默认值 10。https://developer.hashicorp.com/terraform/enterprise/v202405-1/workspaces/variables
+- Ansible 官方文档配置项：`DEFAULT_FORKS`，默认值 5。https://docs.ansible.com/projects/ansible/8/reference_appendices/config.html
+- Ansible 官方文档执行策略：默认 linear 策略、5 个 fork；可用 `forks = 30` 或 `ansible-playbook -f 30` 调整。https://docs.ansible.com/projects/ansible/8/playbook_guide/playbooks_strategies.html
+- Ansible 官方文档术语表：forks 默认值是保守的 5，有足够内存时可设到 50。https://docs.ansible.com/projects/ansible-core/devel/reference_appendices/glossary.html
+- 社区实测报告（非官方基准，仅作量级锚点）：1600 个资源的 state，plan 约 8 分钟以上；2900 个资源的 state，plan 约 20 到 25 分钟；每次 plan 都会刷新全部资源。https://dev.to/karlschriek/the-problem-with-large-terraform-states-a2o
+- 社区文章：并行度是并发操作数的上限，依赖链再高并行度也只能串行；可用 `-refresh=false` 跳过刷新。https://copilot.sourcethread.com/interview/terraform/article_07_performance_debugging
+- 社区文章：每 fork 约 50 MB 内存的经验值，50 个 fork 约 2.5 GB。https://www.ansiblepilot.com/articles/ansible-performance-tuning-speed-up-playbooks-complete-guide
+- 社区文章：forks 设得比主机数大没有意义，只会按主机数起 fork。https://opensource.com/article/19/3/ansible-performance
+
 ## 面试与自测
 
 1. Terraform 和 Ansible 的分工是什么？什么场景下必须两个一起用，什么场景下只用一个就够了？
@@ -356,12 +434,16 @@ web-01 : ok=3 changed=3 unreachable=0 failed=0
 3. Ansible 的幂等性是什么意思？请举一个幂等的写法和一个不幂等的写法，并说清第二次跑 Playbook 时 changed 应该是多少。
 4. 有人说“用 Ansible 建云主机、用 Terraform 装 Nginx”，错在哪里？如果只能二选一，建 10 台云主机并装好 Nginx，正确的分工应该怎么排？
 
+5. 一个 Terraform 配置管 500 个资源，`terraform plan` 要跑 8 分钟；有人建议把 `-parallelism` 从 10 调到 100，另一个人建议把 state 拆成 5 个、每个管 100 个资源。哪种做法更可能见效？什么情况下调并行度完全没用？
+
 ### 参考答案
 
 1. Terraform 管基础设施（建资源），Ansible 管配置管理（配机器）。新环境从 0 到 1、又要建机器又要装软件时两个一起用；只改机器里的配置、不动资源时只用 Ansible；只建一批空机器、不装软件时只用 Terraform。
 2. state 是 Terraform 的账本，记着每个资源的云厂商 ID、属性和依赖关系。丢了会让 Terraform 以为“什么都没建过”，下次 apply 会重复建一套，旧资源变孤儿、继续计费。团队共用要注意两件事：放远端后端、不要只放本地；改的时候加锁，防止两个人同时改把账本写乱。
 3. 幂等是同一个 Playbook 跑 1 次和跑 10 次，最终状态一样。幂等写法是用 `apt` 模块装 Nginx，装过就跳过；不幂等写法是用 `shell` 跑 `echo xxx >> file`，跑几次就追加几行。第二次跑同一份 Playbook，理想情况是 changed 为 0，全部是 ok。
 4. 错在越界：Ansible 没有状态文件，记不住“已经建过几台”，建云资源容易重复建；Terraform 是声明式建资源的工具，拿它装软件包又慢又容易误伤已有资源。正确分工是 Terraform 先建 10 台云主机并输出 IP，inventory 交给 Ansible，再由 Ansible 在 10 台上装 Nginx、写配置、启服务。
+
+5. 拆 state 更可能见效：plan 的耗时大头是刷新阶段，每个资源至少调一次 API，500 个资源就要至少 500 次调用；拆成 5 个 state 后，每次 plan 只刷新自己那 100 个资源，调用数降到原来的五分之一。调并行度只在“同一时刻有足够多互不依赖的操作”时才有效；如果这 500 个资源排成很长的依赖链（例如 VPC → 子网 → 路由表 → NAT 网关 → 弹性 IP 的加长版），每一步都必须等上一步完成，并行度设 100 和设 10 耗时一样；如果瓶颈在云厂商 API 限流，调高并行度反而会触发更多限流重试、变得更慢，这时反而要调低并行度。
 
 ## 小技巧与冷知识
 
@@ -371,6 +453,8 @@ web-01 : ok=3 changed=3 unreachable=0 failed=0
 - inventory 是交接单：Terraform 输出的 IP 直接写进 inventory，两个工具的交接就只有这一张清单，清单一错，后面全错。
 - `become: true` 别滥用：只有装包、写系统文件这种真要 root 的任务才提权，普通读文件没必要提权，权限越小越安全。
 - 小版本也要锁：Terraform 锁 provider 的大版本、Ansible 锁核心版本，升级前先在小环境跑一遍，别直接在生产环境升版本。
+
+- CI 里 plan 太慢时，先确认瓶颈再调参数：state 可信且刚刷新过的情况下，可用 `terraform plan -refresh=false` 跳过刷新阶段，只算差值；但 state 不是最新时 plan 可能基于过期状态做决策，生产环境慎用，改完要记得恢复默认行为。
 
 ## 关联知识
 
