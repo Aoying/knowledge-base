@@ -2,7 +2,7 @@
 知识点: OpenTelemetry
 层级: 进阶
 适用版本: OpenTelemetry Collector 0.165.x / Java instrumentation 2.32.x
-更新日期: 2026-11-16
+更新日期: 2026-11-21
 关联:
   - 监控告警
   - Prometheus与Grafana
@@ -226,6 +226,124 @@ OTel 和 Prometheus 不是二选一，是分工合作：
 - **链路归 OTel**：单次请求经过了哪些服务、哪一步慢、哪一步报错，这些“看个案、做定位”的数据由 OTel 的 Trace 负责，存在 Jaeger 或 Tempo 里。
 - **两者衔接**：OTel Collector 可以把 Metric 通过 Prometheus Exporter 或 Remote Write 送进 Prometheus；反过来，Grafana 里可以从一张 Prometheus 告警图一键跳到同一时间段的 Trace 做下钻。正确姿势是“Prometheus 看面、OTel 看点”，面有点结合才定位得快。
 
+## 采样与成本定量
+
+「进阶知识」一节已经算过一笔账：10,000 spans/s、每条 Span 1 KiB、1% 采样，每天从约 824 GiB 压到约 8.24 GiB。本节把那笔账往深里算三步：先认清 SDK 自带的最常用的五种采样器该怎么选，再算单条 Span 的体积到底由什么决定，最后算 Collector 里攒批与尾采缓冲的内存代价。采样率本身不是目的，目的是用最少的钱留住最值得查的 Trace。
+
+### 原理拆解
+
+#### 最常用的五种内置采样器：各管什么
+
+OpenTelemetry 规范定义了多组内置采样器，最常用的是下面五种（新版规范另有 `ProbabilitySampler`——按 W3C Trace Context Level 2 的 56 位随机性做一致性概率采样，是 `TraceIdRatioBased` 的推荐替代品——以及 `AlwaysRecord`、`CompositeSampler`，本节不展开）：
+
+| 采样器 | 决定逻辑 | 环境变量取值 | 适用场景 |
+| --- | --- | --- | --- |
+| `AlwaysOn` | 全部保留 | `always_on` | 开发联调、故障复现，需要完整链路时 |
+| `AlwaysOff` | 全部丢弃 | `always_off` | 只想保留埋点、不想出任何 Trace 时 |
+| `TraceIdRatioBased` | 对 TraceID 做确定性哈希，按比例保留 | `traceidratio` | 生产环境按固定比例采样 |
+| `ParentBased` | 有父 Span 跟随父级决定，无父 Span 用根采样器决定 | `parentbased_always_on`、`parentbased_always_off`、`parentbased_traceidratio` | 分布式系统，保证整条链路要么全留、要么全丢 |
+| `JaegerRemote` | 从远端（Jaeger）拉取采样策略，定时轮询更新 | `jaeger_remote`、`parentbased_jaeger_remote` | 需要在不重启服务的情况下集中调采样率时 |
+
+默认行为要记牢：**规范默认采样器是 `ParentBased(root=AlwaysOn)`，即不配置时 100% 采样**。原文实战案例里用环境变量配成 `parentbased_traceidratio` 加 `0.01`，就是把这个默认的 100% 改成 1%。
+
+`TraceIdRatioBased` 有两个关键性质。第一，决定只依赖 TraceID：同一条 Trace 在各个服务上独立算出相同结论，不用服务之间互相商量，这是链路不断链的数学基础。第二，它的哈希算法在规范里尚未最终定死，不同语言 SDK、甚至同一 SDK 的不同版本，对同一条 Trace 可能算出不一致的结果；所以规范建议只把它当作 `ParentBased` 的根采样器用，不要裸用。
+
+`ParentBased` 区分五种父级状态：无父级（根 Span）、远端父级已采样、远端父级未采样、本地父级已采样、本地父级未采样。跟随父级决定的部分靠 `traceparent` 请求头里的 flags 位（`01` 表示已采样、`00` 表示未采样）传递，「原理剖析」一节已讲过这个头的格式。
+
+#### 头采样与尾采样：取舍不在“哪个好”，在“什么时候决定”
+
+「进阶知识」一节只讲了两者定义，这里补一张对照表，重点看各自省了什么、付了什么：
+
+| 维度 | 头采样 | 尾采样 |
+| --- | --- | --- |
+| 决定时点 | 根 Span 启动时，请求还没跑 | 整条 Trace 收齐后，在 Collector 里决定 |
+| 决定时能看到什么 | 只有 TraceID 和根 Span 属性 | 全部 Span、状态码、端到端耗时、全部属性 |
+| 状态 | 无状态，每个服务独立决定 | 有状态，Collector 要把在途 Trace 全攒在内存里 |
+| 省掉的成本 | 应用侧出口成本也省：没采样的 Span 根本不产生、不序列化、不发送 | 只省后端存储成本；应用侧全量产生、发送的成本一分不少 |
+| 盲区 | 看不到结果：报错和慢请求与健康请求被同等概率丢掉 | 看得到结果：错误、慢请求可以 100% 保留 |
+| 典型故障 | 稀有报错正好落在没采样的 99% 里，事后查不到 | 内存撑爆、迟到的 Span 赶不上决定、同一条 Trace 的 Span 落到不同 Collector 实例上 |
+
+生产环境的通行做法是两者叠加：入口先用头采样把明显过量的流量削掉，再在 Gateway 层用尾采样规则兜底——错误 Trace 100% 保留、慢 Trace 100% 保留、其余按低比例保留基线。原文「进阶知识」一节末尾的生产建议就是这个思路。
+
+尾采样在 Collector 里由 `tail_sampling` 处理器实现，关键参数都有默认值（以 contrib v0.148.0 的 README 为准）：`decision_wait` 默认 30 秒，指从收到一条 Trace 的第一个 Span 起、等多久就强制做决定；`num_traces` 默认 50000，指内存里最多同时攒多少条 Trace；`expected_new_traces_per_sec` 默认 0，用于预分配内部结构；`policies` 没有默认值，必须配。策略之间是“或”关系：任意一条策略说保留，这条 Trace 就保留。常见写法是三条策略叠加：状态码为 `ERROR` 的保留、耗时超过阈值（例如 2000 毫秒）的保留、其余按 5% 或 10% 的概率保留基线。
+
+#### 单条 Span 的体积量级：500 B 到 2 KiB 是常态
+
+一条 Span 在 OTLP 协议里的体积通常在 500 B 到 2 KiB 之间，具体取决于挂了多少属性；一条 50 个 Span 的 Trace 就是 25 KB 到 100 KB。落盘后因为压缩，体积还会再缩：压缩后每条 Span 通常在 300 B 到 600 B 之间，一条 1 KiB 的 Span 压缩后约 250 B，OTLP 的压缩比约 4 比 1。也就是说，体积由两样东西决定：Span 数量（调用链有多深）和每条 Span 的属性多少。「疑难杂症」一节的「属性爆炸」讲过，往 Span 上挂请求体全文、完整 SQL 文本这类大字段，会让单条 Span 的体积直接翻几倍；Agent 场景更极端，带提示词与模型输出的 Span 常见 20 KB 到 30 KB 一条。
+
+### 手算示例
+
+下面三组手算用同一个新场景：**每秒 5,000 条 Span，平均每条 Trace 由 20 个 Span 组成**（即每秒 250 条 Trace）。场景与原文「进阶知识」一节的 10,000 spans/s 不同，避免重复。
+
+#### 手算 1：日均 Span 量 × 单 Span 体积 → 日增量
+
+- 日 Span 量：5,000 × 86,400 秒 = 432,000,000 条。
+- 按 OTLP 线上体积 500 B/条：432,000,000 × 500 B = 216 GB，约 201 GiB。
+- 按属性多的 2 KiB/条：432,000,000 × 2,048 B = 884.7 GB，约 824 GiB。
+- 按压缩后落盘 420 B/条（取 300–600 B 区间中值）：432,000,000 × 420 B = 181.4 GB，约 169 GiB。
+
+结论：单条 Span 体积差 4 倍，日增量就差 4 倍。**控体积与降采样率是同一笔账的两边**：把 SQL 全文换成模板、删掉大字段，效果相当于把采样率直接砍到四分之一。
+
+#### 手算 2：采样率从 100% 降到 1%，30 天保留的成本变化
+
+沿用原文的单价 0.023 美元/GiB/月，但改按 30 天稳态保留口径算（原文按当月增量口径，两个口径结论方向一致）：
+
+- 100% 采样：每天落盘约 169 GiB，30 天稳态保留 169 × 30 = 5,069 GiB，约 4.95 TiB；月费 5,069 × 0.023 ≈ 116.60 美元。
+- 1% 采样：每天落盘约 1.69 GiB，30 天稳态保留约 50.7 GiB；月费 50.7 × 0.023 ≈ 1.17 美元。
+- 省下的钱：116.60 - 1.17 ≈ 115.43 美元/月，降幅 99%。
+
+如果改用混合尾采（错误 100% 保留、慢请求 100% 保留、其余 1% 基线），先算有效保留率。假设错误率 0.5%、慢请求占 1%、两者不重叠：
+
+- 有效保留率 = 0.5% + 1% + 1% × (1 - 0.5% - 1%) = 2.485%。
+- 每天保留 432,000,000 × 2.485% = 10,735,200 条 Span，每天落盘约 4.2 GiB，30 天稳态保留约 126 GiB，月费约 2.90 美元。
+- 只比纯 1% 头采样多花约 1.73 美元/月，换来的却是错误与慢请求一条不落。**这就是尾采的性价比：多花 2.5 倍的存储，买断了“查不到报错 Trace”的风险。**
+
+#### 手算 3：Collector 攒批与尾采缓冲的内存/延迟权衡
+
+先算 `batch` 处理器。默认值（以 Collector v0.120.0 的 README 为准）：`send_batch_size` 默认 8192，`timeout` 默认 200 毫秒，`send_batch_max_size` 默认 0（即不设上限）。注意 `send_batch_size` 是触发发送的条数，不是每批的上限；要硬上限需另配 `send_batch_max_size`。按每秒 5,000 条 Span、每条 500 B 算：
+
+- 默认配置：200 毫秒超时先触发，每批约 5,000 × 0.2 = 1,000 条 Span，约 0.5 MB（仅 Span 原始体积口径，不含 Go 对象开销），每秒发约 5 次，导出延迟最高 200 毫秒。
+- 把 `send_batch_size` 保持 8192、`timeout` 放到 5 秒：8192 条约 1.64 秒攒满，每批约 4.1 MB，每秒约发 0.61 次，请求数降到约八分之一，但导出延迟最高 1.64 秒，内存占用涨到约 8 倍。
+- 把 `send_batch_size` 改成 1024（「疑难杂症」一节建议的起点）：约 0.205 秒攒满，每批约 0.51 MB，每秒约发 5 次，与默认配置接近。
+
+结论：批越大，请求越少、压缩越好，但内存占用与导出延迟跟着涨；批越小，延迟越低，但请求越碎。低流量服务上超时先触发、高流量服务上条数先触发，调参之前先看清是哪一个在起作用。
+
+再算尾采缓冲。估算公式是 `num_traces` 约等于每秒新增 Trace 数 × `decision_wait` × 1.2，内存约等于平均每条 Trace 的体积 × `num_traces`：
+
+- 本节场景：每秒 250 条 Trace，`decision_wait` 设 10 秒，平均每条 Trace 20 个 Span × 500 B = 10 KB。缓冲 Trace 数约 250 × 10 × 1.2 = 3,000 条，内存约 3,000 × 10 KB ≈ 30 MB。
+- 对照一个已公开的估算例：每秒 10,000 条 Trace、等 15 秒、每条 Trace 10 KB，缓冲约 180,000 条 Trace、内存约 1.8 GB。
+
+结论：尾采的内存账是线性的，流量翻 40 倍、等待时间翻 1.5 倍，内存就从 30 MB 涨到 1.8 GB。`num_traces` 与 `decision_wait` 不是随便填的两个数，填之前先用上面这个公式算一遍。
+
+### 边界条件
+
+- `decision_wait` 必须长于最慢的 Trace。单体应用 5 到 10 秒够用，微服务 15 到 20 秒起，跨地域调用 30 秒以上；等的时间一到，哪怕尾部 Span 还没到，也按已收到的 Span 做决定，迟到的 Span 会被丢弃。
+- 同一条 Trace 的全部 Span 必须落到同一个 Collector 实例上，否则尾采处理器看不到完整 Trace。Gateway 层多副本时，要在前一层用 `loadbalancing` 导出器按 TraceID 路由，或用无头服务（headless service）让各副本直接收到按 TraceID 分流的流量。
+- 处理器顺序有讲究：`batch` 应放在 `memory_limiter` 与采样处理器之后，先限流、先采样丢弃，再攒批发送；反过来会把本该丢掉的数据也攒进批里。
+- 版本边界：本文适用的 Collector 是 0.165.x，`batch` 处理器在该版本仍是标准做法。但官方已宣布弃用 `batch` 处理器，改为导出器级批量（exporter-level batching，计划在 v0.171.0 起成为多数导出器的默认行为，约 2027 年 2 月），`batch` 处理器本身计划在 v0.177.0（约 2027 年 5 月）移除，替代品是新的 `queue_batch` 处理器。升级到 0.171.x 之后应按官方迁移指南去掉管道里的 `batch` 处理器。
+- 采样率可以反推，不用拍脑袋：月存储预算 ÷（每条 Span 落盘字节数 × 保留天数 × 86,400）= 能承受的每秒 Span 数上限，再用上限 ÷ 峰值每秒 Span 数得到采样率。量纲上注意用压缩后落盘字节数，不用线上体积，否则会把需求高估约 4 倍。
+
+### 反例与易错点
+
+- **裸用 `traceidratio`，不用 `ParentBased` 包一层**：每个服务各自按自己的决定采样，同一条 Trace 在这个服务被保留、在那个服务被丢弃，链路出现断洞。正确做法永远是 `parentbased_traceidratio`，让下游跟随上游的决定。
+- **用“把采样率调到 100%”解决查不到报错 Trace**：成本账在手算 2 里，100% 采样每月约 116.60 美元，1% 只要约 1.17 美元。正确做法是上尾采，错误 Trace 100% 保留，基线保持 1%。
+- **以为尾采能省应用侧成本**：尾采只省后端存储，应用侧仍要全量产生、序列化、发送 Span，出口流量与 SDK 开销一分不少。想连应用侧一起省，只能靠头采样。
+- **把 `send_batch_size` 当成每批上限**：它是触发发送的条数，攒够就发，但不限制一批最多多大；后端要求单次请求有硬上限时，必须另配 `send_batch_max_size`。
+- **只算采样率、不算 Span 体积**：采样率从 100% 降到 1% 省了 99%，但往 Span 上多挂一个 2 KB 的 SQL 全文，体积直接翻 4 倍。手算 1 的两档体积就是证明：先瘦身，再谈采样率。
+- **尾采缓冲按默认值硬上生产**：`num_traces` 默认 50000、`decision_wait` 默认 30 秒，在高流量下内存可能直接翻到 GB 级。先用手算 3 的公式按自己的流量算，再填数；同时配好 `memory_limiter`，宁可限流丢数据，也别让 Collector OOM。
+- **混用 `AlwaysOn` 的服务**：上游用 `parentbased_traceidratio` 决定丢弃，下游某个服务配了 `AlwaysOn`，会无视父级决定全量保留，链路两端采样不一致，排查时看到一半 Trace、另一半凭空消失。
+
+### 来源
+
+核验日期 2026-11-21，全部链接为核验当日可访问的原文链接：
+
+- 采样器定义与默认采样器 `ParentBased(root=AlwaysOn)`、内置采样器（最常用的五种）：OpenTelemetry 规范 Tracing SDK（Sampling 一节），`https://raw.githubusercontent.com/open-telemetry/opentelemetry-specification/main/specification/trace/sdk.md`
+- 采样器环境变量取值与默认行为（默认 100% 采样）：OpenTelemetry 官方文档 Sampling（.NET / Erlang），`https://opentelemetry.io/ko/docs/languages/dotnet/sampling/`、`https://opentelemetry.io/fr/docs/languages/erlang/sampling/`
+- 头采样与尾采样的取舍对照：`https://blog.oneenv.io/articles/head-vs-tail-sampling-designing-a-hybrid-trace-sampling-strategy`、`https://www.distributed-tracing.com/distributed-tracing-fundamentals-architecture/choosing-between-head-based-and-tail-based-sampling/`、`https://dev.to/uptrace/opentelemetry-sampling-head-based-and-tail-based-explained-4pm7`
+- `tail_sampling` 处理器参数默认值（`decision_wait` 30 秒、`num_traces` 50000、策略为“或”关系）与内存估算例：`https://raw.githubusercontent.com/open-telemetry/opentelemetry-collector-contrib/v0.148.0/processor/tailsamplingprocessor/README.md`、`https://dzone.com/articles/tail-based-opentelemetry-collector-sampling`、`https://www.datadoghq.com/blog/control-trace-volume-with-opentelemetry-tail-based-sampling/`
+- `batch` 处理器默认值（`send_batch_size` 8192、`timeout` 200 毫秒、`send_batch_max_size` 0）与弃用迁移时间表：`https://raw.githubusercontent.com/open-telemetry/opentelemetry-collector/v0.120.0/processor/batchprocessor/README.md`、`https://opentelemetry.io/blog/2026/collector-batching-migration/`
+- 单条 Span 体积量级（OTLP 线上 500 B–2 KiB、压缩后 300–600 B/条、压缩比约 4 比 1）与采样率反推公式：`https://www.kunwar.page/chapter/095-distributed-tracing-opentelemetry-jaeger-tempo`、`https://www.distributed-tracing.com/distributed-tracing-fundamentals-architecture/choosing-between-head-based-and-tail-based-sampling/calculating-sampling-rates-for-a-trace-budget/`
+
 ## 疑难杂症
 
 ### Trace 断链：下游的 Span 拼不上来
@@ -329,12 +447,16 @@ public class PricingService {
 3. 每秒产生 1 万条 Span、按 1% 采样，一天后保留多少条？如果每条 Span 平均 1 KiB，全量和采样后每天各需要多少存储？
 4. 一个系统已经接了 Prometheus，为什么还需要接 OpenTelemetry？两者应该怎么分工？
 
+5. 生产环境把 SDK 采样器从默认改成 `parentbased_traceidratio`（0.01）后，某条报错的 Trace 还是查不到，为什么？应该如何配置才能保证错误 Trace 100% 保留？已知每秒新增 250 条 Trace、`decision_wait` 设 10 秒、平均每条 Trace 10 KB，估算尾采缓冲需要多少内存？
+
 ### 参考答案
 
 1. Trace 回答“这一次请求经过了哪些服务、每一步花了多久”，Metric 回答“系统整体现在健康吗、趋势如何”，Log 回答“当时到底发生了什么细节”。三者互补：Metric 发现面上的异常、Trace 定位到具体的慢环节或错环节、Log 给出当时的细节证据；只用一种等于只用一只眼睛开车，排查要多绕弯。
 2. TraceID 是 128 位（32 个十六进制字符），整条 Trace 共用；SpanID 是 64 位（16 个十六进制字符），每个 Span 唯一；ParentSpanID 记录父 Span 的 SpanID，用来串起父子关系。跨服务传递靠 W3C `traceparent` 请求头，格式为 `版本-TraceID-父SpanID-flags`，调用方把更新后的请求头放进 HTTP 请求，接收方解析后新建子 Span 并继续往下传。
 3. 每秒保留 10,000 × 1% = 100 条，一天保留 100 × 86,400 = 8,640,000 条，丢弃 855,360,000 条。按每条 1 KiB 算，全量每天 864,000,000 × 1 KiB ≈ 824 GiB，采样后每天约 8.24 GiB，每天省约 816 GiB；每月全量约 24.1 TiB、费用约 568.54 美元（按 0.023 美元/GiB/月），采样后每月约 247 GiB、费用约 5.69 美元。
 4. Prometheus 擅长指标：QPS、延迟分位数、错误率、资源用量，适合看趋势和做告警；OpenTelemetry 擅长链路：单次请求经过了哪些服务、哪一步慢、哪一步报错，适合做个案定位。正确分工是“指标归 Prometheus、链路归 OTel”：Collector 把 Metric 送进 Prometheus，把 Trace 送进 Jaeger 或 Tempo，Grafana 里从告警图一键下钻到 Trace。
+
+5. 头采样在根 Span 启动时就决定留不留，那时请求还没跑、不知道会不会报错，所以报错请求与健康请求被同等概率丢掉：1% 采样下 99% 的报错 Trace 根本不会产生。正确做法是在 Gateway 层加 `tail_sampling` 处理器，配三条策略（策略之间是“或”关系）：状态码为 `ERROR` 的 100% 保留、耗时超过阈值（例如 2000 毫秒）的 100% 保留、其余按 1% 或 5% 的概率保留基线。内存估算：缓冲 Trace 数约 250 × 10 × 1.2 = 3,000 条，内存约 3,000 × 10 KB ≈ 30 MB；同时 `decision_wait` 必须长于最慢的 Trace，`num_traces` 要按该公式算过再填，并配好 `memory_limiter` 防 OOM。
 
 ## 小技巧与冷知识
 
@@ -344,6 +466,8 @@ public class PricingService {
 - **OTel 在 2026 年 5 月从 CNCF 毕业**：和 Kubernetes、Prometheus、Envoy 同属毕业项目，意味着它已经是云原生可观测性的事实标准，选型时不用担心它突然没人维护。
 - **Collector 自己也能被观测**：Collector 暴露了自身的 Metric（比如接收量、导出失败数、队列深度），把它也接进 Prometheus，就能在 Trace 丢数据时第一时间知道是 Collector 堵了还是后端挂了。
 - **日志里带上 TraceID 是成本最低的关联手段**：日志框架的 MDC 里放 `trace_id` 字段，查日志时按 TraceID 一搜，同一请求的所有日志按时间排好，比在海量日志里按时间戳加关键词大海捞针快得多。
+
+- **采样率别拍脑袋，用 Collector 自己的指标反推**：Collector 暴露了 `otelcol_receiver_accepted_spans` 指标，拿它读出真实的每秒 Span 数，再除以当前采样率，就得到采样前的真实流量；拿月存储预算除以（每条 Span 落盘字节数 × 保留天数 × 86,400），就得到能承受的每秒 Span 数上限，两者一除就是该配的采样率。量纲上记得用压缩后落盘字节数，不用线上体积，否则需求会被高估约 4 倍。
 
 ## 关联知识
 
