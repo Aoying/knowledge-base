@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-22
+更新日期: 2026-11-23
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -21,7 +21,7 @@
 
 ## 分类索引
 
-- [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）、Graphify-Labs/graphify（代码库/文档 → 知识图谱：本地 AST 解析、无向量库的 GraphRAG 路线）
+- [RAG 相关](AI与大模型/RAG-Skills.md)：rag-skills、agentic-rag、rag-eval-workflow、Shubhamsaboo/awesome-llm-apps（100+ Agent Skills 与 RAG 应用合集）、Graphify-Labs/graphify（代码库/文档 → 知识图谱：本地 AST 解析、无向量库的 GraphRAG 路线）、NVIDIA/skills（RAG 评测/蓝图三件套：rag-blueprint/rag-eval/rag-perf，RAGAS 质量评测）
 - [Agent 开发](AI与大模型/Agent-开发-Skills.md)：langgraph-agent-stack、awesome-agent-skills、awesome-agent-factories、addyosmani/agent-skills、langchain-ai/langchain-skills（LangChain/LangGraph/Deep Agents 官方技能）、muratcankoylan/Agent-Skills-for-Context-Engineering（上下文工程/多 Agent/记忆系统）、cloudflare/security-audit-skill（多阶段安全审计 skill，独立核验的机器可读审计结论）、google/skills（Google 官方 192 个 Agent Skills：Gemini API/Agent Platform/Genkit）、github/github-mcp-server（GitHub 官方 MCP Server：约 80 个工具，远程端点零本地进程）、mattpocock/skills（给真正工程师的工程 Skills：spec/TDD/评审/排障，39 个）、wshobson/agents（多工具通用插件/Agent/Skill 大库，185 个 SKILL.md）、VoltAgent/awesome-agent-skills（1000+ Agent Skills 索引）、github/awesome-copilot（GitHub 官方 Copilot 指令/Agent/Skill 库，475 个 SKILL.md）、hesreallyhim/awesome-claude-code（Claude Code 生态资源总目录）、JuliusBrussee/caveman（省 token 的穴居人式 Skills，28 个 SKILL.md）、tt-a1i/archify（交互式架构图 Agent Skill，5 个 SKILL.md）、anthropics/skills（Anthropic 官方 Agent Skills，20 个 SKILL.md）、modelcontextprotocol/servers（MCP 官方参考 Server，7 个）、vercel-labs/skills（Agent Skills 安装工具 npx skills，5 个 SKILL.md）、sickn33/agentic-awesome-skills（2,926+ 可复用 Agent Skills 目录）、DietrichGebert/ponytail（极简代码 Skill，YAGNI 口径）、nextlevelbuilder/ui-ux-pro-max-skill（UI/UX 设计 Skill）、K-Dense-AI/scientific-agent-skills（科研 Agent Skills 库，177 个 SKILL.md）、agentskills/agentskills（Agent Skills 官方规范仓库）、davila7/claude-code-templates（Claude Code 组件目录，926 个 SKILL.md）、garrytan/gstack（Garry Tan 的 Claude Code 虚拟工程团队，77 个 SKILL.md）、SuperClaude-Org/SuperClaude_Framework（SuperClaude 配置框架，30 个斜杠命令 + 9 个 SKILL.md）、openai/skills（OpenAI 官方 Codex Skills 目录，44 个 SKILL.md）、gamedev-skills/awesome-gamedev-agent-skills（游戏开发 Agent Skills，78 个 SKILL.md，含 16 个 Godot 专项）、anthropics/claude-plugins-official（Anthropic 官方 Claude Code 插件目录，40 个 SKILL.md）、supabase/agent-skills（Supabase 官方 Agent Skills：Supabase 开发 + Postgres 最佳实践）、huggingface/skills（Hugging Face 官方 Agent Skills：HF 生态 26 个 SKILL.md，含本地 GGUF 模型与 TRL 微调）、plugin87/ux-ui-agent-skills（设计系统 + WCAG 无障碍审计 Skills：DTCG 设计令牌与 Figma 同步）
 - [开发工作流](AI与大模型/开发工作流-Skills.md)：cyberfly agent-skills（git/checkpoint/session）、obra/superpowers（TDD 开发方法论）、vercel-labs/agent-skills（React 最佳实践/设计规范）、Leonxlnx/taste-skill（前端设计品味/审美）、blader/humanizer（去 AI 味的文本润色 skill：识别并改掉 AI 写作痕迹）
 - [知识管理](https://github.com/undefined-ui/second-brain-os)：second-brain-os（AI 自维护第二大脑）、awesome 索引见 [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills)、[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方背景的 Agent skills）、[janestreet/agent_skills](https://github.com/janestreet/agent_skills)（苏格拉底式家教 skill：诊断定级 + 间隔复习）
@@ -486,3 +486,14 @@
 - **安装方法**：`uv tool install graphifyy`（推荐）或 `pipx install graphifyy`，再 `graphify install` 注册到所用助手（Claude Code、Cursor、Codex、Gemini CLI 等 20+ 平台；Python 需 3.11.5–3.14）。只收集不安装。
 - **依赖**：Python 3.11.5–3.14 + uv 或 pipx；语义抽取用 Agent 自身模型；Neo4j 推送需本地 Neo4j 在跑（默认 `bolt://localhost:7687`）。
 - **安全注意**：只收集不安装。已通读 `skills/graphify/skill.md` 全文（2026-11-22 核验，1205 行）：本地 AST 解析与图谱生成，无网络上传、无敏感信息读取、无危险命令；敏感文件会被跳过且只报数量、不打印文件名；边置信度三档（EXTRACTED/INFERRED/AMBIGUOUS）与 ao“区分已验证事实/个人推断/待验证”的口径一致。使用时注意四点：① skill 第一步会在未安装时跑 `pip install graphifyy --break-system-packages`，取用前先确认包名是官方 `graphifyy`（双 y），别装成别的 `graphify*` 包；② `--neo4j-push` 只推向你自己指定的 Neo4j 地址（默认本机），推前确认地址与账号是你本人的；③ 另有 Graphify Cloud 付费托管版（跨仓图谱、Sentry/Jira 连接器），ao 的零成本口径用本地版就够了，不用开 Cloud；④ `/graphify add <url>` 会抓取你给的 URL 存进语料，只加你确认过的来源。
+
+### 51. skills（NVIDIA/skills）NVIDIA 官方 Agent Skills 合集：RAG 评测/蓝图 + CUDA/机器人/物理 AI 等 300+ skills
+
+- **功能**：`skills/` 下 300+ 个 SKILL.md（2026-11-23 核验）：RAG 三件套 rag-blueprint（部署 NVIDIA RAG Blueprint 服务）/ rag-eval（filesystem RAG 评测：`corpus/` + `train.json` + `evaluate_rag.py`，RAGAS 质量分）/ rag-perf（延迟/吞吐/压测）；NeMo 系列（nemo-retriever 检索、nemo-mbridge 分布式训练性能调优、nemo-rl）；CUDA 开发（compute-sanitizer-diagnose-cuda-bugs、tilegym Cutlass/Triton 内核调优、nsight-port-cpu-to-gpu）；机器人与物理 AI（isaac-*/jetson-*/physical-ai-*）；另有 nvidia-skill-finder（检索本仓库 skill 的入口 skill）。
+- **适用场景**：ao 的 RAG 线直接对口——rag-eval 的 RAGAS 评测流程（`corpus/`/`train.json` 布局、检索/生成参数调优、失败分诊）可对照库内《RAG 评测与分块策略》与《模型评测方法》；rag-perf 的延迟/吞吐基准方法对照《推理框架对比》。注意：这些 skill 围绕 NVIDIA RAG Blueprint/NIM 服务写，评测 Judge 默认走 NVIDIA API（需 NVIDIA_API_KEY），ao 的本地 Ollama 路线取用时要把 Judge 与服务端点换成本地实现，方法论可借鉴、部署形态不能照搬。库内其余大部分 skill（BioNeMo、DOCA、TAO、Jetson、Omniverse 等）属 NVIDIA 产品线，与 ao 当前栈不直接相关，按需取用。
+- **来源**：https://github.com/NVIDIA/skills（公开仓库）
+- **热度/更新**：4,121 stars、551 forks（2026-11-23 GitHub API 核验），Apache-2.0，2026-02-25 创建，最近推送 2026-11-20，未归档。
+- **许可证**：Apache-2.0。
+- **安装方法**：按 skill 目录取用对应 SKILL.md（Claude Code、Codex 等支持 SKILL.md 的助手直接放入 skills 目录）；或用仓库自带的 nvidia-skill-finder 检索。只收集不安装。
+- **依赖**：各 skill 自带前提：rag-eval 需 Python 3.11+、uv、已部署的 RAG/ingestor 服务与 NVIDIA_API_KEY（RAGAS Judge 用）；CUDA 类需本机 NVIDIA GPU 与工具链；多数 skill 需跑在对应 NVIDIA 产品环境里。
+- **安全注意**：只收集不安装。已通读 `skills/rag-eval/SKILL.md` 全文（2026-11-23 核验，130 行）：本地跑 `evaluate_rag.py` 做评测，无恶意代码、无敏感信息读取、无危险命令、无网络上传（除向你自己部署的 RAG/ingestor 端点发请求外）；SKILL.md 自带凭证卫生一节（NVIDIA_API_KEY 放 gitignored 的 env 文件、不进 shell history）。使用时注意两点：① rag-eval 的 Judge 默认走 NVIDIA 远程模型（mistralai/mixtral-8x22b-instruct-v0.1），会把评测数据发给 NVIDIA API，ao 的零成本/本地口径取用时要换成本地 Judge 或只取方法论；② 其余 300+ 个 skill 未逐一通读，取用某个具体 skill 前先读它的 SKILL.md 再动手（与既往口径一致：只收集不安装）。
