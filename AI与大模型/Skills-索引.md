@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-23
+更新日期: 2026-11-26
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -321,12 +321,12 @@
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；它是安装器本身，装任何技能前先通读该技能的 SKILL.md，确认无敏感信息读取、网络上传、危险命令；不要整库装，按任务取单个技能。
 
-### 34. agentic-awesome-skills（sickn33/agentic-awesome-skills）2900+ 可复用 Agent Skills 目录
+### 34. agentic-awesome-skills（sickn33/agentic-awesome-skills）3000+ 可复用 Agent Skills 目录
 
-- **功能**：面向 Claude Code、Codex、Cursor、Gemini CLI 的可复用 Agent Skills 大目录，仓库自述 2,926+ 个 SKILL.md（2026-11-09 核验 GitHub API 描述口径）；附 AAS Core（本地目录发现、Agent 自主选技能、计划预览）与 CLI、MCP、插件入口，另有 hosted 目录站 aaskills.tech。
+- **功能**：面向 Claude Code、Codex、Cursor、Gemini CLI 的可复用 Agent Skills 大目录，仓库自述 3,000+ 个 SKILL.md（2026-11-26 核验 GitHub API 描述口径）；附 AAS Core（本地目录发现、Agent 自主选技能、计划预览）与 CLI、MCP、插件入口，另有 hosted 目录站 aaskills.tech。
 - **适用场景**：ao 要给某个具体任务找现成 skill 时，先在这份目录里按任务检索定位、再去源仓库通读 SKILL.md；与第 25 项 VoltAgent/awesome-agent-skills（1000+ 索引）、第 26 项 awesome-copilot（475 个）互补：本项量更大、覆盖 Codex/Cursor/Gemini CLI 四端；与第 33 项 npx skills 搭着用：先找、再装。
 - **来源**：https://github.com/sickn33/agentic-awesome-skills（公开仓库）
-- **热度/更新**：49,392 stars（2026-11-09 核验 GitHub API），2026-01-14 创建，最近推送 2026-11-08。
+- **热度/更新**：50,364 stars（2026-11-26 核验 GitHub API），2026-01-14 创建，最近推送 2026-11-25。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；它是技能目录不是单个技能，取用前先通读目标技能的 SKILL.md，确认无敏感信息读取、网络上传、危险命令；不要整库装，按任务取单个技能；AAS Core/CLI/MCP 是附带工具链，用前同样先通读再决定。
 
