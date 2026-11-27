@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-26
+更新日期: 2026-11-27
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -97,12 +97,12 @@
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；hooks 会拦截工具调用，引入前逐个通读 SKILL.md 与 hook 脚本。
 
-### 9. claude-skills（alirezarezvani/claude-skills）380 个 skills 精选集
+### 9. claude-skills（alirezarezvani/claude-skills）410 个 skills 精选集
 
-- **功能**：380+ 个实测过的 skill / agent / 自定义命令精选：PR 评审、API 设计评审、测试生成、文档写作等日常工程 skills 开箱即用。
+- **功能**：410+ 个实测过的 skill / agent / 自定义命令精选：PR 评审、API 设计评审、测试生成、文档写作等日常工程 skills 开箱即用。
 - **适用场景**：和 gamai-skills（992 合集）互补的"精选版"——先在这里找，找不到再去 gamai-skills 大海捞针。
 - **来源**：https://github.com/alirezarezvani/claude-skills
-- **热度/更新**：28k+ stars（2026-10-18 核验），MIT。
+- **热度/更新**：30.5k+ stars（2026-11-27 核验），2026-11-27 仍在更新（v2.14.18），MIT。
 - **安全注意**：量大，挑中的单个 skill 引入前通读 SKILL.md；不熟悉的脚本不要直接跑。
 
 ### 10. second-brain-os（undefined-ui/second-brain-os）AI 自维护第二大脑
