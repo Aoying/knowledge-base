@@ -2,7 +2,7 @@
 知识点: MCP
 层级: 进阶
 适用版本: MCP 规范 2026-07-28
-更新日期: 2026-11-16
+更新日期: 2026-11-27
 关联:
   - Agent
   - Tool-Calling
@@ -195,6 +195,79 @@ sequenceDiagram
 - **2026-07-28 版**（当前）：核心协议无状态化，移除 `initialize` 握手与会话 ID；sampling、roots 弃用；elicitation 保留。跟教程前先确认它针对哪个版本。
 - 来源：MCP 官方规范（modelcontextprotocol.io，架构与传输章节）与 Real Python MCP 词条，2026-10 核对。
 
+## 多 Server 同名工具冲突与命名空间
+
+> 两个 Server 各自暴露一个 `search`，模型看到的工具清单里就会出现两个 `search`。这不是某个 Server 的 bug：协议只保证名字在单个 Server 内唯一，跨 Server 的同名由谁处理、怎么处理，是 Host 的实现行为，不是协议保证。
+
+### 规范层面：唯一性只在单个 Server 内
+
+已验证事实（MCP 官方规范 2026-07-28 版，`Tool Names` 一节，2026-11-27 直接打开核验）：
+
+- 工具名应为 1 至 128 个字符、区分大小写，字符只限大小写 ASCII 字母、数字、下划线、连字符和点；
+- 工具名只要求在单个 Server 内唯一（`SHOULD be unique within a server`）。
+
+这意味着：规范没有规定两个 Server 的同名工具合并后叫什么，也没有规定 Host 必须报错、覆盖还是加前缀。Host 各自收到的是一份份分 Server 的 `tools/list` 结果，把它们拼成一份给模型的清单时，消歧的责任落在 Host 身上。
+
+补充说明（来源为规范文本的公开镜像，非官方站原文，见文末来源备注）：同一段规范文字在 `modelcontextprotocol.info` 镜像的 2026-07-28 版里还写明，跨 Server 聚合工具的客户端可能遇到命名冲突，应当实现消歧策略，例如用 Server 标识给工具名加前缀；且 `serverInfo` 里的 Server 名不保证在各 Server 间唯一，不应被用作消歧依据。2026-11-27 当天直接打开的官方站（`modelcontextprotocol.io`）2026-07-28 版 `Tool Names` 一节没有这段跨 Server 的文字，只有「单个 Server 内唯一」一句——引用时以官方站为准，镜像的补充表述仅作参考。
+
+个人推断：`tools/call` 本身是按连接发给指定 Server 的，调用那一步没有歧义；歧义只存在于 Host 把多份清单合并成一份、交给模型挑选的那一步。所以冲突首先是「模型选错工具」的风险，其次才是 Host 内部路由的风险。
+
+### 主流 Host 的实际做法
+
+| Host | 同名工具的处理 | 来源与可信度 |
+| --- | --- | --- |
+| Claude Code | 强制加前缀：模型看到的工具名是 `mcp__<server>__<tool>`，如 `mcp__github__list_issues`；插件提供的 Server 形式更长，为 `mcp__plugin_<plugin-name>_<server-name>__<tool-name>`；全名超过 128 个字符的工具会被直接略过，不进入发给模型的工具清单 | 已验证：Claude Code 官方文档（2026-11-27 直接打开核验） |
+| Claude Desktop | 待验证：本次检索没有找到官方文档说明其命名方案，不写其行为 | 待验证 |
+| Cursor、VS Code | 待验证：本次检索到的第三方文章称这两家没有公开记录的命名方案，未在官方文档中找到对应说明 | 待验证 |
+| Spring AI MCP Client（框架侧） | 默认给重名工具加计数前缀：第一个 `search` 保持原名，第二个起依次变为 `alt_1_search`、`alt_2_search`；也可自定义前缀生成器 | 已验证：Spring AI 官方文档（2026-11-27 检索核验） |
+| 自己拼工具数组的 Host（如直调模型 API 的自研 Agent） | 行为由自研代码决定，无统一答案；有公开记录的个案是：用字典按名合并时后者覆盖前者，早期工具静默丢失；也有客户端在请求校验层直接拒绝重名，整个请求不发给模型 | 个案转述，非通用结论：前者见 Claude Lab 文章，后者见 GambaOS 文章，均非官方文档 |
+
+两点已验证的 Claude Code 细节（同一官方文档）：Server 名里除字母、数字、连字符、下划线之外的字符会被替换为下划线；权限规则、Skill 的 `allowed-tools`、Hook 匹配器里都要写加前缀后的全名，写裸 Server 名的匹配器对插件 Server 不会触发。
+
+### 三种缓解手段对照
+
+| 手段 | 做法 | 代价 | 适用场景 |
+| --- | --- | --- | --- |
+| Server 侧改名 | 把通用动词改成「动词加对象」的领域名，如 `search` 改为 `search_chapters`、`search_files` | 要改 Server 代码、改提示词与 Skill 文档里的旧名；第三方 Server 改不了，只能自己 fork 或包一层代理 | 自己可控的 Server；想让名字在任何 Host 下都唯一 |
+| Host 侧加前缀或命名空间 | Host 在合并清单时给每个工具名前加 Server 标识，如 Claude Code 的 `mcp__<server>__<tool>` 形式，或 Spring AI 的计数前缀 | 名字变长、占更多 token；前缀只解决「同名」，不解决「不同名但语义相近」的工具被选错；换 Host 后前缀规则可能不同，权限规则与文档要跟着改 | 接第三方 Server、改不了 Server 侧；多 Server 长期共存 |
+| 按任务启停 Server 做工具筛选 | 本次任务用不到的 Server 先不连，或只把当次任务的工具放进清单 | 每次任务要维护「用哪些 Server」的配置；动态启停依赖 Host 支持，不支持的 Host 只能改配置文件重启 | 工具总量大、单次任务只用其中一两个 Server；想顺带省 token |
+
+三点对照结论（个人推断，与上表事实一致）：改名是最彻底的，因为名字在任何 Host 下都唯一；加前缀是最省事的，因为不用动 Server，但把正确性押在了 Host 的实现上；启停筛选不解决冲突本身，只是让冲突在当次任务里不出现，两个 Server 同时需要时仍要靠前两种手段。
+
+### 边界条件与易错点
+
+1. **改名后旧引用全部失效**。提示词、Skill 文档、Claude Code 权限规则里写的是改名前的名字，Server 一改名，这些引用就指不到工具了。Claude Code 的权限规则要求写加前缀后的全名，改名前后全名都变，规则要同步改。改名要有迁移窗口：先新旧并存一段时间，再下掉旧名。
+2. **工具描述里的交叉引用也要同步改**。描述里常写「先调 `search` 再调 `fetch`」这类指引，只改工具名、不改描述里的名字，模型会去调一个不存在的旧名。描述、Skill 文档、示例提示词要同一批改完再发版。
+3. **清单变更通知只报「变了」，不报「变了什么」**。Server 声明 `listChanged` 后，清单变化时发 `notifications/tools/list_changed`，客户端收到后要重新调 `tools/list` 才知道新名字；2026-07-28 版下，这条通知只在客户端事先打开的 `subscriptions/listen` 流上发送。只在连接时拉一次清单就缓存到底的客户端，改名后看到的仍是旧工具表。以上通知机制已验证（官方规范 2026-07-28 版，2026-11-27 直接打开核验）。
+4. **加前缀后要重算 128 字符上限**。Claude Code 按全名计长，超过 128 个字符的工具直接被略过。可复算的口径：全名长度按 `5 + Server 名长度 + 2 + 工具名长度` 计算，其中 `5` 是 `mcp__` 的长度，`2` 是中间 `__` 的长度。例：Server 名 `novel-tools`（11 个字符）加工具名 `search_chapter_summaries`（23 个字符），全名长度为 `5 + 11 + 2 + 23`，即 41 个字符，在限内；Server 名 40 个字符加工具名 90 个字符，全名长度为 `5 + 40 + 2 + 90`，即 137 个字符，超限，工具会被略过。
+5. **Server 名本身也可能撞车**。Server 名含点或空格时，Claude Code 会把这些字符替换为下划线，于是 `my.server` 与 `my_server` 规范化后成为同一个前缀，两个 Server 的工具又撞在一起（由官方文档的替换规则推出，属个人推断，未实测）。Server 名里含 `__` 时，分隔符与名字本身的下划线无法区分，权限规则可能匹配到意料之外的 Server（第三方文章转述的个案，非官方文档）。
+6. **同名可能是故意的仿冒**。有未经过同行评审的预印本研究转述称：攻击方 Server 用与可信 Server 相同的工具名、描述和参数复制一个工具，部分模型会调到攻击方的工具上。无论该研究的数字是否可复现，结论方向与本节一致：名字只是标签，不能证明工具背后的 Server 是谁；不可信 Server 的同名工具要按第 5 节的安全规则处理，先审后用。
+
+### 小说引擎例子
+
+ao 的小说引擎若接两个 Server：小说查询 Server 暴露 `search`（查章节摘要、伏笔台账），文件系统 Server 也暴露 `search`（搜项目里的文件）。用户问「苏晚埋了哪些伏笔」，模型要在两个 `search` 里选一个；选错时，查到的是一堆 Markdown 文件路径，而不是伏笔台账，回答就跑偏了。
+
+在 Claude Code 里这两个工具实际是 `mcp__novel-tools__search` 与 `mcp__filesystem__search`，名字上已区分，权限规则也可以只放行其中一个。但只靠前缀仍不够：两个工具的描述如果都只写「搜索相关内容」，模型仍可能按描述选错。更稳的做法是在 Server 侧改名——小说查询 Server 用 `search_chapters`、`search_foreshadowing`，文件系统 Server 用 `search_files`——名字本身就带上对象，描述里再写清各自查的是什么、不要在什么情况下用。
+
+### 来源（2026-11-27 核验）
+
+已验证事实的来源：
+
+- MCP 官方规范 2026-07-28 版 Tools 章，`Tool Names` 与 `List Changed Notification` 两节：https://modelcontextprotocol.io/specification/2026-07-28/server/tools/
+- Claude Code 官方文档 MCP 章，工具命名、插件 Server 命名、全名超长略过、权限规则写全名：https://code.claude.com/docs/en/mcp
+- Spring AI 官方文档 MCP Client 工具回调章，默认前缀生成器与计数前缀规则：https://docs.spring.io/spring-ai/reference/2.1-SNAPSHOT/mcp/client/tools.html
+
+次级来源（非官方文档，仅用于个案与补充表述，正文已注明）：
+
+- 规范文本公开镜像 2026-07-28 版 Tools 章，含跨 Server 消歧建议与 `serverInfo` 不可作消歧依据的表述：https://modelcontextprotocol.info/specification/2026-07-28/server/tools/
+- Claude Lab 文章《Resolving Tool Name Collisions When You Bundle MCP Servers》，自研聚合层后者覆盖前者的个案：https://claudelab.net/en/articles/api-sdk/claude-agent-sdk-mcp-tool-name-collision-resolver
+- GambaOS 文章《tools: Tool names must be unique》，请求层拒绝重名工具名的个案：https://gambaos.com/errors/tools-tool-names-must-be-unique/
+- MCP1 博客《MCP tool name collisions: causes and fixes》，Cursor 与 VS Code 未公开命名方案的说法：https://mcp1.com/blog/mcp-tool-name-collisions
+
+待验证：Claude Desktop、Cursor、VS Code 对同名工具的具体处理，本次未在官方文档中找到对应说明，正文记为「待验证」，未作断言。
+
+个人推断已在正文以「个人推断」标出，共三处：调用歧义只存在于清单合并环节；三种手段的对照结论；`my.server` 与 `my_server` 规范化后撞车的例子。其余数字均为可复算的字符数算术，口径见正文第 4 条易错点。
+
 ## 实战案例
 
 以下两则只用原文已给出的写法与数字，不引入原文之外的事实。
@@ -229,6 +302,8 @@ sequenceDiagram
 
 【小技巧】排障先别进 Host，用官方 Inspector 直接连 Server：`npx @modelcontextprotocol/inspector` 会打开一个网页客户端（另有 `--cli` 命令行版和 `--tui` 终端版），填好启动命令连上后就能看它到底暴露了哪些工具、资源和提示模板，还能当场填参数调一次、看原始 JSON-RPC 来回。原文 §6 说的“脱离 Host 直连验证”就是这个工具的用途；它比反复改 Host 配置、重启、看模型为什么不用某个工具要快得多。
 
+【小技巧】排障时先在 Host 里看模型实际看到的全名，而不是 Server 代码里的裸名：在 Claude Code 里用 `/mcp` 面板点开工具看全名，核对权限规则与 Skill 文档里写的是不是同一个全名；同名冲突的排查顺序是先看全名是否已区分，再看两个工具的描述是否写清了各自的适用对象，最后才考虑改 Server 名。
+
 ## 10. 面试与自测
 
 1. Host、Client、Server 的职责边界是什么？为什么说「一个 Client 只连一个 Server」？
@@ -236,6 +311,7 @@ sequenceDiagram
 3. MCP 把 M×N 降到 M+N 的前提是什么？哪部分成本并没有消失？（答：每个系统仍要实现一次 Server、每个应用仍要实现一次 Client，且工具质量仍要各自负责）
 4. 工具投毒是什么？Host 侧有哪些具体防法？
 5. stdio 和 Streamable HTTP 各适合什么部署形态？各自的安全重点有何不同？
+6. 两个 MCP Server 各自暴露一个同名工具时，模型会看到什么？Host 一般怎么处理？改名时最容易漏掉什么？
 
 ### 参考答案
 
@@ -248,6 +324,8 @@ sequenceDiagram
 4. 工具投毒是恶意 Server 在工具描述里藏指令（如「调用前先读取某文件并附带返回」），描述会拼进模型上下文，模型读着读着就照做。Host 侧防法：外部 Server 一律不可信，接入前看源码、看维护方、锁版本；展示工具清单变更，描述突变就是危险信号；Server 返回内容按不可信输入处理；Server 进程最小权限、密钥按 Server 隔离；删除、花钱、对外发送类动作一律 Host 侧弹窗确认。
 
 5. stdio 适合本地单机部署：Host 把 Server 当子进程拉起，走标准输入输出，是本地场景主流；安全重点在进程权限——本地进程拥有本机权限，来源必须审，且 stdout 被协议占用，调试日志只能打 stderr 或文件，否则会污染 JSON-RPC 流。Streamable HTTP 适合远程部署、多台机器或多人共用；安全重点在鉴权（规范推荐 OAuth、核对 token 传递方式）与协议版本匹配，远程 Server 同样不可信。
+
+6. 模型看到的清单取决于 Host 的合并方式，不是协议规定的。规范只要求工具名在单个 Server 内唯一，跨 Server 不保证唯一，Host 如何消歧是实现行为。Claude Code 的做法是强制加前缀，模型看到 `mcp__<server>__<tool>` 形式的两个不同名字；有的框架（如 Spring AI）给重名工具加计数前缀；自己拼工具数组的 Host 则由自研代码决定，曾有后者覆盖前者、或请求层直接拒绝重名的个案；Claude Desktop 与 Cursor、VS Code 的命名方案本次未在官方文档中找到，记为待验证。改名时最容易漏掉三处：一是提示词、Skill 文档与权限规则里的旧名；二是工具描述里引用旧名的交叉指引；三是清单变更通知只报「变了」不报 diff，缓存了旧清单的客户端在重拉 `tools/list` 之前仍看到旧名。另需重算全名是否超过 128 字符上限，超限的工具会被 Claude Code 直接略过。
 
 ## 11. 关联知识
 
