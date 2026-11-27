@@ -2,7 +2,7 @@
 知识点: Shell脚本编程
 层级: 基础
 适用版本: Bash 4+
-更新日期: 2026-11-16
+更新日期: 2026-11-27
 关联:
   - Linux与Shell
 标签:
@@ -379,6 +379,8 @@ log "完成"
 - `cmd > file 2>&1` 顺序写反：stderr 去了终端，文件里只有 stdout。
 - `set -e` 当万能药：条件判断与管道场景下它不触发，关键失败要显式判断。
 - 通配展开无匹配时原样保留：`for f in *.log` 在没有 log 时会循环一次字面量 `*.log`，先 `shopt -s nullglob` 可避免。
+- **Windows 编辑后脚本报 `bad interpreter` 或每行结尾报错**：换行符变成了 CRLF（`\r\n`），Linux 只认 LF（`\n`），shebang 行尾多了个 `\r`，内核找不到解释器。修法二选一：`sed -i 's/\r$//' 脚本.sh`（删每行尾的 `\r`，不用装工具）；系统有 dos2unix 更直接：`dos2unix 脚本.sh`。修完验证：`file 脚本.sh` 应只报 `ASCII text`，`cat -A 脚本.sh` 行尾应只有 `$`、没有 `^M`。
+
 
 ## 实战案例
 
@@ -414,6 +416,8 @@ log "完成"
 
 【小技巧】`bash -x` 的追踪输出默认混在 stderr 里，和程序自己的报错搅在一起不好翻：`export BASH_XTRACEFD=9; exec 9>trace.log` 可以把追踪单独写进文件，终端只留程序自己的输出。排障时先看日志、再按行号对 trace.log，能分清“哪一步真的执行了”和“哪一步只是报错”，比在满屏输出里翻 + 号要快。
 
+【小技巧】脚本报 `bad interpreter` 先别急着重写：`file 脚本.sh` 一眼能看换行符——报 `with CRLF line terminators` 就是 Windows 换行符在作怪；`cat -A 脚本.sh` 行尾看到 `^M$` 也是同一铁证。修法见第 13 节：`sed -i 's/\r$//' 脚本.sh` 或 `dos2unix 脚本.sh`，修完再 `file` 一次确认。
+
 【冷知识】`$$` 在子 shell 里不会变：`(echo $$)` 打印的仍是父 shell 的 PID，因为 `$$` 展开的是“最初那个 shell”的进程号；想拿子 shell 自己的 PID 要用 `$BASHPID`。写“记录当前进程号到 pid 文件”这类逻辑时用错变量，kill 的可能是父进程；同理，原文第 5 节说的 `$!` 是最近一个后台进程的 PID，和这两个都不是一回事。
 
 【冷知识】`echo -e` 的行为在不同 shell 里并不一致，别依赖它：POSIX 没规定 `echo` 必须支持 `-e`，dash 的 `echo` 默认不解释转义，bash 的要看 `xpg_echo` 开关；同一行 `echo -e "a\nb"` 换个 shell 可能原样输出 `\n`。要可移植的转义输出用 `printf '%b\n' 'a\nb'`，`printf` 的格式语义在所有 POSIX shell 里都是一致的，脚本跨环境才不会变脸。
@@ -426,6 +430,7 @@ log "完成"
 4. `set -euo pipefail` 里三个选项各起什么作用？`set -e` 在哪些场景下不触发？
 5. 脚本里建了临时目录，怎么保证脚本中途失败或被 Ctrl+C 中断时也能清掉？
 
+6. 脚本在 Windows 编辑后拿到 Linux 跑，报 `bad interpreter` 或每行结尾报错，可能是什么原因？给出两种修法和验证方法。
 ### 参考答案
 
 1. `"$@"` 把每个参数展开成独立的词，带空格的参数不会被拆散；`"$*"` 把全部参数拼成一个词（用 IFS 首字符连接）；`$@` 不加引号会按空格拆词，带空格的参数会被拆错。遍历带空格的参数必须用 `"$@"`。
@@ -433,3 +438,4 @@ log "完成"
 3. 前者 stdout 与 stderr 都进文件；后者 stderr 去了终端，文件里只有 stdout。因为 `2>&1` 的含义是“把 stderr 并到 stdout 当前去的地方”，写在 `>` 之前时 stdout 还指向终端，写在之后才指向文件。
 4. `-e` 任一命令失败立即退出；`-u` 用到未定义变量立即报错；`pipefail` 让管道以最后一个非 0 的退出码为准。`set -e` 不触发的场景：if/while 条件里、`&&`/`||` 列表里（最后一个除外）、返回值正被判断时；需要失败也继续的命令写 `cmd || true`。
 5. 用 trap：先定义 cleanup 函数删临时目录，再 `trap cleanup EXIT`（无论成功失败退出时都执行），并 `trap '...' INT TERM` 处理中断信号；注意 EXIT trap 里不要再 exit，以免覆盖原本的退出码。
+6. 换行符变成了 CRLF（`\r\n`），Linux 只认 LF，shebang 行尾多了 `\r`，内核找不到解释器。修法：`sed -i 's/\r$//' 脚本.sh` 删行尾 `\r`，或 `dos2unix 脚本.sh`；验证：`file 脚本.sh` 应只报 `ASCII text`，`cat -A` 行尾只有 `$`、没有 `^M`。
