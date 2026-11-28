@@ -2,7 +2,7 @@
 知识点: Skills 索引
 层级: 基础
 适用版本: 通用
-更新日期: 2026-11-27
+更新日期: 2026-11-28
 关联:
   - AI知识点地图
   - RAG-Skills
@@ -227,7 +227,7 @@
 - **功能**：Matt Pocock（TypeScript 教育者）个人 .agents 目录里的工程 skills，39 个 SKILL.md（2026-11-08 核验），全是工程方法论：code-review、tdd、implement-spec、to-spec、diagnosing-bugs、grill-with-docs（Agent 先访谈你、把需求问清再动手）、codebase-design、improve-codebase-architecture、research、retro、triage、pr 等；不讲花活，只讲规划、测试、评审、排障的硬流程。
 - **适用场景**：ao 的小说引擎长期迭代与 Java 后端开发纪律直接对口——“先出 spec 再实现”（implement-spec/to-spec）、TDD、code-review、排障（diagnosing-bugs）这套流程可直接套到小说引擎的开发节奏上；与已收录的第 4 项 obra/superpowers（同样是 TDD 方法论）互补：superpowers 偏流程框架，本项偏“工程师个人实战动作”，grill-with-docs 的“先访谈再动手”尤其适合需求不清时先问清再写代码。
 - **来源**：https://github.com/mattpocock/skills（公开仓库）
-- **热度/更新**：318,041 stars（2026-11-08 核验 GitHub API），2026-02-03 创建，最近推送 2026-11-05；截至 2026 年 11 月初是 GitHub 上星数最高的 Agent Skills 仓库。
+- **热度/更新**：334,513 stars（2026-11-28 核验 GitHub API），2026-02-03 创建，最近推送 2026-11-27；仍是 GitHub 上星数最高的 Agent Skills 仓库（同期 obra/superpowers 328,688★，同日核验）。
 - **许可证**：MIT。
 - **安全注意**：只收集不安装；方法论类 skill 只含流程指令，风险低；引入单个 skill 前通读其 SKILL.md，确认无敏感信息读取、网络上传、危险命令。
 
